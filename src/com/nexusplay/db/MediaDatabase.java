@@ -139,7 +139,7 @@ public class MediaDatabase
         Statement stmt = null;
         Connection con = getConnection();
         stmt = con.createStatement();
-        String req = new String("SELECT * FROM MediaDB ORDER BY views DESC;");
+        String req = new String("SELECT * FROM MediaDB WHERE published=1 ORDER BY views DESC;");
         ResultSet rs = stmt.executeQuery(req);
         ArrayList raw = new ArrayList();
         for(int i = 1; i < size && rs.next(); i++)
@@ -195,7 +195,7 @@ public class MediaDatabase
         Statement stmt = null;
         Connection con = getConnection();
         stmt = con.createStatement();
-        String req = new String("SELECT * FROM MediaDB;");
+        String req = new String("SELECT * FROM MediaDB WHERE published=1;");
         ResultSet rs = stmt.executeQuery(req);
         ArrayList raw = new ArrayList();
         rs.setFetchDirection(1001);
@@ -225,7 +225,7 @@ public class MediaDatabase
         Statement stmt = null;
         Connection con = getConnection();
         stmt = con.createStatement();
-        String req = new String("SELECT * FROM MediaDB WHERE ");
+        String req = new String("SELECT * FROM MediaDB WHERE published=1 AND ");
         req = (new StringBuilder(String.valueOf(req))).append("name like '%").append(request).append("%';").toString();
         Media item; int k=0;
         for(ResultSet rs = stmt.executeQuery(req); rs.next() && k<=resultCap; raw.add(item), k++)
@@ -251,7 +251,7 @@ public class MediaDatabase
     	Statement stmt = null;
         Connection con = getConnection();
         stmt = con.createStatement();
-        String req = new String("SELECT * FROM MediaDB WHERE collectionid='" + collectionID + "' ORDER BY season ASC, episode ASC;");
+        String req = new String("SELECT * FROM MediaDB WHERE published=1 AND collectionid='" + collectionID + "' ORDER BY season ASC, episode ASC;");
         ResultSet rs = stmt.executeQuery(req);
         int currentSeason = -1;
         while(rs.next())

@@ -2,6 +2,7 @@ package com.nexusplay.elements;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.sql.SQLException;
 import java.util.Iterator;
@@ -16,6 +17,7 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.FileItemFactory;
 import org.apache.commons.fileupload.FileUploadException;
+import org.apache.commons.fileupload.MultipartStream;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
 
@@ -56,7 +58,6 @@ public class AddCollection extends HttpServlet {
         PrintWriter out = response.getWriter();
 		boolean isMultipart = ServletFileUpload.isMultipartContent(request);
 		Collection coll;
-		 
         if (isMultipart) {
         	// Create a factory for disk-based file items
         	FileItemFactory factory = new DiskFileItemFactory();

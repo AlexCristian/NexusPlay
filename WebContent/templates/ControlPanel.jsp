@@ -41,20 +41,16 @@
             }
         });
       }
-	function searchCollections(field){
-		$.ajax({
-			type: "POST",
-			url: "./CollectionSearch",
-			data: "q="+field.val()
-		}).done(function ( data ) {
-			return data.split("\n");
-		});
-	}
     
       window.onload = createUploader;
 </script>
 <script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.fineuploader-3.5.0.min.js'></script>
 <script type='text/javascript' src='<%=request.getContextPath()%>/js/iframe.xss.response-3.5.0.js'></script>
+<style>
+.typeahead{
+	margin-left:10px;
+}
+</style>
 <% 
 User user = (User) request.getAttribute("user");
 %>
@@ -113,7 +109,12 @@ User user = (User) request.getAttribute("user");
 						<td>Collection</td>
 						<script>
 						$(document).ready(function(){
-							$("#<%= item.getId() %>cll").typeahead({source:searchCollections($("#<%= item.getId() %>cll"))});
+							$("#<%= item.getId() %>cll").typeahead({source:function ( query, process ){
+								$.get( './CollectionSearch', { q: query }, function ( data ) {
+									process( data.split("\n") );
+									
+								});
+							}});
 						});
 						</script>
 						<td><input id="<%= item.getId() %>cll" class="collectionSelector" autocomplete="off" type="text" name="Collection" placeholder="Collection" style="margin-bottom:10px; margin-left:10px;"></td>
@@ -149,46 +150,34 @@ User user = (User) request.getAttribute("user");
 	<hr class="featurette-divider">
 	<div class="well uncategHolder" style="text-align: center;">
 	<p><b><i>Add a collection</i></b></p>
+		<form id="collAdd" target="transFrame" method="POST" action="./AddCollection" enctype="multipart/form-data" >
 		<table class="adminTable">
 			<tr>
 				<td>Name</td>
-				<td><input id="newcollnm" type="text" name="Name" placeholder="Name" style="margin-bottom:10px; margin-left:10px;"></td>
+				<td><input id="collnm" type="text" name="Name" placeholder="Name" style="margin-bottom:10px; margin-left:10px;"></td>
 			</tr>
 			<tr>
 				<td>Year</td>
-				<td><input id="newcollyr" type="text" name="Year" placeholder="Year" style="margin-bottom:10px; margin-left:10px;"></td>
+				<td><input id="collyr" type="text" name="Year" placeholder="Year" style="margin-bottom:10px; margin-left:10px;"></td>
+			</tr>
+			<tr>
+				<td>Poster</td>
+				<td>
+					<div style="margin-left:50px;"><input type="file" name="datafile" size="40"></div>
+				</td>
+			</tr>
+			<tr>
+				<td></td>
+				<td><div id="addCollection" class="submitButton pull-right topBarButton normalTopBarButton">Add</div></td>
 			</tr>
 		</table>
-		<style>
-			.qq-uploader{
-				display:none;
-				}
-		</style>
-		<a id="collectionSend" class="publish submitButton pull-right topBarButton normalTopBarButton" style="color:white; width: 100px;">Submit and select poster</a>
-		<div id="collectionSendHidden" style="display:none;"></div>
+		</form>
+		<iframe style="display:none;" name="transFrame" id="transFrame"></iframe>
 		<script type="text/javascript">
 						$(document).ready(function(){
-							var uploadParams = {};
-							var uploader = new qq.FineUploader({
-						          // Pass the HTML element here
-						          element: document.getElementById('collectionSend'),
-						          // or, if using jQuery
-						          // element: $('#fine-uploader')[0],
-						          // Use the relevant server script url here
-						          // if it's different from the default “/server/upload”
-						          request: {
-						            endpoint: "./AddCollection",
-						            params: uploadParams
-						          },
-						          text: {
-						              uploadButton: 'Submit and select poster'
-						            }
-						        });
-							$("#collectionSend").click(function(){
-								uploadParams['name'] = $("#newcollnm").val();
-				            	uploadParams['year'] = $("#newcollyr").val();
-								$("#collectionSendHidden").fineUploader('setParams', uploadParams );
-								$("#collectionSendHidden").click();
+							$("#addCollection").click(function(){
+								$("#collAdd").attr("action", "./AddCollection?name=" + $("#collnm").val() + "&year=" + $("#collyr").val());
+								$("#collAdd").submit();
 							});
 						});
 					</script>

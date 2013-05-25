@@ -124,7 +124,7 @@
 			<div class='span8 container' id='mainHolder'>
 				<div id='abovePage'>
 					<form class='pull-right' id="search">
-						<input id="searchBox" type="text" size="40" placeholder="Search media..." />
+						<input id="searchBox" autocomplete="off" type="text" size="40" placeholder="Search media..." />
 					</form>
 				</div>
 				<script type='text/javascript'>

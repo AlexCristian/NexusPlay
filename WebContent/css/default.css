@@ -7,9 +7,6 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
-.qq-upload-list{
-	display:none !important;
-}
 .adminPosterHolder > div > div > .qq-upload-button{
 	width:135px !important;
 }
