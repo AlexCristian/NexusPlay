@@ -1,0 +1,43 @@
+@charset "UTF-8";
+
+body {
+	margin:0;
+	background:url(lib/bg.jpg) center top;
+	color:#d2d6db;
+	font-family:"Helvetica Neue", "Nimbus Sans L", sans-serif;
+	font-size:12px;
+	line-height:1.62em;
+	text-shadow:0 1px 1px rgba(255, 255, 255, .9);
+}
+
+a {
+	color:#c0c8d6;
+	text-decoration:none;
+}
+
+a:hover {
+	color:#a6b2c8;
+}
+
+#audio-container {
+	max-width:360px;
+	height:30px;
+	padding:160px 188px;
+	margin:0 auto;
+	background:url(lib/light.png) 0 8px;
+}
+
+#video-container {
+	max-width:640px;
+	margin:0 auto 160px;
+	padding:0 40px 8px;
+	background:url(lib/shadow.png) 0 352px no-repeat;
+}
+
+.mejs-container {
+	box-shadow:0 0 18px rgba(0, 0, 0, .2);
+}
+
+#credits {
+	text-align:center;
+}

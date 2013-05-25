@@ -1,0 +1,62 @@
+#controls span {
+    display:inline-block;
+}
+         
+#playpause {
+    background:#eee;
+    color:#333;
+    padding:0 5px;
+    font-size:12pt;
+    text-transform:uppercase;
+    width:50px;
+}
+#progress {
+    width: -moz-calc(100% - 220px);
+    width: -webkit-calc(100% - 220px);
+    width: calc(100% - 220px);
+}
+             
+#total {
+    width:100%;                
+    background:#999;
+}
+             
+#buffered {
+    background:#ccc;
+}
+             
+#current {
+    background:#eee;
+    line-height:0;
+    height:10px;
+}
+             
+#time {
+    color:#999;
+    font-size:12pt;
+}
+#dynamic {
+    fill:white;
+    padding:0 5px;
+}
+             
+#dynamic.off {
+    fill:red;
+}
+.playerContainer{
+	overflow:hidden;
+	width:100%;
+	background-color:black;
+}
+#controls{
+	color:white;
+	background: rgb(69,72,77); /* Old browsers */
+	background: -moz-linear-gradient(top,  rgba(69,72,77,1) 0%, rgba(0,0,0,1) 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(69,72,77,1)), color-stop(100%,rgba(0,0,0,1))); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top,  rgba(69,72,77,1) 0%,rgba(0,0,0,1) 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top,  rgba(69,72,77,1) 0%,rgba(0,0,0,1) 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top,  rgba(69,72,77,1) 0%,rgba(0,0,0,1) 100%); /* IE10+ */
+	background: linear-gradient(to bottom,  rgba(69,72,77,1) 0%,rgba(0,0,0,1) 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#45484d', endColorstr='#000000',GradientType=0 ); /* IE6-9 */
+
+}
