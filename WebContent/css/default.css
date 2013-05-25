@@ -7,6 +7,36 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
+.episodeNumber{
+	display:block;
+}
+tr:hover > td > .episodeNumber{
+	display:none;
+}
+.episodePlay{
+	display:none;
+}
+tr:hover > td >.episodePlay{
+	display:block;
+}
+.collection > .modal-header{
+	padding:0;
+	margin:0;
+	color:white !important;
+	background-color: rgb(41, 41, 41);
+	-webkit-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 0 1000px rgba(0, 0, 0, 0.1) inset;
+	-moz-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 0 1000px rgba(0, 0, 0, 0.1) inset;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 0 1000px rgba(0, 0, 0, 0.1) inset;
+}
+.collection > .modal-body{
+	-webkit-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
+-moz-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
+box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
+}
+.collection > .modal-header > div > h3, h4, h5{
+	margin-bottom: 10px;
+	color:white;
+}
 .adminPosterHolder > div > div > .qq-upload-button{
 	width:135px !important;
 }

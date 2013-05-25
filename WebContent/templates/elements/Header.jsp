@@ -74,6 +74,34 @@
 	          <p>Registering on Nexus Play lets you subscribe to your favorite media and resume interrupted playback from where you left off.</p>
 		  </div>
 		</div>
+		
+		<div id="collection" class="collection modal hide fad">
+		  <div class="modal-header">
+		    <button style="margin:10px" type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+		    <div style="display: inline-block;">
+		    	<img id="moviePoster" src="/NexusPlay/media/posters/829720803150741702.jpg" style="width:140px;">
+		    </div>
+		    <div style="margin:20px; display: inline-block;">
+		    	<h3>My collection</h3>
+		    	<h5>X Seasons, 1975</h5>
+		    </div>
+		  </div>
+		  <div class="modal-body">
+		  	<div style="width: 100%; text-align: center;">
+		  		<table class="table table-bordered table-hover">
+		  			<tr>
+		  				<td>Episode</td>
+		  				<td>Name</td>
+		  			</tr>
+		  			<tr>
+		  				<td><div class="episodeNumber">1</div><div class="episodePlay"><i class="icon-play"></i></div></td>
+		  				<td>The name of the Doctor</td>
+		  			</tr>
+		  		</table>
+	        </div>
+	          <p>Not a registered user? Please register here.</p>
+		  </div>
+		</div>
 
 		<div id='topBar' class='normalTopBar navbar-static-top'>
 			<div id='innerTopBar'>
