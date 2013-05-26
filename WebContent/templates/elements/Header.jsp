@@ -75,6 +75,8 @@
 		  </div>
 		</div>
 		
+		<!-- start collection modal -->
+		
 		<div id="collection" class="collection modal hide fad">
 		  <div class="modal-header">
 		    <button style="margin:10px" type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
@@ -85,15 +87,37 @@
 		    	<h3>My collection</h3>
 		    	<h5>X Seasons, 1975</h5>
 		    </div>
+		    <div class='seasonsSlider'>
+			    <div class='seasonsHolder'>
+				    <div id='collses1' class='seasonSelector'>
+			    		<h5 style='color:white;'>Season 1</h5>
+				    </div>
+				    <div id='collses2' class='seasonSelector'>
+			    		<h5>Season 2</h5>
+				    </div>
+				    <div id='collses3' class='seasonSelector'>
+			    		<h5>Season 3</h5>
+				    </div>
+				    <div id='collses4' class='seasonSelector'>
+			    		<h5>Season 3</h5>
+				    </div>
+				    <div id='collses5' class='seasonSelector'>
+			    		<h5>Season 3</h5>
+				    </div>
+				    <div id='collses6' class='seasonSelector'>
+			    		<h5>Season 3</h5>
+				    </div>
+			    </div>
+			</div>
 		  </div>
 		  <div class="modal-body">
-		  	<div style="width: 100%; text-align: center;">
+		  	<div id="collsescnt1" class="seasonContent" style="display:block;">
 		  		<table class="table table-bordered table-hover">
 		  			<tr>
 		  				<td>Episode</td>
-		  				<td>Name</td>
+		  				<td>Title</td>
 		  			</tr>
-		  			<tr>
+		  			<tr style="cursor:pointer" onclick="document.location.href='blah.html'">
 		  				<td><div class="episodeNumber">1</div><div class="episodePlay"><i class="icon-play"></i></div></td>
 		  				<td>The name of the Doctor</td>
 		  			</tr>
@@ -102,6 +126,28 @@
 	          <p>Not a registered user? Please register here.</p>
 		  </div>
 		</div>
+		<script>
+		$(document).ready(function(){
+			$('.seasonSelector').on('click', function(event){
+				id=$(this).attr('id').substring(7); maxwidth=$(".seasonSelector").size()*$(this).width();
+		    	$('.seasonSelector > h5').css('color', "rgb(160, 160, 160)");
+		    	$('.seasonContent').fadeOut(200, function(){
+		    		$('#collsescnt'+id).fadeIn(200);
+		    		});
+		    	$('#'+$(this).attr('id')+' > h5').css('color', "white");
+		    	
+				leftOffset = ($(".seasonsSlider").width()/2-$(this).width()*(id));
+				if(leftOffset<0&&maxwidth+leftOffset>$(".seasonsSlider").width()-30)
+					$(".seasonsHolder").css('left', leftOffset + "px");
+				else if(leftOffset>=0)
+					$(".seasonsHolder").css('left', "0px");
+				else if(maxwidth+leftOffset<=$(".seasonsSlider").width()-30)
+					$(".seasonsHolder").css('left',$(".seasonsSlider").width()-30 - maxwidth +"px");
+	    	});
+		});
+		</script>
+
+		<!-- end collection modal -->
 
 		<div id='topBar' class='normalTopBar navbar-static-top'>
 			<div id='innerTopBar'>

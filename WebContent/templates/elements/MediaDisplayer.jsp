@@ -57,15 +57,15 @@
 	     keyCorrespondence['<%=(String)ids.get(i) %>'] = <%=i %>;
 	     keyCorrespondence[<%=(i + 1) %>] = '<%=(String)ids.get(i) %>';
 	    $('#<%=(String)ids.get(i) %>').on('click', function(event){
-	    	$('#'+keyCorrespondence[onDisplay]).animate({
+	    	$('#'+keyCorrespondence[onDisplay]).css({
 	    		'color':'rgb(160, 160, 160)'
-	    		},200);
+	    		});
 	    	$('#resultPage'+onDisplay).fadeOut(200, function(){
 	    		$('#resultPage'+onDisplay).fadeIn(200);
 	    		});
 	    	onDisplay = <%=(i + 1) %>;
-	    	$('#'+keyCorrespondence[onDisplay]).animate({
-	    		'color':'black'}, 200);
+	    	$('#'+keyCorrespondence[onDisplay]).css({
+	    		'color':'black'});
 	    	});
 		<%
 	}

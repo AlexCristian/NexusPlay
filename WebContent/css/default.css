@@ -7,6 +7,33 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
+.seasonsSlider{
+	position: absolute;
+	bottom: 0px;
+	right: 0px;
+	width: calc(100% - 160px);
+	overflow: hidden;
+	height: 30px;
+}
+.seasonsHolder{
+	position:absolute;
+	width:200%;
+	transition: all 0.5s;
+	-webkit-transition: all 0.5s; /* Safari */
+}
+.seasonContent{
+	width: 100%; 
+	text-align: center;
+	display: none;
+}
+.seasonSelector{
+	display: inline-block;
+}
+.seasonSelector > h5{
+	color: rgb(160, 160, 160);
+	transition: all 0.5s;
+	-webkit-transition: all 0.5s; /* Safari */
+}
 .episodeNumber{
 	display:block;
 }
@@ -21,6 +48,7 @@ tr:hover > td >.episodePlay{
 }
 .collection > .modal-header{
 	padding:0;
+	position:relative;
 	margin:0;
 	color:white !important;
 	background-color: rgb(41, 41, 41);
@@ -143,6 +171,7 @@ box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
 #pageCover{
 	background-color:white;
 	height:100%;
+	overflow: hidden;
 	-webkit-border-radius: 8px;
 	-moz-border-radius: 8px;
 	border-radius: 8px;
@@ -182,6 +211,10 @@ box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
 #searchResults{
 	background-color:rgba(255, 255, 255, 0.5);
 	display:none;
+	overflow: hidden;
+	-webkit-border-radius: 8px;
+	-moz-border-radius: 8px;
+	border-radius: 8px;
 }
 .input-append > button {
     height: inherit !important;
@@ -334,9 +367,9 @@ a:hover, a:focus{
 	color:rgb(160, 160, 160);
 	float: left;
 	margin: 10px 10px 10px 10px;
-	transition: background-color .25s ease-in-out;
-   -moz-transition: background-color .25s ease-in-out;
-   -webkit-transition: background-color .25s ease-in-out;
+	transition: all .5s;
+   -moz-transition: all .5s;
+   -webkit-transition: all .5s;
 }
 .topBarButton{
 	text-decoration:none !important;
@@ -347,7 +380,6 @@ a:hover, a:focus{
 }
 .contentContainer{
 	background-color:black;
-	overflow:hidden;
 	-webkit-border-radius: 8px;
 	-moz-border-radius: 8px;
 	border-radius: 8px;
