@@ -85,9 +85,8 @@ public class Media
             String line;
             while((line = reader.readLine()) != null) 
                 builder.append(line);
-            for(jsonResult = builder.toString(); !mediaName.contains(" ") && jsonResult.contentEquals("{\"code\":404, \"error\":\"Film not found\"}"); jsonResult = builder.toString())
+            for(jsonResult = builder.toString(); mediaName.contains(" ") && jsonResult.contentEquals("{\"code\":404, \"error\":\"Film not found\"}"); mediaName = mediaName.substring(0, mediaName.lastIndexOf(" ")))
             {
-                mediaName = mediaName.substring(0, mediaName.lastIndexOf(" "));
                 url = new URL((new StringBuilder("http://imdbapi.org/?q=")).append(mediaName.replaceAll(" ", "+")).toString());
                 connection = url.openConnection();
                 connection.addRequestProperty("User-Agent", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0)");

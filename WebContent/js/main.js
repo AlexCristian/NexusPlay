@@ -1,3 +1,15 @@
+function displayCollection(id){
+	$.ajax({
+		type: "POST",
+		url: "./CollectionDisplayer",
+		data: { id : id}
+	}).done(function( data ){
+		$("#collection").html(data);
+		$("#collection").modal();
+	});
+	
+	
+}
 $(document).ready(function(){
 	$("#login-submit").click(function(){
 		$.ajax({

@@ -11,7 +11,7 @@ body{
 	position: absolute;
 	bottom: 0px;
 	right: 0px;
-	width: calc(100% - 160px);
+	width: 400px;
 	overflow: hidden;
 	height: 30px;
 }
@@ -34,17 +34,11 @@ body{
 	transition: all 0.5s;
 	-webkit-transition: all 0.5s; /* Safari */
 }
-.episodeNumber{
+.episode{
 	display:block;
 }
-tr:hover > td > .episodeNumber{
-	display:none;
-}
-.episodePlay{
-	display:none;
-}
-tr:hover > td >.episodePlay{
-	display:block;
+tr:hover > td > .episode:after{
+	content: ' \25BA';
 }
 .collection > .modal-header{
 	padding:0;
@@ -88,6 +82,9 @@ box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
 }
 .uncategHolder{
 	width:500px;
+}
+.uncategHolder > h5{
+	color:black;
 }
 .controlContent{
 	display:none;
@@ -318,6 +315,7 @@ a:hover, a:focus{
 	background-color:white;
 	min-height:50px;
 	padding-top:20px;
+	font-size: 40px;
 }
 .mediaTile{
 	-webkit-box-shadow: 0px 0px 20px rgba(0,0,0,.8);

@@ -4,7 +4,7 @@
 	<%@ include file="/templates/elements/MediaDisplayer.jsp" %>
 	 <script type="text/javascript">
 	 $(document).ready(function(){
-	 	$("#recentlyAdded > .categoriesHolder").prepend("<div class='categorySelector beta'>Recently added</div>");
+	 	$("#recentlyAdded > .categoriesHolder").prepend("<div class='categorySelector'>Just added</div>");
 	 });
 	 </script>
 </div>

@@ -4,9 +4,9 @@
 				</div>
 			</div>
 			<div class='span2'></div>
-			<div class='span11' style='text-align:center'>
-				<i>Hosted on a Raspberry Pi.
-					<br>Built on Nexus Play, an open source project available for free download <a href='http://alexcri.no-ip.org/'>here</a>
+			<div class='span11' style='text-align:center; color:rgba(255, 255, 255, 0.8);'>
+				<i>
+					<br>Built on Nexus Play, an open source project available for free download <a href='https://github.com/TheShadows/NexusPlay'>here</a>
 				</i>
 			</div>
 		</div>

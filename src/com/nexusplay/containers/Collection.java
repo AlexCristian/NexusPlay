@@ -11,6 +11,7 @@ public class Collection {
 
 	private String name, id, poster, year;
 	private ArrayList<ArrayList<Media>> episodes;
+	private int seasons;
 	
 	public Collection(String name, String collectionID){
 		this.name = name;
@@ -21,7 +22,7 @@ public class Collection {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
+		seasons = episodes.size()-1;
 	}
 	
 	public Collection(String name, String year, String poster){
@@ -71,6 +72,14 @@ public class Collection {
 		this.year = year;
 	}
 
+	public int getSeasons() {
+		return seasons;
+	}
+
+	public void setSeasons(int seasons) {
+		this.seasons = seasons;
+	}
+
 	public ArrayList<ArrayList<Media>> getEpisodes() {
 		return episodes;
 	}
@@ -78,4 +87,5 @@ public class Collection {
 	public void setEpisodes(ArrayList<ArrayList<Media>> episodes) {
 		this.episodes = episodes;
 	}
+
 }

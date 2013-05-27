@@ -78,6 +78,24 @@ public class CollectionsDatabase {
 	        }
 	    }
 	    
+	    public static String matchIdWithName(String id)
+		        throws SQLException
+		    {
+		        Statement stmt = null;
+		        Connection con = getConnection();
+		        stmt = con.createStatement();
+		        String req = new String("SELECT * FROM CollectionsDB WHERE ");
+		        req = (new StringBuilder(String.valueOf(req))).append("id = '").append(id).append("';").toString();
+		        ResultSet rs = stmt.executeQuery(req);
+		        if(!rs.next())
+		        {
+		            return null;
+		        } else
+		        {
+		        	return rs.getString("name");
+		        }
+		    }
+	    
 	    public static Collection getCollectionByName(String name)
 		        throws SQLException
 		    {

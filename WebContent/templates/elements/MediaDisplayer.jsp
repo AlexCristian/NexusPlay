@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=utf-8"
-    pageEncoding="utf-8" import="com.nexusplay.containers.*,java.util.*"%>
+    pageEncoding="utf-8" import="com.nexusplay.containers.*,java.util.*,com.nexusplay.db.CollectionsDatabase"%>
 <%
 	CategoryContainer[] totalCategs = (CategoryContainer[]) pageContext.findAttribute("categories");
 	request.removeAttribute("categories");
@@ -13,7 +13,7 @@
 	    String currentID = totalCategs[i].getCategoryName().toLowerCase().replaceAll(" ", "") + randomToken;
 	    ids.add(currentID);
 	    %>
-	    <div id='<%=currentID %>' class='categorySelector beta'<%=(i != 0) ? "" : "style='color:black;'" %>>
+	    <div id='<%=currentID %>' class='categorySelector'<%=(i != 0) ? "" : "style='color:black;'" %>>
 	    	<%=totalCategs[i].getCategoryName() %>
 	    </div>
 	    <%
@@ -31,10 +31,10 @@
 	    {
 	        Media item = (Media)iterator1.next();
 	        %>
-	        <a class='videoLink' href='<%=request.getContextPath() %>/watch?w=<%=item.getId() %>'>
+	        <a class='videoLink' <% if(item.getCollectionID().contentEquals("")){ %>href='<%=request.getContextPath() %>/watch?w=<%=item.getId() %>'<% }else{ %>style="cursor:pointer" onClick="displayCollection('<%=item.getCollectionID() %>')" <% } %>>
 	        	<div class='mediaTile'>
 	        		<img id='moviePoster' src='<%=request.getContextPath()+item.getPoster() %>'/>
-	        		<p><%=item.getName() %>
+	        		<p><%=(item.getCollectionID().contentEquals("")) ? item.getName() : CollectionsDatabase.matchIdWithName(item.getCollectionID()) %>
 	        			<br><%=item.getYear() %>
 	        		</p>
 	        	</div>

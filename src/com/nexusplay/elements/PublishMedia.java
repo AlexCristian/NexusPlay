@@ -9,6 +9,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import com.nexusplay.containers.Collection;
 import com.nexusplay.containers.Media;
 import com.nexusplay.db.CollectionsDatabase;
 import com.nexusplay.db.MediaDatabase;
@@ -53,7 +54,10 @@ public class PublishMedia extends HttpServlet {
 		media.setPublished(1);
 		media.setYear(request.getParameter("year"));
 		try {
-			media.setCollectionID(CollectionsDatabase.getCollectionByName(request.getParameter("collection")).getID());
+			Collection coll= null;
+			coll = CollectionsDatabase.getCollectionByName(request.getParameter("collection"));
+			media.setCollectionID(coll.getID());
+			media.setPoster(coll.getPoster());
 		} catch (Exception e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();

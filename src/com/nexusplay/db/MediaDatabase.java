@@ -195,7 +195,7 @@ public class MediaDatabase
         Statement stmt = null;
         Connection con = getConnection();
         stmt = con.createStatement();
-        String req = new String("SELECT * FROM MediaDB WHERE published=1;");
+        String req = new String("SELECT * FROM MediaDB WHERE published=1 AND collectionid!='' GROUP BY collectionid UNION SELECT * FROM MediaDB WHERE published=1 AND collectionid='';");
         ResultSet rs = stmt.executeQuery(req);
         ArrayList raw = new ArrayList();
         rs.setFetchDirection(1001);
@@ -253,7 +253,6 @@ public class MediaDatabase
         stmt = con.createStatement();
         String req = new String("SELECT * FROM MediaDB WHERE published=1 AND collectionid='" + collectionID + "' ORDER BY season ASC, episode ASC;");
         ResultSet rs = stmt.executeQuery(req);
-        int currentSeason = -1;
         while(rs.next())
         {
             Media temp = new Media(rs.getString("name"), rs.getString("id"), rs.getString("filename"), rs.getString("category"), rs.getInt("published"));
@@ -263,11 +262,10 @@ public class MediaDatabase
             temp.setSeason(rs.getInt("season"));
             temp.setViews(rs.getInt("views"));
             temp.setYear(rs.getString("year"));
-            if(temp.getSeason()!=currentSeason){
-            	currentSeason = temp.getSeason();
-            	episodes.add(currentSeason, new ArrayList<Media>());
+            while(episodes.size()<=temp.getSeason()){
+            	episodes.add(new ArrayList<Media>());
             }
-            episodes.get(currentSeason).add(temp);
+            episodes.get(temp.getSeason()).add(temp);
         }
         return episodes;
     }
