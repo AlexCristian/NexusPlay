@@ -7,6 +7,33 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
+.metadata > .metaText{
+	display:inline-table;
+	margin-left: 10px;
+}
+.videoContent{
+	background-color: rgb(17, 17, 17);
+}
+.metaText > h5, .metaText > h2{
+	color:white;
+}
+.metadata{
+	display:inline-table;
+	width:100%;
+	box-shadow: 0 1px 4px transparent, 0 0 1000px rgb(0, 0, 0) inset;
+	overflow:hidden;
+}
+.watchPoster{
+	-moz-transform: skewY(-5deg);
+	-webkit-transform: skewY(-5deg);
+    -o-transform: skewY(-5deg);
+    -ms-transform: skewY(-5deg);
+    transform: skewY(-5deg);
+    margin:30px;
+    display:inline-table;
+    -webkit-box-reflect: below 0px -webkit-gradient(linear, left top, left bottom, from(transparent), color-stop(50%, transparent), to(rgba(255,255,255,0.2)));
+    box-reflect: below 0px -webkit-gradient(linear, left top, left bottom, from(transparent), color-stop(50%, transparent), to(rgba(255,255,255,0.2)));
+}
 .seasonsSlider{
 	position: absolute;
 	bottom: 0px;
