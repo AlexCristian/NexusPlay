@@ -16,7 +16,7 @@
 <div class="videoContent">
 	<script>
 	$(document).ready(function(){
-		jQuery("#mediaName").fitText(1.5);
+		jQuery("#mediaName").fitText(2);
 	});
 	</script>
 	<div class="metadata">
