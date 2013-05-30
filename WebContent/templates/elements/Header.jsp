@@ -9,6 +9,7 @@
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.color.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/sha1.js'></script>
+		<script type='text/javascript' src='<%=request.getContextPath()%>/js/fittext.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/main.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/player/lib/mediaelement.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/player/lib/mediaelementplayer.js'></script>		

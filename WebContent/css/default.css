@@ -7,8 +7,12 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
+#mediaName{
+	width:100%;
+	font-size:200%;
+}
 .metadata > .metaText{
-	display:inline-table;
+	display:inline-block;
 	margin-left: 10px;
 }
 .videoContent{
@@ -16,6 +20,10 @@ body{
 }
 .metaText > h5, .metaText > h2{
 	color:white;
+}
+.metaText{
+	width: calc(100% - 240px);
+	width: -webkit-calc(100% - 240px);
 }
 .metadata{
 	display:inline-table;

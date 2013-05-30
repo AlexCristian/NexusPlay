@@ -14,16 +14,21 @@
 	<video id="media-player" src="<%=request.getContextPath()+SettingsContainer.getMediaSource() %>/<%=item.getFilename() %>" height="400px" width="100%"></video>
 </div>
 <div class="videoContent">
+	<script>
+	$(document).ready(function(){
+		jQuery("#mediaName").fitText(1.5);
+	});
+	</script>
 	<div class="metadata">
-		<img src=".<%=item.getPoster() %>" width=140px" class="watchPoster"/>
+		<img src=".<%=item.getPoster() %>" class="watchPoster" width="120px"/>
 		<% if(item.getCollectionID().isEmpty()){ %>
 		<div class="metaText">
-			<h2><%=item.getName() %></h2>
-			<h5>Released in <%=item.getYear() %></h5>
+			<h2 id="mediaName"><%=item.getName() %></h2>
+			<h5 class="zeta">Released in <%=item.getYear() %></h5>
 		</div>
 		<% }else{ %>
 		<div class="metaText">
-			<h2 class="gamma"><%=CollectionsDatabase.matchIdWithName(item.getCollectionID()) %><span class="muted"> - <%=item.getName() %></span></h2>
+			<h2 id="mediaName"><%=CollectionsDatabase.matchIdWithName(item.getCollectionID()) %><span class="muted"> - <%=item.getName() %></span></h2>
 			<h5 class="zeta">Season <%=item.getSeason() %>, episode <%=item.getEpisode() %></h5>
 		</div>
 		<% } %>
