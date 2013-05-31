@@ -11,10 +11,7 @@ body{
 	width:100%;
 	font-size:200%;
 }
-.metadata > .metaText{
-	display:inline-block;
-	margin-left: 10px;
-}
+
 .videoContent{
 	background-color: rgb(17, 17, 17);
 }
@@ -22,8 +19,11 @@ body{
 	color:white;
 }
 .metaText{
-	width: calc(100% - 240px);
-	width: -webkit-calc(100% - 240px);
+	display:inline-table;
+	margin-left: 10px;
+}
+.metaText > h2, .metaText > h5{
+	margin-left: 30px;
 }
 .metadata{
 	display:inline-table;
