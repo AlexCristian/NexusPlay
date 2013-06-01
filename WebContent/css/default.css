@@ -7,6 +7,73 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
+.collectionHeader{
+	height:200px;
+	overflow:hidden;
+}
+.poster-wrapper {
+	display:inline-table;
+	background: white;
+	width: 140px;
+	overflow: hidden;
+	-webkit-box-shadow: 0px 0px 8px rgba(0,0,0,0.3);
+	-moz-box-shadow:    0px 0px 8px rgba(0,0,0,0.3);
+	box-shadow:         0px 0px 8px rgba(0,0,0,0.3);
+	position: relative;
+	z-index: 90;
+}
+.ribbon-wrapper {
+  width: 85px;
+  height: 88px;
+  overflow: hidden;
+  position: absolute;
+  top: 0px;
+  right: 0px;
+}
+.ribbon {
+	transition: all 0.5s;
+	font: bold 15px Sans-Serif;
+	color: white !important;
+	text-align: center;
+	-webkit-transform: rotate(45deg);
+	-moz-transform:    rotate(45deg);
+	-ms-transform:     rotate(45deg);
+	-o-transform:      rotate(45deg);
+	position: relative;
+	left: 38px;
+	top: 5px;
+	width: 64px;
+	background-color: grey;
+	-webkit-box-shadow: 0px 0px 3px rgba(0,0,0,0.3);
+	-moz-box-shadow:    0px 0px 3px rgba(0,0,0,0.3);
+	box-shadow:         0px 0px 3px rgba(0,0,0,0.3);
+}
+.ribbon-green{
+	background-color: #99CC00;
+}
+.poster-wrapper:hover > .ribbon-wrapper > .ribbon-green{
+	background-color: #0099CC;   
+}
+.poster-wrapper:hover > .ribbon-wrapper > .ribbon-green:before{
+	content:"\25CB";
+}
+.ribbon-green:before {
+  left: 0;
+  content:"\2022";
+}
+.ribbon-blue{
+	background-color: #0099CC;
+}
+.poster-wrapper:hover > .ribbon-wrapper > .ribbon-blue{
+	background-color: #99CC00;   
+}
+.poster-wrapper:hover > .ribbon-wrapper > .ribbon-blue:before{
+	content:"\2022";
+}
+.ribbon-blue:before {
+  left: 0;
+  content:"\25CB";
+}
 #mediaName{
 	width:100%;
 	font-size:200%;
@@ -21,6 +88,7 @@ body{
 .metaText{
 	display:inline-table;
 	margin-left: 10px;
+	margin-right: 5px;
 }
 .metaText > h2, .metaText > h5{
 	margin-left: 30px;
@@ -28,7 +96,7 @@ body{
 .metadata{
 	display:inline-table;
 	width:100%;
-	box-shadow: 0 1px 4px transparent, 0 0 1000px rgb(0, 0, 0) inset;
+	box-shadow: 0 2px 4px rgb(0, 0, 0), 0 0 1000px rgb(0, 0, 0) inset;
 	overflow:hidden;
 }
 .watchPoster{
@@ -38,9 +106,18 @@ body{
     -ms-transform: skewY(-5deg);
     transform: skewY(-5deg);
     margin:30px;
+    width:120px;
     display:inline-table;
+    transition: all 0.5s;
     -webkit-box-reflect: below 0px -webkit-gradient(linear, left top, left bottom, from(transparent), color-stop(50%, transparent), to(rgba(255,255,255,0.2)));
     box-reflect: below 0px -webkit-gradient(linear, left top, left bottom, from(transparent), color-stop(50%, transparent), to(rgba(255,255,255,0.2)));
+}
+.watchPoster:hover{
+	-moz-transform: skewY(0deg);
+	-webkit-transform: skewY(0deg);
+    -o-transform: skewY(0deg);
+    -ms-transform: skewY(0deg);
+    transform: skewY(0deg);
 }
 .seasonsSlider{
 	position: absolute;

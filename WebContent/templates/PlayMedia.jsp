@@ -16,27 +16,37 @@
 <div class="videoContent">
 	<div class="metadata">
 		<table>
+			<% if(item.getCollectionID().isEmpty()){ %>
 			<tr>
 				<td>
-					<img src=".<%=item.getPoster() %>" class="watchPoster" width="120px"/>
+					<img src=".<%=item.getPoster() %>" class="watchPoster" width="120px"/><img src=".<%=item.getPoster() %>" class="watchPoster" width="120px" style="cursor:pointer" onClick="displayCollection('<%=item.getCollectionID() %>')"/>
 				</td>
 				<td>
-					<% if(item.getCollectionID().isEmpty()){ %>
 					<div class="metaText">
 						<h2 class="gamma"><%=item.getName() %></h2>
 						<h5 class="zeta">Released in <%=item.getYear() %></h5>
 					</div>
-					<% }else{ %>
+				</td>
+			</tr>
+			<% }else{ %>
+			<tr>
+				<td>
+					<img src=".<%=item.getPoster() %>" class="watchPoster" width="120px" style="cursor:pointer" onClick="displayCollection('<%=item.getCollectionID() %>')"/>
+				</td>
+				<td>
 					<div class="metaText">
 						<h2 class="gamma"><%=CollectionsDatabase.matchIdWithName(item.getCollectionID()) %><span class="muted"> - <%=item.getName() %></span></h2>
 						<h5 class="zeta">Season <%=item.getSeason() %>, episode <%=item.getEpisode() %></h5>
 					</div>
-					<% } %>
 				</td>
 			</tr>
+			<% } %>
 		</table>
 		
 	</div>
-	<h5 style="margin:0;">Comments</h5>
+	<!-- 
+		This is where comments & subs will go
+		<h5 style="margin:0;">Comments</h5>
+	 -->
 </div>
 <% item=null; %>
