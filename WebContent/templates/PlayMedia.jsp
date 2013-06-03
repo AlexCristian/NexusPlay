@@ -19,7 +19,7 @@
 			<% if(item.getCollectionID().isEmpty()){ %>
 			<tr>
 				<td>
-					<img src=".<%=item.getPoster() %>" class="watchPoster" width="120px"/><img src=".<%=item.getPoster() %>" class="watchPoster" width="120px" style="cursor:pointer" onClick="displayCollection('<%=item.getCollectionID() %>')"/>
+					<img src=".<%=item.getPoster() %>" class="watchPoster" width="120px"/>
 				</td>
 				<td>
 					<div class="metaText">
