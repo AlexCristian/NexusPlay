@@ -24,11 +24,13 @@ public class PlayMedia extends HttpServlet
     {
         response.setContentType("text/html");
         PrintWriter out = response.getWriter();
+        String userID=null;
         
         if(request.getSession().getAttribute("userID")!=null){
         	try {
         		User user = UsersDatabase.getUserById((String) request.getSession().getAttribute("userID"));
-				request.setAttribute("user", user);
+				userID = user.getId();
+        		request.setAttribute("user", user);
 			} catch (Exception e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -43,6 +45,9 @@ public class PlayMedia extends HttpServlet
             	throw new Exception("Media not found exception");
             }
             request.setAttribute("media", item);
+            if(userID!=null){
+            	UsersDatabase.setMediaWatched(userID, item.getId());
+            }
             request.getRequestDispatcher("/templates/PlayMedia.jsp").include(request, response);
         }
         catch(SQLException e)

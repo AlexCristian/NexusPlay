@@ -1,9 +1,13 @@
 <%@ page language="java" contentType="text/html; charset=utf-8"
-    pageEncoding="utf-8" import="com.nexusplay.containers.*,java.util.*,com.nexusplay.db.CollectionsDatabase"%>
+    pageEncoding="utf-8" import="com.nexusplay.containers.*,java.util.*,com.nexusplay.db.CollectionsDatabase,com.nexusplay.db.UsersDatabase"%>
 <%
 	CategoryContainer[] totalCategs = (CategoryContainer[]) pageContext.findAttribute("categories");
 	request.removeAttribute("categories");
 	String randomToken = String.valueOf((new Random()).nextInt(0x3b9ac9ff));
+	User user = null;
+	if(request.getSession().getAttribute("userID") instanceof String){
+		user = UsersDatabase.getUserById((String)request.getSession().getAttribute("userID"));
+	}
 	%>
 	<div class='categoriesHolder'>
 	<%	
@@ -35,7 +39,10 @@
 	        	<div class='mediaTile'>
 	        		<img id='moviePoster' src='<%=request.getContextPath()+item.getPoster() %>'/>
 	        		<p><%=(item.getCollectionID().contentEquals("")) ? item.getName() : CollectionsDatabase.matchIdWithName(item.getCollectionID()) %>
-	        			<br><%=item.getYear() %>
+	        			<br>
+	        			<% if(item.getCollectionID().contentEquals("")&&user!=null&&user.isWatched(item.getId())){ %>
+	        				<i class="icon-ok  icon-white"></i> <% } %>
+	        			<%=item.getYear() %>
 	        		</p>
 	        	</div>
 	        </a>

@@ -99,13 +99,13 @@
 					for (Map.Entry<String, String> entry : user.getPaused().entrySet()) {
 						m++;
 						Media item = MediaDatabase.getMediaById(entry.getKey());
-						if(m>1)
-							pausedList+="<hr class=\"featurette-divider\">";
-						pausedList+= "<a href=\"./watch?w=" + item.getId() + "\"><div class=\"pausedMedia\">";
-						pausedList+= "<img src=\"." + item.getPoster() + "\" height=\"60px\"/>";
-						pausedList+= "<div class=\"innerPausedMedia\">" + item.getName() + "<br><i class=\"icon-pause\"></i>" + (int) Float.parseFloat(entry.getValue())/60 + " min</div>";
-						pausedList+= "</div></a>";
+						if(m==1)
+							pausedList+="<table class=\"pausedTable\">";
+						pausedList+= "<tr onclick=\"document.location.href=\\'./watch?w=" + item.getId() + "\\'\"><div class=\"pausedMedia\">";						pausedList+= "<td><img class=\"previouslyWatchingPoster\" src=\"." + item.getPoster() + "\" height=\"60px\"/>";
+						pausedList+= "</td><td><div class=\"innerPausedMedia\">" + item.getName() + "<br><i class=\"icon-pause\"></i>" + (int) Float.parseFloat(entry.getValue())/60 + " min</div>";
+						pausedList+= "</div></td></tr>";
 					}
+					pausedList+="</table>";
 				
 				
 				

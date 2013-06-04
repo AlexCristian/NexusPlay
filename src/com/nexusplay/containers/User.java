@@ -100,6 +100,9 @@ public class User {
 	public ArrayList<String> getWatched() {
 		return watched;
 	}
+	public boolean isWatched(String mediaID){
+		return watched.contains(mediaID);
+	}
 	public void setWatched(ArrayList<String> watched) {
 		this.watched = watched;
 	}

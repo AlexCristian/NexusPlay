@@ -15,6 +15,8 @@ body{
 	display:inline-table;
 	background: white;
 	width: 140px;
+	margin: 0 !important;
+	border: none !important;
 	overflow: hidden;
 	-webkit-box-shadow: 0px 0px 8px rgba(0,0,0,0.3);
 	-moz-box-shadow:    0px 0px 8px rgba(0,0,0,0.3);
@@ -241,6 +243,23 @@ box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
 }
 #popOverBox > .featurette-divider{
 	margin: 5px 0;
+}
+.pausedTable{
+	margin:0;
+}
+.pausedTable > tbody > tr{
+	border-bottom:solid;
+	border-width:1px;
+	border-color:rgb(214, 214, 214);
+	cursor:pointer;
+}
+.pausedTable > tbody > tr > td{
+	padding-bottom:3px;
+	color:#08c;
+	padding-top:3px;
+}
+.previouslyWatchingPoster{
+	height:60px;
 }
 .pausedMedia > img{
 	height:60px;
@@ -485,8 +504,11 @@ a:hover, a:focus{
 	text-decoration:none !important;
 }
 #moviePoster{
+	margin:0;
+	display:inline-table;
+	border:none !important;
 	height:200px;
-	width:135px;
+	width:140px;
 }
 .contentContainer{
 	background-color:black;

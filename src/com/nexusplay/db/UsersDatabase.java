@@ -86,4 +86,18 @@ public class UsersDatabase {
         String req = "UPDATE UsersDB SET email='"+item.getEmail()+"', nickname='"+item.getNickname()+"', password='"+item.getPassword()+"', watched='"+item.getWatchedSerialized()+"', subscriptions='"+item.getSubscriptionsSerialized()+"', paused='"+item.getPausedSerialized()+"' WHERE id='" + item.getId() + "';";
         stmt.executeUpdate(req);
 	}
+	public static void setMediaWatched(String userID, String mediaID) throws SQLException{
+		Connection con = getConnection();
+        Statement stmt = null;
+        stmt = con.createStatement();
+        String req = "SELECT * FROM UsersDB WHERE id='" + userID + "';";
+        ResultSet rs = stmt.executeQuery(req);
+        if(!rs.next())
+        	return;
+        if(!rs.getString("watched").contains(mediaID+";")){
+        	req="UPDATE UsersDB SET watched=concat(watched,'" + mediaID + ";') WHERE id='" + userID + "';";
+        	stmt = con.createStatement();
+        	stmt.executeUpdate(req);
+        }
+	}
 }

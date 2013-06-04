@@ -10,7 +10,9 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import com.nexusplay.containers.Collection;
+import com.nexusplay.containers.User;
 import com.nexusplay.db.CollectionsDatabase;
+import com.nexusplay.db.UsersDatabase;
 
 /**
  * Servlet implementation class CollectionDisplayer
@@ -38,10 +40,17 @@ public class CollectionDisplayer extends HttpServlet {
 	 * @see HttpServlet#doPost(HttpServletRequest request, HttpServletResponse response)
 	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		Collection coll = null;
+		Collection coll = null; User user = null;
 		try {
 			coll = CollectionsDatabase.getCollectionById(request.getParameter("id"));
+			if(request.getSession().getAttribute("userID") instanceof String){
+				user = UsersDatabase.getUserById((String)request.getSession().getAttribute("userID"));
+				request.setAttribute("user", user);
+			}
 		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
