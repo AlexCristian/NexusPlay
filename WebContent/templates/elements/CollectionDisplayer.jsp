@@ -11,7 +11,7 @@
 	    <div style="width:139px; height:199px; overflow:hidden;">
 			<div class="poster-wrapper">
 				<img id="moviePoster" src=".<%= coll.getPoster() %>" style="width:140px;"/>
-	       		<div class="ribbon-wrapper"><div class="ribbon ribbon-blue"></div></div>
+	       		<div class="ribbon-wrapper"><div class="ribbon <%=(user==null||!user.getSubscriptions().contains(coll.getID())) ? "ribbon-blue" : "ribbon-green" %>"></div></div>
 			</div>
 	    </div>
 	</div>

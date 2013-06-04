@@ -9,7 +9,7 @@ import com.nexusplay.containers.User;
 
 public class UsersDatabase {
 
-	private final static String tableDefinition = "CREATE TABLE IF NOT EXISTS UsersDB(email VARCHAR(100), nickname VARCHAR(100), password VARCHAR(100), watched TEXT, subscriptions TEXT, paused TEXT, id VARCHAR(50));";
+	private final static String tableDefinition = "CREATE TABLE IF NOT EXISTS UsersDB(email VARCHAR(100), nickname VARCHAR(100), password VARCHAR(100), watched TEXT, subscriptions TEXT, paused TEXT, notifications TEXT, id VARCHAR(50));";
 	private static Connection getConnection() throws SQLException{
     	Statement stmt = null;
         Connection con = ConnectionManager.getConnection();
@@ -27,7 +27,7 @@ public class UsersDatabase {
         if(rs.next())
             throw new Exception("User already registered!");
         stmt = con.createStatement();
-        req = "INSERT INTO UsersDB VALUES ('"+item.getEmail()+"', '"+item.getNickname()+"', '"+item.getPassword()+"', '"+item.getWatchedSerialized()+"', '"+item.getSubscriptionsSerialized()+"' ,'"+item.getPausedSerialized()+"', '" + item.getId() + "');";
+        req = "INSERT INTO UsersDB VALUES ('"+item.getEmail()+"', '"+item.getNickname()+"', '"+item.getPassword()+"', '"+item.getWatchedSerialized()+"', '"+item.getSubscriptionsSerialized()+"' ,'"+item.getPausedSerialized()+"' ,'"+item.getNotificationsSerialized()+"', '" + item.getId() + "');";
         stmt.executeUpdate(req);
 	}
 	public static boolean isEmailValid(String email) throws SQLException{
@@ -51,7 +51,7 @@ public class UsersDatabase {
         rs.next();
         if(!rs.getString("password").equals(password))
         	throw new Exception("Passwords don't match!");
-        User user = new User(rs.getString("email"), rs.getString("watched"), rs.getString("nickname"), rs.getString("subscriptions"), rs.getString("password"), rs.getString("paused"), rs.getString("id"));
+        User user = new User(rs.getString("email"), rs.getString("watched"), rs.getString("nickname"), rs.getString("subscriptions"), rs.getString("password"), rs.getString("paused"), rs.getString("id"), rs.getString("notifications"));
         return user;
 	}
 	public static User getUserById(String id) throws Exception{
@@ -61,7 +61,7 @@ public class UsersDatabase {
         String req = "SELECT * FROM UsersDB WHERE id='" + id + "';";
         ResultSet rs = stmt.executeQuery(req);
         if(rs.next())
-        	return new User(rs.getString("email"), rs.getString("watched"), rs.getString("nickname"), rs.getString("subscriptions"), rs.getString("password"), rs.getString("paused"), rs.getString("id"));
+        	return new User(rs.getString("email"), rs.getString("watched"), rs.getString("nickname"), rs.getString("subscriptions"), rs.getString("password"), rs.getString("paused"), rs.getString("id"), rs.getString("notifications"));
         return null;
 	}
 	public static void deleteUser(User item) throws Exception{
@@ -83,7 +83,7 @@ public class UsersDatabase {
 		Connection con = getConnection();
         Statement stmt = null;
         stmt = con.createStatement();
-        String req = "UPDATE UsersDB SET email='"+item.getEmail()+"', nickname='"+item.getNickname()+"', password='"+item.getPassword()+"', watched='"+item.getWatchedSerialized()+"', subscriptions='"+item.getSubscriptionsSerialized()+"', paused='"+item.getPausedSerialized()+"' WHERE id='" + item.getId() + "';";
+        String req = "UPDATE UsersDB SET email='"+item.getEmail()+"', nickname='"+item.getNickname()+"', password='"+item.getPassword()+"', watched='"+item.getWatchedSerialized()+"', subscriptions='"+item.getSubscriptionsSerialized()+"', paused='"+item.getPausedSerialized()+"', notifications='"+item.getNotificationsSerialized()+"' WHERE id='" + item.getId() + "';";
         stmt.executeUpdate(req);
 	}
 	public static void setMediaWatched(String userID, String mediaID) throws SQLException{
@@ -99,5 +99,11 @@ public class UsersDatabase {
         	stmt = con.createStatement();
         	stmt.executeUpdate(req);
         }
+        if(!rs.getString("notifications").contains(mediaID+";")){
+        	req="UPDATE UsersDB SET notifications='" + rs.getString("notifications").replace(mediaID+";", "") + "' WHERE id='" + userID + "';";
+        	stmt = con.createStatement();
+        	stmt.executeUpdate(req);
+        }
 	}
+
 }

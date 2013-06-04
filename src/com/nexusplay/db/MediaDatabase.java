@@ -112,24 +112,19 @@ public class MediaDatabase
         }
     }
     
-    public static boolean publishMedia(String id)
+    public static void propagateMediaNotification(Media media)
             throws SQLException
         {
             Statement stmt = null;
-            Connection con = getConnection();
+            Connection con = getConnection();           
             stmt = con.createStatement();
-            String req = new String("SELECT * FROM MediaDB WHERE ");
-            req = (new StringBuilder(String.valueOf(req))).append("id like '%").append(id).append("%';").toString();
+            String req = new String("SELECT * FROM UsersDB WHERE subscriptions like '%" + media.getCollectionID() + "%';");
             ResultSet rs = stmt.executeQuery(req);
-            if(!rs.next())
-            {
-                return false;
-            } else
-            {
-                stmt = con.createStatement();
-                req = "UPDATE MediaDB SET published=1 WHERE id="+id+";";
-                stmt.executeUpdate(req);
-                return true;
+            while(rs.next()){
+            	String id = rs.getString("id");
+            	req="UPDATE UsersDB SET notifications=concat(notifications,'" + media.getId() + ";') WHERE id='" + id + "';";
+            	stmt = con.createStatement();
+            	stmt.executeUpdate(req);
             }
         }
 

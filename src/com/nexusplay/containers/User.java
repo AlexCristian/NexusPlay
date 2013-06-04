@@ -16,7 +16,7 @@ import com.nexusplay.security.RandomContainer;
 public class User {
 
 	private String email, nickname, password, id;
-	private ArrayList<String> watched, subscriptions;
+	private ArrayList<String> watched, subscriptions, notifications;
 	private HashMap<String, String> paused;
 	
 	/**
@@ -30,7 +30,7 @@ public class User {
 	 * @param PMpassword user's password (2x SHA-1)
 	 * @param PMpaused raw database dump of paused media
 	 */
-	public User(String PMemail, String PMwatched, String PMnickname, String PMsubscriptions, String PMpassword, String PMpaused, String PMID){
+	public User(String PMemail, String PMwatched, String PMnickname, String PMsubscriptions, String PMpassword, String PMpaused, String PMID, String PMnotifications){
 		email = PMemail; nickname = PMnickname; id=PMID;
 		watched=new ArrayList<String>();
 		StringTokenizer watchedTokenizer = new StringTokenizer(PMwatched, ";");
@@ -41,6 +41,11 @@ public class User {
 		StringTokenizer subscriptionsTokenizer = new StringTokenizer(PMsubscriptions, ";");
 		while(subscriptionsTokenizer.hasMoreElements()){
 			subscriptions.add(subscriptionsTokenizer.nextToken());
+		}
+		notifications=new ArrayList<String>();
+		StringTokenizer notificationsTokenizer = new StringTokenizer(PMnotifications, ";");
+		while(notificationsTokenizer.hasMoreElements()){
+			notifications.add(notificationsTokenizer.nextToken());
 		}
 		password = PMpassword;
 		paused = new HashMap<String, String>();
@@ -62,6 +67,7 @@ public class User {
 		email = PMemail; nickname = PMnickname; generateId();
 		watched=new ArrayList<String>();
 		subscriptions=new ArrayList<String>();
+		notifications=new ArrayList<String>();
 		password = Crypto.encryptPassword(PMpassword);
 		paused = new HashMap<String, String>();
 	}
@@ -119,6 +125,24 @@ public class User {
 	public void setSubscriptions(ArrayList<String> subscriptions) {
 		this.subscriptions = subscriptions;
 	}
+	public void subscribe(String collectionID){
+		subscriptions.add(collectionID);
+		try {
+			UsersDatabase.replaceUser(this);
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	public void unsubscribe(String collectionID){
+		subscriptions.remove(collectionID);
+		try {
+			UsersDatabase.replaceUser(this);
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
 	public String getPausedSerialized(){
 		String resp = new String();
 		
@@ -162,6 +186,19 @@ public class User {
 	}
 	public void setId(String id) {
 		this.id = id;
+	}
+	public ArrayList<String> getNotifications() {
+		return notifications;
+	}
+	public String getNotificationsSerialized(){
+		String resp = new String();
+		for(String item : notifications){
+			resp+=item + ";";
+		}
+		return resp;
+	}
+	public void setNotifications(ArrayList<String> notifications) {
+		this.notifications = notifications;
 	}
 	
 }

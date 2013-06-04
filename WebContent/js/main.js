@@ -6,7 +6,6 @@ function displayCollection(id){
 		$("#collection").html(data);
 		$("#collection").modal();
 		$('.seasonSelector').on('click', function(event){
-			console.log(this);
 			id=$(this).attr('id').substring(7); maxwidth=$(".seasonSelector").size()*$(this).width();
 	    	$('.seasonSelector > h5').css('color', "rgb(160, 160, 160)");
 	    	$('.seasonContent').fadeOut(200, function(){
@@ -23,6 +22,14 @@ function displayCollection(id){
 			else if(maxwidth+leftOffset<=$(".seasonsSlider").width()-30)
 				$(".seasonsHolder").css('left',$(".seasonsSlider").width()-30 - maxwidth +"px");
 			}
+		});
+		$('.poster-wrapper').on('click', function(event){
+			$.ajax({
+				type: "POST",
+				url: "./AddRemoveSubscription?id=" + id
+			}).done(function(data){
+				$('.ribbon').toggleClass("ribbon-green ribbon-blue");
+			});
 		});
 	});
 	

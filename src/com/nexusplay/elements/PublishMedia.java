@@ -64,6 +64,7 @@ public class PublishMedia extends HttpServlet {
 		}
 		try {
 			MediaDatabase.replaceMedia(media);
+			MediaDatabase.propagateMediaNotification(media);
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();

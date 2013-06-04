@@ -107,7 +107,20 @@
 					}
 					pausedList+="</table>";
 				
-				
+					String subscriptionList = new String();
+					m=0;
+					
+					for (String mediaID : user.getNotifications()) {
+						m++;
+						Media item = MediaDatabase.getMediaById(mediaID);
+						if(m==1)
+							subscriptionList+="<table class=\"pausedTable\">";
+						subscriptionList+= "<tr onclick=\"document.location.href=\\'./watch?w=" + item.getId() + "\\'\"><div class=\"pausedMedia\">";						
+						subscriptionList+= "<td><img class=\"previouslyWatchingPoster\" src=\"." + item.getPoster() + "\" height=\"60px\"/>";
+						subscriptionList+= "</td><td><div class=\"innerPausedMedia\">" + item.getName() + "</div>";
+						subscriptionList+= "</div></td></tr>";
+					}
+					subscriptionList+="</table>";
 				
 				%>
 				<script type='text/javascript'>
@@ -118,9 +131,15 @@
 						      html: 'true', //needed to show html of course
 						      content : '<div id="popOverBox"><%= pausedList %></div>' //this is the content of the html box. add the image here or anything you want really.
 						});
+						$("#subscriptions").popover({
+						      placement : 'bottom', //placement of the popover. also can use top, bottom, left or right
+						      title : '<div style="text-align:center; color:black; font-size:14px;">Subscriptions</div>', //this is the top title bar of the popover. add some basic css
+						      html: 'true', //needed to show html of course
+						      content : '<div id="popOverBox"><%= subscriptionList %></div>' //this is the content of the html box. add the image here or anything you want really.
+						});
 					});
 				</script>
-				<a href='<%=request.getContextPath()%>/Subscriptions'><h4 class='zeta topBarButton normalTopBarButton'>My subscriptions</h4></a>
+				<a rel="popover" class="popover-link" id="subscriptions"><h4 class='zeta topBarButton normalTopBarButton'>My subscriptions</h4></a>
 				<a href='<%=request.getContextPath()%>/ControlPanel' class="pull-right"><h4 class='zeta userBar topBarButton normalTopBarButton'>Welcome, <%= user.getNickname() %></h4></a>
 				<% }else{ %>
 				<a href='#register' class="pull-right" data-toggle="modal"><h4 class='zeta userBar topBarButton normalTopBarButton'>Register</h4></a>
