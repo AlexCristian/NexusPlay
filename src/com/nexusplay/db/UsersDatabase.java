@@ -99,7 +99,7 @@ public class UsersDatabase {
         	stmt = con.createStatement();
         	stmt.executeUpdate(req);
         }
-        if(!rs.getString("notifications").contains(mediaID+";")){
+        if(rs.getString("notifications").contains(mediaID+";")){
         	req="UPDATE UsersDB SET notifications='" + rs.getString("notifications").replace(mediaID+";", "") + "' WHERE id='" + userID + "';";
         	stmt = con.createStatement();
         	stmt.executeUpdate(req);

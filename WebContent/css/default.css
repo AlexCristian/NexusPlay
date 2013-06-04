@@ -253,6 +253,9 @@ box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
 	border-color:rgb(214, 214, 214);
 	cursor:pointer;
 }
+.pausedTable > tbody > tr:last-child{
+	border-bottom:none;
+}
 .pausedTable > tbody > tr > td{
 	padding-bottom:3px;
 	color:#08c;

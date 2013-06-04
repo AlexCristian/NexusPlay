@@ -220,8 +220,9 @@ public class MediaDatabase
         Statement stmt = null;
         Connection con = getConnection();
         stmt = con.createStatement();
-        String req = new String("SELECT * FROM MediaDB WHERE published=1 AND ");
-        req = (new StringBuilder(String.valueOf(req))).append("name like '%").append(request).append("%';").toString();
+        String req = new String("SELECT * FROM MediaDB WHERE published=1 AND collectionid!='' AND name like '%" + request + "%'");
+        req += "GROUP BY collectionid UNION SELECT * FROM MediaDB WHERE published=1 AND collectionid='' AND name like '%" + request + "%';";
+        //req += "UNION SELECT * FROM CollectionsDB WHERE name like '%" + request + "%';";
         Media item; int k=0;
         for(ResultSet rs = stmt.executeQuery(req); rs.next() && k<=resultCap; raw.add(item), k++)
         {
