@@ -59,8 +59,7 @@ public class PublishMedia extends HttpServlet {
 			media.setCollectionID(coll.getID());
 			media.setPoster(coll.getPoster());
 		} catch (Exception e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
+			//Not part of a collection
 		}
 		try {
 			MediaDatabase.replaceMedia(media);

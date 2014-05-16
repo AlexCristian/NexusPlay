@@ -44,6 +44,7 @@ public class UpdaterAgent extends Thread
         throws SQLException, Exception
     {
         File files[] = mediaFolder.listFiles();
+        
         File afile[];
         int j = (afile = files).length;
         for(int i = 0; i < j; i++)

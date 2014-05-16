@@ -1,8 +1,6 @@
 package com.nexusplay.pages;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.sql.SQLException;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -10,9 +8,8 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import com.nexusplay.containers.Media;
+import com.nexusplay.containers.SettingsContainer;
 import com.nexusplay.containers.User;
-import com.nexusplay.db.MediaDatabase;
 import com.nexusplay.db.UsersDatabase;
 
 /**
@@ -35,9 +32,7 @@ public class ControlPanel extends HttpServlet {
 	 */
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		response.setContentType("text/html");
-        PrintWriter out = response.getWriter();
-        
-        User user;
+        User user = null;
 		try {
 			user = UsersDatabase.getUserById((String) request.getSession().getAttribute("userID"));
 			request.setAttribute("user", user);
@@ -47,7 +42,7 @@ public class ControlPanel extends HttpServlet {
 		}
 		request.getRequestDispatcher("/templates/elements/Header.jsp").include(request, response);
 		
-        if(request.getSession().getAttribute("userID")!=null){
+        if(request.getSession().getAttribute("userID")!=null && user.getNickname().equals(SettingsContainer.getAdministratorNickname())){
 			request.getRequestDispatcher("/templates/ControlPanel.jsp").include(request, response);
         }else{
         	request.getRequestDispatcher("/templates/exceptions/Error.jsp").include(request, response);

@@ -8,20 +8,17 @@ function displayCollection(id){
 		$('.seasonSelector').on('click', function(event){
 			id=$(this).attr('id').substring(7); maxwidth=$(".seasonSelector").size()*$(this).width();
 	    	$('.seasonSelector > h5').css('color', "rgb(160, 160, 160)");
-	    	$('.seasonContent').fadeOut(200, function(){
-	    		$('#collsescnt'+id).fadeIn(200);
-	    		});
+	    	$('.seasonContent').fadeOut(200);
+	    	setTimeout(function(){$('#collsescnt'+id).fadeIn(200);},200);
 	    	$('#'+$(this).attr('id')+' > h5').css('color', "white");
 	    	
 			leftOffset = ($(".seasonsSlider").width()/2-$(this).width()*(id));
-			if($(this).width()*(id)>$(".seasonsSlider").width()){
 			if(leftOffset<0&&maxwidth+leftOffset>$(".seasonsSlider").width()-30)
 				$(".seasonsHolder").css('left', leftOffset + "px");
 			else if(leftOffset>=0)
 				$(".seasonsHolder").css('left', "0px");
 			else if(maxwidth+leftOffset<=$(".seasonsSlider").width()-30)
 				$(".seasonsHolder").css('left',$(".seasonsSlider").width()-30 - maxwidth +"px");
-			}
 		});
 		$('.poster-wrapper').on('click', function(event){
 			$.ajax({

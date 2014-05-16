@@ -4,30 +4,23 @@ import com.google.gson.*;
 import com.nexusplay.security.RandomContainer;
 import java.io.*;
 import java.math.BigInteger;
-import java.net.*;
+import java.net.URL;
+import java.net.URLConnection;
 import java.security.SecureRandom;
 
-// Referenced classes of package com.nexusplay.containers:
-//            SettingsContainer
 
 public class Media
 {
-	
-	private String name;
-    private String id;
-    private String jsonResult;
-    private String poster;
-    private String year;
-    private String filename;
-    private String category, collectionID="";
-    private int published, season=0, episode=0;
-    private JsonObject jsonObject;
-    private int views;
-    private Gson gson;
 
-    //in case you rename your media
     public Media(String mediaName, String idS, String categ, int published)
     {
+        name = "";
+        poster = "";
+        year = "";
+        category = "";
+        collectionID = "";
+        season = 0;
+        episode = 0;
         views = 1;
         name = mediaName;
         id = idS;
@@ -38,6 +31,13 @@ public class Media
 
     public Media(String mediaName, String idS, String file, String categ, int published)
     {
+        name = "";
+        poster = "";
+        year = "";
+        category = "";
+        collectionID = "";
+        season = 0;
+        episode = 0;
         views = 1;
         name = mediaName;
         id = idS;
@@ -65,6 +65,13 @@ public class Media
 
     public Media(String mediaName)
     {
+        name = "";
+        poster = "";
+        year = "";
+        category = "";
+        collectionID = "";
+        season = 0;
+        episode = 0;
         views = 1;
         filename = mediaName;
         published = 0;
@@ -97,29 +104,61 @@ public class Media
                     builder.append(line);
             }
 
-            if(!mediaName.contains(" ")){
-            	name = "";
-                poster = "";
-                year = "";
-                category = "";
-            }else{
-	            jsonResult = jsonResult.substring(1, jsonResult.length() - 1);
-	            gson = new Gson();
-	            JsonParser parser = new JsonParser();
-	            jsonObject = parser.parse(jsonResult).getAsJsonObject();
-	            name = (String)gson.fromJson(jsonObject.get("title"), String.class);
-	            poster = savePoster((String)gson.fromJson(jsonObject.get("poster"), String.class), filename);
-	            year = (String)gson.fromJson(jsonObject.get("year"), String.class);
-	            category = (String)gson.fromJson(jsonObject.get("type"), String.class);
+            if(mediaName.contains(" "))
+            {
+                jsonResult = jsonResult.substring(1, jsonResult.length() - 1);
+                gson = new Gson();
+                JsonParser parser = new JsonParser();
+                jsonObject = parser.parse(jsonResult).getAsJsonObject();
+                name = (String)gson.fromJson(jsonObject.get("title"), String.class);
+                poster = savePoster((String)gson.fromJson(jsonObject.get("poster"), String.class), filename);
+                year = (String)gson.fromJson(jsonObject.get("year"), String.class);
+                category = (String)gson.fromJson(jsonObject.get("type"), String.class);
             }
         }
-        catch(MalformedURLException e)
+        catch(Exception e)
         {
             e.printStackTrace();
         }
-        catch(IOException e)
+        episode = attemptIntParsing(filename, "episode");
+        season = attemptIntParsing(filename, "season");
+        if(name.equals(""))
+            name = attemptEpisodeParsing(filename);
+        if(episode != 0)
+            category = "TV Shows";
+    }
+
+    private String attemptEpisodeParsing(String mediaName)
+    {
+        String eqName = mediaName;
+        if(eqName.contains("-"))
         {
-            e.printStackTrace();
+            int start = eqName.indexOf("-") + 1;
+            if(eqName.charAt(start) == ' ')
+                start++;
+            int end;
+            for(end = start; Character.isLetterOrDigit(eqName.charAt(end)) || eqName.charAt(end) == '\'' || eqName.charAt(end) == ' '; end++);
+            return eqName.substring(start, end);
+        } else
+        {
+            return "";
+        }
+    }
+
+    private int attemptIntParsing(String mediaName, String key)
+    {
+        String eqName = mediaName.toLowerCase();
+        if(eqName.contains(key))
+        {
+            int start = eqName.indexOf(key) + key.length();
+            if(eqName.charAt(start) == ' ')
+                start++;
+            int end;
+            for(end = start; Character.isDigit(eqName.charAt(end)); end++);
+            return Integer.parseInt(eqName.substring(start, end));
+        } else
+        {
+            return 0;
         }
     }
 
@@ -194,15 +233,17 @@ public class Media
         this.poster = poster;
     }
 
-    public int getPublished() {
-		return published;
-	}
+    public int getPublished()
+    {
+        return published;
+    }
 
-	public void setPublished(int published) {
-		this.published = published;
-	}
+    public void setPublished(int published)
+    {
+        this.published = published;
+    }
 
-	public void setYear(String year)
+    public void setYear(String year)
     {
         this.year = year;
     }
@@ -237,28 +278,48 @@ public class Media
         this.category = category;
     }
 
-	public int getSeason() {
-		return season;
-	}
+    public int getSeason()
+    {
+        return season;
+    }
 
-	public void setSeason(int season) {
-		this.season = season;
-	}
+    public void setSeason(int season)
+    {
+        this.season = season;
+    }
 
-	public int getEpisode() {
-		return episode;
-	}
+    public int getEpisode()
+    {
+        return episode;
+    }
 
-	public void setEpisode(int episode) {
-		this.episode = episode;
-	}
+    public void setEpisode(int episode)
+    {
+        this.episode = episode;
+    }
 
-	public String getCollectionID() {
-		return collectionID;
-	}
+    public String getCollectionID()
+    {
+        return collectionID;
+    }
 
-	public void setCollectionID(String collectionID) {
-		this.collectionID = collectionID;
-	}
+    public void setCollectionID(String collectionID)
+    {
+        this.collectionID = collectionID;
+    }
 
+    private String name;
+    private String id;
+    private String jsonResult;
+    private String poster;
+    private String year;
+    private String filename;
+    private String category;
+    private String collectionID;
+    private int published;
+    private int season;
+    private int episode;
+    private JsonObject jsonObject;
+    private int views;
+    private Gson gson;
 }

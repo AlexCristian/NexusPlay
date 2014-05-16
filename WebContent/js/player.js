@@ -1,4 +1,5 @@
-	$(document).ready(function(){
+var hasResetFrame = false;	
+$(document).ready(function(){
 		
 		$('audio,video').mediaelementplayer({
 			videoWidth: '100%',
@@ -64,12 +65,16 @@
 		    	   onPlay();
 		       }, false);
 		       
+		       
 		       mediaElement.addEventListener("canplay", function() {
-					setTimeout(
-							  function() 
-							  {
-								  mediaElement.setCurrentTime(resumeLocation);
-							  }, 1000);
+					if(!hasResetFrame){
+			    	   setTimeout(
+								  function() 
+								  {
+									  mediaElement.setCurrentTime(resumeLocation);
+								  }, 1000);
+			    	   hasResetFrame=true;
+					}
 				});
 				
 		       mediaElement.addEventListener("ended", function() {

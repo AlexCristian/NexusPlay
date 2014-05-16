@@ -86,7 +86,7 @@
 
 		<div id='topBar' class='normalTopBar navbar-static-top'>
 			<div id='innerTopBar'>
-				<a href='<%=request.getContextPath()%>'><h4 class='topBarButton normalTopBarButton zeta'>&#9658; Nexus Play</h4></a>
+				<a href='<%=request.getContextPath()%>/'><h4 class='topBarButton normalTopBarButton zeta'>&#9658; Nexus Play</h4></a>
 				<% 	
 					User user = (User) request.getAttribute("user");
 					if(user!=null){ 

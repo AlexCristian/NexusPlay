@@ -43,4 +43,15 @@
   		com.nexusplay.security.SystemOverlord
   	</listener-class>
   </listener>
+  <filter>
+	  <filter-name>QuerySafetyFilter</filter-name>
+	  <filter-class>com.nexusplay.security.QuerySafetyFilter</filter-class>
+  </filter>
+  <filter-mapping>
+	  <filter-name>QuerySafetyFilter</filter-name>
+	  <url-pattern>/*</url-pattern>
+	  <dispatcher>REQUEST</dispatcher>
+  </filter-mapping>
+
+	
 </web-app>

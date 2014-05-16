@@ -5,18 +5,19 @@ import java.io.File;
 public class SettingsContainer
 {
 	
-	//private static String absoluteMediaPath = "/home/transmission/downloads";;
-	private static String absoluteMediaPath = "C:/media-downloads";
+	private static String absoluteMediaPath = "/media/storage";
+	//private static String absoluteMediaPath = "C:/media-downloads";
     private static String mediaSource = "/media";
     private static String posterFolder = "posters";
     private static String posterSource = mediaSource + "/" + posterFolder;
     private static String absolutePosterPath = absoluteMediaPath + "/" + posterFolder;
+    private static String administratorNickname = "admin";
+
     private static String dbURL = "localhost";
     private static String dbPort = "3306";
     private static String dbName = "NexusPlayDB";
     private static String dbUserName = "nexusplay";
     private static String dbPass = "nexusplay";
-
 
     public static String getMediaSource()
     {
@@ -107,4 +108,12 @@ public class SettingsContainer
     {
         posterSource = posterSource;
     }
+
+	public static String getAdministratorNickname() {
+		return administratorNickname;
+	}
+
+	public static void setAdministratorNickname(String administratorNickname) {
+		SettingsContainer.administratorNickname = administratorNickname;
+	}
 }

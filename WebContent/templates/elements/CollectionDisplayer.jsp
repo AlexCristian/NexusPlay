@@ -20,7 +20,7 @@
     	<h5><%= seasons %>, <%= coll.getYear() %></h5>
     </div>
     <div class='seasonsSlider'>
-	    <div class='seasonsHolder'>
+	    <div class='seasonsHolder' style="left:0px;">
 	    	<% 
 	    		ArrayList<ArrayList<Media>> episodes = coll.getEpisodes();
 	    		boolean first=true; int x=0;
@@ -32,7 +32,7 @@
 	    			x++;
 	    	%>
 		    <div id='collses<%=x %>' class='seasonSelector'>
-	    		<h5 <%= (first) ? "style='color:white;'" : ""%> id='collses<%=x %>' class='seasonSelector'>Season <%=i %></h5>
+	    		<h5 <%= (first) ? "style='color:white;'" : ""%> id='collses<%=x %>'>Season <%=i %></h5>
 		    </div>
 		    <% 
 		    	first=false;
@@ -51,7 +51,7 @@
 				continue;
 			x++;
 	%>
-	<div id="collsescnt<%=x %>" class="seasonContent" <% if(first){ %> style="display:block;" <% } %>>
+	<div id="collsescnt<%=x %>" class="seasonContent" <% if(first){ %> style="display:block;" <% }else{ %> style="display: none;" <% } %>>
 		<table class="table table-bordered table-hover">
 			<tr>
 				<td>Episode</td>
