@@ -1,13 +1,11 @@
 package com.nexusplay.pages;
 
 import com.nexusplay.containers.Media;
-import com.nexusplay.containers.SettingsContainer;
 import com.nexusplay.containers.User;
 import com.nexusplay.db.MediaDatabase;
 import com.nexusplay.db.UsersDatabase;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.sql.SQLException;
 import javax.servlet.ServletException;
 import javax.servlet.http.*;
@@ -23,7 +21,6 @@ public class PlayMedia extends HttpServlet
         throws ServletException, IOException
     {
         response.setContentType("text/html");
-        PrintWriter out = response.getWriter();
         String userID=null;
         
         if(request.getSession().getAttribute("userID")!=null){

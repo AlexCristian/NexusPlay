@@ -5,9 +5,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-
 import com.nexusplay.containers.Collection;
-import com.nexusplay.containers.Media;
 
 
 public class CollectionsDatabase {

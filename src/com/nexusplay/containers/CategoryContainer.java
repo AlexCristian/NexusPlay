@@ -10,7 +10,7 @@ public class CategoryContainer
 
     public CategoryContainer(String name)
     {
-        media = new ArrayList();
+        media = new ArrayList<Media>();
         categoryName = name;
     }
 
@@ -34,16 +34,16 @@ public class CategoryContainer
         this.categoryName = categoryName;
     }
 
-    public ArrayList getMedia()
+    public ArrayList<Media> getMedia()
     {
         return media;
     }
 
-    public void setMedia(ArrayList media)
+    public void setMedia(ArrayList<Media> media)
     {
         this.media = media;
     }
 
     private String categoryName;
-    private ArrayList media;
+    private ArrayList<Media> media;
 }

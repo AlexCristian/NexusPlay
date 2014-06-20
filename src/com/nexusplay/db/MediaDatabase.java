@@ -136,7 +136,7 @@ public class MediaDatabase
         stmt = con.createStatement();
         String req = new String("SELECT * FROM MediaDB WHERE published=1 ORDER BY views DESC;");
         ResultSet rs = stmt.executeQuery(req);
-        ArrayList raw = new ArrayList();
+        ArrayList<Media> raw = new ArrayList<Media>();
         for(int i = 1; i < size && rs.next(); i++)
         {
             Media temp = new Media(rs.getString("name"), rs.getString("id"), rs.getString("filename"), rs.getString("category"), rs.getInt("published"));
@@ -192,7 +192,7 @@ public class MediaDatabase
         stmt = con.createStatement();
         String req = new String("SELECT * FROM MediaDB WHERE published=1 AND collectionid!='' GROUP BY collectionid UNION SELECT * FROM MediaDB WHERE published=1 AND collectionid='';");
         ResultSet rs = stmt.executeQuery(req);
-        ArrayList raw = new ArrayList();
+        ArrayList<Media> raw = new ArrayList<Media>();
         rs.setFetchDirection(1001);
         for(int i = 1; i < size && rs.next(); i++)
         {
@@ -216,7 +216,7 @@ public class MediaDatabase
     public static Media[] searchMedia(String request, int resultCap)
         throws SQLException
     {
-        ArrayList raw = new ArrayList();
+        ArrayList<Media> raw = new ArrayList<Media>();
         Statement stmt = null;
         Connection con = getConnection();
         stmt = con.createStatement();

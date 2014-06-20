@@ -2,7 +2,6 @@ package com.nexusplay.pages;
 
 import com.nexusplay.containers.User;
 import com.nexusplay.db.MediaDatabase;
-import com.nexusplay.db.UpdaterAgent;
 import com.nexusplay.db.UsersDatabase;
 import com.nexusplay.elements.*;
 import java.io.IOException;

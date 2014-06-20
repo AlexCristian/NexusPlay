@@ -1,7 +1,6 @@
 package com.nexusplay.db;
 
 import com.nexusplay.containers.SettingsContainer;
-import java.io.PrintStream;
 import java.sql.*;
 
 public class ConnectionManager

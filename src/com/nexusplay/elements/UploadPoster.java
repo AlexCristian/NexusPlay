@@ -19,7 +19,6 @@ import org.apache.commons.fileupload.FileUploadException;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
 
-import com.google.gson.Gson;
 import com.nexusplay.containers.Collection;
 import com.nexusplay.containers.Media;
 import com.nexusplay.containers.SettingsContainer;
@@ -81,17 +80,13 @@ public class UploadPoster extends HttpServlet {
         	}
             try {
             	// Parse the request
-            	List /* FileItem */ items = upload.parseRequest(request);
-                Iterator iterator = items.iterator();
+            	List<FileItem> items = upload.parseRequest(request);
+                Iterator<FileItem> iterator = items.iterator();
                 while (iterator.hasNext()) {
                     FileItem item = (FileItem) iterator.next();
                     if (!item.isFormField()) {
                         String fileName = item.getName();	 
-                        String root = getServletContext().getRealPath("/");
                         File path = new File(SettingsContainer.getAbsolutePosterPath());
-                        if (!path.exists()) {
-                            boolean status = path.mkdirs();
-                        }
                         long randId; File uploadedFile;
                         do{
                         randId = RandomContainer.getRandom().nextLong();

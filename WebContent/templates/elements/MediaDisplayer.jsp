@@ -11,7 +11,7 @@
 	%>
 	<div class='categoriesHolder'>
 	<%	
-	ArrayList ids = new ArrayList();
+	ArrayList<String> ids = new ArrayList<String>();
 	for(int i = 0; i < totalCategs.length; i++)
 	{
 	    String currentID = totalCategs[i].getCategoryName().toLowerCase().replaceAll(" ", "") + randomToken;
@@ -31,7 +31,7 @@
 		%>
 	    <div id='resultPage<%=(i + 1) %>' <%=(i!=0) ? "style='display:none;'" : "" %>>
 	    <%
-	    for(Iterator iterator1 = totalCategs[i].getMedia().iterator(); iterator1.hasNext();)
+	    for(Iterator<Media> iterator1 = totalCategs[i].getMedia().iterator(); iterator1.hasNext();)
 	    {
 	        Media item = (Media)iterator1.next();
 	        %>

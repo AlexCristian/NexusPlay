@@ -3,19 +3,14 @@ package com.nexusplay.elements;
 import com.nexusplay.containers.CategoryContainer;
 import com.nexusplay.containers.Media;
 
-import java.io.IOException;
 import java.util.*;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 
 public class MediaDisplayer
 {
 
     public MediaDisplayer(Media elems[])
     {
-        categs = new HashMap();
+        categs = new HashMap<String, CategoryContainer>();
         Media amedia[];
         int j = (amedia = elems).length;
         for(int i = 0; i < j; i++)
@@ -30,7 +25,7 @@ public class MediaDisplayer
 
     public MediaDisplayer(CategoryContainer cat[])
     {
-        categs = new HashMap();
+        categs = new HashMap<String, CategoryContainer>();
         CategoryContainer acategorycontainer[];
         int j = (acategorycontainer = cat).length;
         for(int i = 0; i < j; i++)
@@ -42,10 +37,10 @@ public class MediaDisplayer
     }
 
     public CategoryContainer[] getCategories(){
-    	Collection c = categs.values();
+    	Collection<CategoryContainer> c = categs.values();
         CategoryContainer totalCategs[] = new CategoryContainer[categs.values().size()];
         int ci = 0;
-        for(Iterator iterator = c.iterator(); iterator.hasNext();)
+        for(Iterator<CategoryContainer> iterator = c.iterator(); iterator.hasNext();)
         {
             CategoryContainer x = (CategoryContainer)iterator.next();
             totalCategs[ci] = x;
@@ -54,9 +49,9 @@ public class MediaDisplayer
         return totalCategs;
     }
 
-    private HashMap categs;
+    private HashMap<String, CategoryContainer> categs;
 
-	public HashMap getCategsMap() {
+	public HashMap<String, CategoryContainer> getCategsMap() {
 		return categs;
 	}
 }
