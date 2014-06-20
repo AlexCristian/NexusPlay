@@ -22,7 +22,7 @@ public class UsersDatabase {
 		Connection con = getConnection();
         Statement stmt = null;
         stmt = con.createStatement();
-        String req = "SELECT * FROM UsersDB WHERE email='" + item.getEmail() + "';";
+        String req = "SELECT * FROM UsersDB WHERE email='" + item.getEmail() + "' OR nickname='" + item.getNickname() + "';";
         ResultSet rs = stmt.executeQuery(req);
         if(rs.next())
             throw new Exception("User already registered!");
