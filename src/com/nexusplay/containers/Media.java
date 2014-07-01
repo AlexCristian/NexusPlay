@@ -7,27 +7,37 @@ import java.math.BigInteger;
 import java.net.URL;
 import java.net.URLConnection;
 
-
+/**
+ * Contains a video file and all its metadata.
+ * @author alex
+ *
+ */
 public class Media
 {
+	private String name;
+    private String id;
+    private String jsonResult;
+    private String poster;
+    private String year;
+    private String filename;
+    private String category;
+    private String collectionID;
+    private int published;
+    private int season;
+    private int episode;
+    private JsonObject jsonObject;
+    private int views;
+    private Gson gson;
 
-    public Media(String mediaName, String idS, String categ, int published)
-    {
-        name = "";
-        poster = "";
-        year = "";
-        category = "";
-        collectionID = "";
-        season = 0;
-        episode = 0;
-        views = 1;
-        name = mediaName;
-        id = idS;
-        filename = idS;
-        category = categ;
-        this.published = published;
-    }
-
+    /**
+     * Used for instantiating a new Media object that's already
+     * been stored in that database.
+     * @param mediaName The video's title
+     * @param idS Unique video identifier ID
+     * @param file URI pointing towards the video's location
+     * @param categ The video's category
+     * @param published Recognizes whether or not the video is public
+     */
     public Media(String mediaName, String idS, String file, String categ, int published)
     {
         name = "";
@@ -45,7 +55,12 @@ public class Media
         this.published = published;
     }
 
-    public static String removeExtention(String filePath)
+    /**
+     * Method for obtaining the pure filename of the video.
+     * @param filePath URI pointing towards the video
+     * @return The filename stripped of its extension
+     */
+    private static String removeExtension(String filePath)
     {
         File f = new File(filePath);
         if(f.isDirectory())
@@ -62,7 +77,15 @@ public class Media
         }
     }
 
-    public Media(String mediaName)
+    /**
+     * Constructor used for instantiating a new Media object,
+     * not yet stored in the database. It automatically attempts
+     * to look up the object's meta data on the web while also
+     * trying to determine whether the video is part of a collection
+     * or not.
+     * @param mediaPath URI pointing towards the video
+     */
+    public Media(String mediaPath)
     {
         name = "";
         poster = "";
@@ -72,17 +95,17 @@ public class Media
         season = 0;
         episode = 0;
         views = 1;
-        filename = mediaName;
+        filename = mediaPath;
         published = 0;
-        mediaName = removeExtention(mediaName);
-        if(mediaName.lastIndexOf(File.separator) > 0)
-            mediaName = mediaName.substring(mediaName.lastIndexOf(File.separator) + 1);
-        mediaName = mediaName.replace('.', ' ');
-        mediaName = mediaName.replace('_', ' ');
-        mediaName = mediaName.replace('-', ' ');
+        mediaPath = removeExtension(mediaPath);
+        if(mediaPath.lastIndexOf(File.separator) > 0)
+            mediaPath = mediaPath.substring(mediaPath.lastIndexOf(File.separator) + 1);
+        mediaPath = mediaPath.replace('.', ' ');
+        mediaPath = mediaPath.replace('_', ' ');
+        mediaPath = mediaPath.replace('-', ' ');
         try
         {
-            URL url = new URL((new StringBuilder("http://imdbapi.org/?q=")).append(mediaName.replaceAll(" ", "+")).toString());
+            URL url = new URL((new StringBuilder("http://imdbapi.org/?q=")).append(mediaPath.replaceAll(" ", "+")).toString());
             URLConnection connection = url.openConnection();
             connection.addRequestProperty("User-Agent", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0)");
             connection.connect();
@@ -91,9 +114,9 @@ public class Media
             String line;
             while((line = reader.readLine()) != null) 
                 builder.append(line);
-            for(jsonResult = builder.toString(); mediaName.contains(" ") && jsonResult.contentEquals("{\"code\":404, \"error\":\"Film not found\"}"); mediaName = mediaName.substring(0, mediaName.lastIndexOf(" ")))
+            for(jsonResult = builder.toString(); mediaPath.contains(" ") && jsonResult.contentEquals("{\"code\":404, \"error\":\"Film not found\"}"); mediaPath = mediaPath.substring(0, mediaPath.lastIndexOf(" ")))
             {
-                url = new URL((new StringBuilder("http://imdbapi.org/?q=")).append(mediaName.replaceAll(" ", "+")).toString());
+                url = new URL((new StringBuilder("http://imdbapi.org/?q=")).append(mediaPath.replaceAll(" ", "+")).toString());
                 connection = url.openConnection();
                 connection.addRequestProperty("User-Agent", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0)");
                 connection.connect();
@@ -103,7 +126,7 @@ public class Media
                     builder.append(line);
             }
 
-            if(mediaName.contains(" "))
+            if(mediaPath.contains(" "))
             {
                 jsonResult = jsonResult.substring(1, jsonResult.length() - 1);
                 gson = new Gson();
@@ -127,6 +150,12 @@ public class Media
             category = "TV Shows";
     }
 
+    /**
+     * Attempts to extract the episode's title 
+     * from the video's filename.
+     * @param mediaName URI pointing towards the video
+     * @return Episode title if parsing is successful, void string otherwise
+     */
     private String attemptEpisodeParsing(String mediaName)
     {
         String eqName = mediaName;
@@ -144,6 +173,13 @@ public class Media
         }
     }
 
+    /**
+     * Attempts to parse from the filename the episode
+     * value corresponding to the provided key.
+     * @param mediaName URI pointing towards video
+     * @param key Key to look for in the filename
+     * @return If found, integer corresponding to the given key, 0 otherwise.
+     */
     private int attemptIntParsing(String mediaName, String key)
     {
         String eqName = mediaName.toLowerCase();
@@ -306,19 +342,4 @@ public class Media
     {
         this.collectionID = collectionID;
     }
-
-    private String name;
-    private String id;
-    private String jsonResult;
-    private String poster;
-    private String year;
-    private String filename;
-    private String category;
-    private String collectionID;
-    private int published;
-    private int season;
-    private int episode;
-    private JsonObject jsonObject;
-    private int views;
-    private Gson gson;
 }

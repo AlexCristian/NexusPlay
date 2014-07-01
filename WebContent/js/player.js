@@ -7,6 +7,7 @@ $(document).ready(function(){
 			audioWidth: '100%',
 			features: ['playpause','progress','tracks','volume'],
 			videoVolume: 'horizontal',
+			mode: "shim",
 		    loop: false,
 		    // enables Flash and Silverlight to resize to content size
 		    enableAutosize: true,
@@ -101,13 +102,16 @@ $(document).ready(function(){
 				$(window).on('beforeunload', function(e) {
 					storePlaybackState();               
 			    });
+				
 		   }
 		});
 		
-		
+		/**
+		 * Adapt the player's size to the available space
+		 */
 		$(".playerContainer").css("height", $(".playerContainer").width() * 9 / 16-20);
 		window.onresize = function(event) {
 			$(".playerContainer").css("height", $(".playerContainer").width() * 9 / 16-20);
-		}
+		};
 	    
 	});

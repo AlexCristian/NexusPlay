@@ -11,7 +11,7 @@ import com.nexusplay.containers.User;
 import com.nexusplay.db.UsersDatabase;
 
 /**
- * Servlet implementation class StorePlaybackState
+ * Stores the paused playback time fed from an AJAX call
  */
 @WebServlet("/StorePlaybackState")
 public class StorePlaybackState extends HttpServlet {
