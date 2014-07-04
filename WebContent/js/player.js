@@ -1,13 +1,18 @@
-var hasResetFrame = false;	
+/**
+ * Prevent video seek reset loop
+ */
+var hasResetFrame = false;
 $(document).ready(function(){
 		
+		/**
+		 * Initialize player
+		 */
 		$('audio,video').mediaelementplayer({
 			videoWidth: '100%',
 			videoHeight: '100%',
 			audioWidth: '100%',
 			features: ['playpause','progress','tracks','volume'],
 			videoVolume: 'horizontal',
-			mode: "shim",
 		    loop: false,
 		    // enables Flash and Silverlight to resize to content size
 		    enableAutosize: true,
@@ -36,6 +41,10 @@ $(document).ready(function(){
 		 	// method that fires when the Flash or Silverlight object is ready
 		    success: function (mediaElement, domObject) {   
 
+		    	/**
+		    	 * AJAX call to the server in order to store the current
+		    	 * playback status.
+		    	 */
 		    	function storePlaybackState(){
 					$.ajax({
 						type: "GET",
@@ -46,6 +55,10 @@ $(document).ready(function(){
 						}
 					});
 				}
+		    	
+		    	/**
+		    	 * Toggle navbar theme
+		    	 */
 		    	function onPlay(){
 			    	$('#topBar').toggleClass("normalTopBar playTopBar");
 			        $('.topBarButton').toggleClass("normalTopBarButton playTopBarButton");
@@ -57,16 +70,13 @@ $(document).ready(function(){
 			        storePlaybackState();
 			    }
 			    
-		       // add event listeners
-		       mediaElement.addEventListener('pause', function(e) {
-		    	   onPause();
-		       }, false);
+		       mediaElement.addEventListener('pause', onPause, false);
 
-		       mediaElement.addEventListener('play', function(e) {
-		    	   onPlay();
-		       }, false);
+		       mediaElement.addEventListener('play', onPlay, false);
 		       
-		       
+		       /**
+		        * Resume video from the time index stored on the server
+		        */
 		       mediaElement.addEventListener("canplay", function() {
 					if(!hasResetFrame){
 			    	   setTimeout(
@@ -78,6 +88,10 @@ $(document).ready(function(){
 					}
 				});
 				
+		       /**
+		        * Call AJAX function to store the time index at which
+		        * the video stopped
+		        */
 		       mediaElement.addEventListener("ended", function() {
 					$.ajax({
 						type: "GET",
@@ -102,6 +116,55 @@ $(document).ready(function(){
 				$(window).on('beforeunload', function(e) {
 					storePlaybackState();               
 			    });
+
+				
+				/**
+				 * Enable responsive captions
+				 */
+				$(".mejs-captions-text").addClass("zeta");
+				
+				/**
+				 * Some browsers don't support native WebVTT, while others do.
+				 * Since fullscreen subtitling on iOS is only possible through native WebVTT,
+				 * we'll conveniently switch to native subtitling when needed; otherwise
+				 * we stick with the MediaElementJS implementation.
+				 */
+				try{
+					/**
+					 * Set default subtitle to none
+					 */
+					for (var i = 0; i < mediaElement.textTracks.length; i++) {
+						mediaElement.textTracks[i].mode = 'hidden';
+					}
+					
+					/**
+					 * Know at all times what language (if any) is selected
+					 */
+					currentLang='none';
+					$(".mejs-captions-selector > ul > li > input").click(function(){
+						currentLang = this.value;						
+					});
+					
+					/**
+					 * Detect iOS fullscreen mode & switch on native captioning 
+					 */
+					mediaElement.addEventListener('webkitbeginfullscreen', function(){
+						for (var i = 0; i < mediaElement.textTracks.length; i++) {
+							mediaElement.textTracks[i].mode = 'hidden';
+							if(mediaElement.textTracks[i].language == lang){
+								mediaElement.textTracks[i].mode = 'showing';
+							}
+						}
+					}, false);
+					
+					mediaElement.addEventListener('webkitendfullscreen', function(){
+						for (var i = 0; i < mediaElement.textTracks.length; i++) {
+							mediaElement.textTracks[i].mode = 'hidden';
+						}
+					}, false);
+				}catch(err){
+					console.log("Your browser doesn't support WebVTT");
+				}
 				
 		   }
 		});

@@ -1,6 +1,22 @@
 #controls span {
     display:inline-block;
 }
+
+.mejs-time > span{
+	margin-left:1px;
+	margin-right:1px;
+}
+
+.mejs-time-float-current{
+	margin:auto !important;
+	padding:0;
+	width:100% !important;
+	margin-top:3px !important;
+}
+
+.mejs-time-float{
+	width:46px !important;
+}
          
 #playpause {
     background:#eee;
