@@ -11,6 +11,11 @@ import com.nexusplay.db.UsersDatabase;
 import com.nexusplay.security.Crypto;
 import com.nexusplay.security.RandomContainer;
 
+/**
+ * This class represents the data that makes up a user.
+ * @author alex
+ *
+ */
 public class User {
 
 	private String email, nickname, password, id;
@@ -37,8 +42,8 @@ public class User {
 		}
 		subscriptions=new ArrayList<String>();
 		StringTokenizer subscriptionsTokenizer = new StringTokenizer(PMsubscriptions, ";");
+		subscriptions.add(subscriptionsTokenizer.nextToken());
 		while(subscriptionsTokenizer.hasMoreElements()){
-			subscriptions.add(subscriptionsTokenizer.nextToken());
 		}
 		notifications=new ArrayList<String>();
 		StringTokenizer notificationsTokenizer = new StringTokenizer(PMnotifications, ";");

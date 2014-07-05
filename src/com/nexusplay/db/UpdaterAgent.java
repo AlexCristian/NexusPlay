@@ -2,17 +2,24 @@ package com.nexusplay.db;
 
 import com.nexusplay.containers.Media;
 import com.nexusplay.containers.SettingsContainer;
+
 import java.io.File;
 import java.sql.SQLException;
 
-// Referenced classes of package com.nexusplay.db:
-//            MediaDatabase
-
+/**
+ * The UpdaterAgent class is designed to continuously search for newly
+ * added media in the selected source folder.
+ * @author alex
+ *
+ */
 public class UpdaterAgent extends Thread
 {
     private String path = SettingsContainer.getAbsoluteMediaPath();;
     private File mediaFolder;
 
+    /**
+     * Main thread loop method.
+     */
     public void run()
     {
         File x = new File(SettingsContainer.getAbsoluteMediaPath());
@@ -27,7 +34,7 @@ public class UpdaterAgent extends Thread
                 mediaFolder = new File(path);
                 checkFolder(mediaFolder, "");
                 Thread.yield();
-                Thread.sleep(0x493e0L);
+                Thread.sleep(300000);
             }
             catch(Exception E)
             {
@@ -37,11 +44,21 @@ public class UpdaterAgent extends Thread
         x=null; nullify();
     }
 
+    /**
+     * Set variables to null in order to prevent memory leaks.
+     */
     private void nullify(){
     	mediaFolder=null; path=null;
     }
+    
+    /**
+     * Check the parameter location for undiscovered media.
+     * @param mediaFolder The current folder to search in
+     * @param parentFolder The parent folder containing the current location
+     * @throws SQLException Thrown if the database is not accessible to us for whatever reason
+     */
     private void checkFolder(File mediaFolder, String parentFolder)
-        throws SQLException, Exception
+        throws SQLException
     {
         File files[] = mediaFolder.listFiles();
         
@@ -51,17 +68,28 @@ public class UpdaterAgent extends Thread
         {
             File file = afile[i];
             if(file.isDirectory())
-                checkFolder(file, (new StringBuilder(String.valueOf(parentFolder))).append("/").append(file.getName()).toString());
+                checkFolder(file, parentFolder + "/" + file.getName());
             else
-            if(isSupportedFormat(file) && !MediaDatabase.checkExists((new StringBuilder(String.valueOf(parentFolder))).append("/").append(file.getName()).toString()))
+            if(isSupportedFormat(file) && !MediaDatabase.checkExists(parentFolder + "/" + file.getName()))
             {
-                Media newMedia = new Media((new StringBuilder(String.valueOf(parentFolder))).append("/").append(file.getName()).toString());
-                MediaDatabase.pushMedia(newMedia);
+                Media newMedia = new Media(parentFolder + "/" + file.getName());
+                try {
+					MediaDatabase.pushMedia(newMedia);
+				} catch (Exception e) {
+					//should not happen since we already if the item existed
+					e.printStackTrace();
+					System.err.println("More than one thread is adding media to the database!");
+				}
             }
         }
 
     }
 
+    /**
+     * Checks whether a file has a supported format or not.
+     * @param file The file to be inspected
+     * @return True or false if the file isn't supported
+     */
     private boolean isSupportedFormat(File file)
     {
         String name = file.getName();

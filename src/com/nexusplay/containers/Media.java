@@ -133,7 +133,7 @@ public class Media
                 JsonParser parser = new JsonParser();
                 jsonObject = parser.parse(jsonResult).getAsJsonObject();
                 name = (String)gson.fromJson(jsonObject.get("title"), String.class);
-                poster = savePoster((String)gson.fromJson(jsonObject.get("poster"), String.class), filename);
+                poster = savePoster((String)gson.fromJson(jsonObject.get("poster"), String.class));
                 year = (String)gson.fromJson(jsonObject.get("year"), String.class);
                 category = (String)gson.fromJson(jsonObject.get("type"), String.class);
             }
@@ -197,7 +197,13 @@ public class Media
         }
     }
 
-    public static String savePoster(String imageUrl, String mediaName)
+    /**
+     * Fetches and saves to disk the poster fed by the API.
+     * @param imageUrl The poster's URL
+     * @return The path towards the saved poster
+     * @throws IOException If we don't have permission or space to write to disk, etc.
+     */
+    public static String savePoster(String imageUrl)
         throws IOException
     {
         String destinationFile;
@@ -205,7 +211,7 @@ public class Media
         do
         {
             posterId = RandomContainer.getRandom().nextLong();
-            destinationFile = (new StringBuilder(String.valueOf(SettingsContainer.getAbsolutePosterPath()))).append(File.separator).append(posterId).append(".jpg").toString();
+            destinationFile = SettingsContainer.getAbsolutePosterPath() + File.separator + posterId + ".jpg";
         } while((new File(destinationFile)).exists());
         URL url = new URL(imageUrl);
         InputStream is = url.openStream();
@@ -216,128 +222,219 @@ public class Media
             os.write(b, 0, length);
         is.close();
         os.close();
-        return (new StringBuilder(String.valueOf(SettingsContainer.getPosterSource()))).append("/").append(posterId).append(".jpg").toString();
+        return SettingsContainer.getPosterSource() + "/" + posterId + ".jpg";
     }
 
-    public void overwriteChanges()
-    {
-    }
-
+    /**
+     * 
+     * @return Path towards poster image
+     */
     public String getPoster()
     {
         return poster;
     }
 
+    /**
+     * 
+     * @return Year of appearance
+     */
     public String getYear()
     {
         return year;
     }
 
+    /**
+     * 
+     * @return The item's name
+     */
     public String getName()
     {
         return name;
     }
 
+    /**
+     * 
+     * @param name The item's new name
+     */
     public void setName(String name)
     {
         this.name = name;
     }
 
+    /**
+     * Generates a new unique ID for the item
+     */
     public void generateId()
     {
         id = (new BigInteger(130, RandomContainer.getRandom())).toString(32);
     }
 
+    /**
+     * 
+     * @return The raw JSON response from the API
+     */
     public String getJsonResult()
     {
         return jsonResult;
     }
 
+    /**
+     * 
+     * @return The item's unique ID
+     */
     public String getId()
     {
         return id;
     }
 
+    /**
+     * 
+     * @param id The item's new unique ID
+     */
     public void setId(String id)
     {
         this.id = id;
     }
 
+    /**
+     * 
+     * @param poster The path towards the new poster image
+     */
     public void setPoster(String poster)
     {
         this.poster = poster;
     }
 
+    /**
+     * Checks whether or not this item has been published.
+     * @return The according boolean value
+     */
     public int getPublished()
     {
         return published;
     }
 
+    /**
+     * Sets the item's published status
+     * @param published The according boolean value
+     */
     public void setPublished(int published)
     {
         this.published = published;
     }
 
+    /**
+     * 
+     * @param year The new year of appearance
+     */
     public void setYear(String year)
     {
         this.year = year;
     }
 
+    /**
+     * 
+     * @return The path towards the video file
+     */
     public String getFilename()
     {
         return filename;
     }
 
+    /**
+     * 
+     * @param filename The new path towards the video file
+     */
     public void setFilename(String filename)
     {
         this.filename = filename;
     }
 
+    /**
+     * 
+     * @return The number of views
+     */
     public int getViews()
     {
         return views;
     }
 
+    /**
+     * 
+     * @param views The new number of views
+     */
     public void setViews(int views)
     {
         this.views = views;
     }
 
+    /**
+     * 
+     * @return The category the Media object is part of
+     */
     public String getCategory()
     {
         return category;
     }
 
+    /**
+     * 
+     * @param category The new category the Media object is to be part of
+     */
     public void setCategory(String category)
     {
         this.category = category;
     }
 
+    /**
+     * 
+     * @return The season number to which the video pertains
+     */
     public int getSeason()
     {
         return season;
     }
 
+    /**
+     * 
+     * @param season The new season number to which the video pertains
+     */
     public void setSeason(int season)
     {
         this.season = season;
     }
 
+    /**
+     * 
+     * @return The item's episode number
+     */
     public int getEpisode()
     {
         return episode;
     }
 
+    /**
+     * 
+     * @param episode The item's new episode number
+     */
     public void setEpisode(int episode)
     {
         this.episode = episode;
     }
 
+    /**
+     * 
+     * @return The unique ID of the collection the item pertains to
+     */
     public String getCollectionID()
     {
         return collectionID;
     }
 
+    /**
+     * 
+     * @param collectionID The unique ID of the new collection the item pertains to
+     */
     public void setCollectionID(String collectionID)
     {
         this.collectionID = collectionID;

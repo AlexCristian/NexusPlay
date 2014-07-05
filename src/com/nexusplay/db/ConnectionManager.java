@@ -3,6 +3,12 @@ package com.nexusplay.db;
 import com.nexusplay.containers.SettingsContainer;
 import java.sql.*;
 
+/**
+ * This class dispatches connections to the other database classes,
+ * being the only class that interfaces directly with the JDBC driver.
+ * @author alex
+ *
+ */
 public class ConnectionManager
 {
 
@@ -10,6 +16,14 @@ public class ConnectionManager
     {
     }
 
+    /**
+     * Creates a JDBC connection with the specified parameters.
+     * @param url Path toward the server
+     * @param port Server SQL port
+     * @param dbName The database's name
+     * @param userName User name to be used
+     * @param password The password associated to the user name
+     */
     public static void createConnection(String url, String port, String dbName, String userName, String password)
     {
         isRunning = true;
@@ -34,6 +48,10 @@ public class ConnectionManager
         isRunning = false;
     }
 
+    /**
+     * Closes the JDBC connection.
+     * @throws SQLException Thrown if the database is not accessible to us for whatever reason
+     */
     public static void closeConnection()
         throws SQLException
     {
@@ -41,6 +59,11 @@ public class ConnectionManager
             conn.close();
     }
 
+    /**
+     * Creates a connection using the stored settings and returns a non-null
+     * instance of a Connection object.
+     * @return
+     */
     public static Connection getConnection()
     {
         while(conn == null) 
@@ -48,7 +71,8 @@ public class ConnectionManager
             {
                 if(!isRunning)
                     createConnection(SettingsContainer.getDbURL(), SettingsContainer.getDbPort(), SettingsContainer.getDbName(), SettingsContainer.getDbUserName(), SettingsContainer.getDbPass());
-                Thread.sleep(100L);
+                //TODO Wait time is server-dependent, does not guarantee a non-null Connection instance.
+                Thread.sleep(1000);
             }
             catch(InterruptedException e)
             {
