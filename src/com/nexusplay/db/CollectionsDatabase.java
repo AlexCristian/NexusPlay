@@ -178,8 +178,8 @@ public class CollectionsDatabase {
 	            ArrayList<Collection> raw = new ArrayList<Collection>();
 	            PreparedStatement stmt = null;
 	            Connection con = getConnection();
-	            String req = "SELECT * FROM CollectionsDB WHERE name like '%?%';";
-	            stmt = con.prepareStatement(req);
+	            String req = "SELECT * FROM CollectionsDB WHERE name like ?;";
+	            stmt = con.prepareStatement("%" + req + "%");
 	            stmt.setString(1, request);
 	            Collection item; int k=0;
 	            for(ResultSet rs = stmt.executeQuery(); rs.next() && k<=resultCap; raw.add(item), k++)
@@ -205,8 +205,8 @@ public class CollectionsDatabase {
 	        {
 	            PreparedStatement stmt = null;
 	            Connection con = getConnection();
-	            String req = "SELECT * FROM CollectionsDB WHERE id like '%?%';";
-	            stmt = con.prepareStatement(req);
+	            String req = "SELECT * FROM CollectionsDB WHERE id like ?;";
+	            stmt = con.prepareStatement("%" + req + "%");
 	            stmt.setString(1, item.getID());
 	            ResultSet rs = stmt.executeQuery();
 	            if(!rs.next())

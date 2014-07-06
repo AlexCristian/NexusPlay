@@ -152,9 +152,9 @@ public class MediaDatabase
     {
         PreparedStatement stmt = null;
         Connection con = getConnection();
-        String req = "SELECT * FROM MediaDB WHERE id like '%?%';";
+        String req = "SELECT * FROM MediaDB WHERE id like ?;";
         stmt = con.prepareStatement(req);
-        stmt.setString(1, item.getId());
+        stmt.setString(1, "%" + item.getId() + "%");
         ResultSet rs = stmt.executeQuery();
         if(!rs.next())
         {
@@ -194,9 +194,9 @@ public class MediaDatabase
     			
             PreparedStatement stmt = null;
             Connection con = getConnection();           
-            String req = "SELECT * FROM UsersDB WHERE subscriptions like '%?%';";
+            String req = "SELECT * FROM UsersDB WHERE subscriptions like ?;";
             stmt = con.prepareStatement(req);
-            stmt.setString(1, media.getCollectionID());
+            stmt.setString(1, "%" + media.getCollectionID() + "%");
             ResultSet rs = stmt.executeQuery();
             while(rs.next()){
             	String id = rs.getString("id");
@@ -322,13 +322,12 @@ public class MediaDatabase
         ArrayList<Media> raw = new ArrayList<Media>();
         PreparedStatement stmt = null;
         Connection con = getConnection();
-        String req = "SELECT * FROM MediaDB WHERE published=1 AND collectionid!='' AND name like '%?%' "
+        String req = "SELECT * FROM MediaDB WHERE published=1 AND collectionid!='' AND name like ? "
         		+ "GROUP BY collectionid UNION SELECT * FROM MediaDB WHERE published=1 AND "
-        		+ "collectionid='' AND name like '%?%';";
+        		+ "collectionid='' AND name like ?;";
         stmt = con.prepareStatement(req);
-        //req += "UNION SELECT * FROM CollectionsDB WHERE name like '%" + request + "%';";
-        stmt.setString(1, request);
-        stmt.setString(2, request);
+        stmt.setString(1, "%" + request + "%");
+        stmt.setString(2, "%" + request + "%");
         Media item; int k=0;
         for(ResultSet rs = stmt.executeQuery(); rs.next() && k<=resultCap; raw.add(item), k++)
         {

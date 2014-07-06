@@ -39,7 +39,7 @@ public class ConnectionManager
         }
         try
         {
-            conn = DriverManager.getConnection((new StringBuilder("jdbc:mysql://")).append(url).append(":").append(port).append("/").append(dbName).toString(), userName, password);
+            conn = DriverManager.getConnection("jdbc:mysql://"+url+":"+port+"/"+dbName, userName, password);
         }
         catch(Exception e)
         {
