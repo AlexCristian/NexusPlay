@@ -11,7 +11,7 @@
 		var resumeLocation = "<%= ((user!=null) ? user.getPausedTimeByID(request.getParameter("w")) : "0") %>";
 	</script>
 
-	<video id="media-player" src="<%=request.getContextPath()+SettingsContainer.getMediaSource() %>/<%=item.getFilename() %>" height="400px" width="100%">
+	<video id="media-player" src="<%=request.getContextPath()+SettingsContainer.getMediaSource() %>/<%=item.getId() %>.<%=item.getFileFormat() %>" height="400px" width="100%">
 		<!-- <track type="text/vtt" kind="subtitles" label="English subtitles" src="<%=request.getContextPath()+SettingsContainer.getMediaSource() %>/path-to-subs.vtt" srclang="en" default></track>  -->
 	</video>
 </div>

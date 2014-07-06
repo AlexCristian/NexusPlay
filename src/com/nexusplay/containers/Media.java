@@ -190,11 +190,13 @@ public class Media
                 start++;
             int end;
             for(end = start; Character.isDigit(eqName.charAt(end)); end++);
-            return Integer.parseInt(eqName.substring(start, end));
-        } else
-        {
-            return 0;
+            try{
+            	return Integer.parseInt(eqName.substring(start, end));
+            }catch (NumberFormatException e){
+            	e.printStackTrace();
+            }
         }
+        return 0;
     }
 
     /**
@@ -223,6 +225,10 @@ public class Media
         is.close();
         os.close();
         return SettingsContainer.getPosterSource() + "/" + posterId + ".jpg";
+    }
+    
+    public String getFileFormat(){
+    	return filename.substring(filename.lastIndexOf(".")+1);
     }
 
     /**

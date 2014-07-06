@@ -76,7 +76,7 @@ User user = (User) request.getAttribute("user");
 			i++;
 		%>	
 			<div class="well uncategHolder" id="<%= item.getId() %>hold">
-				<h5><%= item.getFilename().substring(1) %></h5>
+				<h5><%= item.getFilename() %></h5>
 				<p><b><i>Suggested metadata</i></b></p>
 				<div class="adminPosterHolder">
 					<div id="<%= i %>upload"></div>

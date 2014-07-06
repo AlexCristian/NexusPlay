@@ -15,7 +15,7 @@ public class MediaDatabase
 	private static final String tableDefinition = "CREATE TABLE IF NOT EXISTS MediaDB(name VARCHAR(50), "
 			+ "filename VARCHAR(100), poster VARCHAR(100), id VARCHAR(1000), year VARCHAR(300), "
 			+ "views INT(1), category VARCHAR(50), season INT(1), episode INT(1), "
-			+ "collectionid VARCHAR(1000), published INT(1));";
+			+ "collectionid VARCHAR(1000), published INT(1), date TIMESTAMP DEFAULT CURRENT_TIMESTAMP);";
 
     /**
 	 * Opens a connection while at the same time making sure the table exists.
@@ -41,9 +41,9 @@ public class MediaDatabase
     {
         Connection con = getConnection();
         PreparedStatement stmt = null;
-        String req = "SELECT * FROM MediaDB WHERE name=?;";
+        String req = "SELECT * FROM MediaDB WHERE filename=?;";
         stmt = con.prepareStatement(req);
-        stmt.setString(1, item.getName());
+        stmt.setString(1, item.getFilename());
         ResultSet rs = stmt.executeQuery();
         if(rs.next())
             throw new Exception("Duplicate item!");
@@ -61,7 +61,7 @@ public class MediaDatabase
             if(rs.next())
                 pp = true;
         } while(pp);
-        req = "INSERT INTO MediaDB VALUES (? , ? , ? , ? , ? , 1, ? , ? , ? , ? , 0);";
+        req = "INSERT INTO MediaDB VALUES (? , ? , ? , ? , ? , 1, ? , ? , ? , ? , 0, DEFAULT);";
         stmt = con.prepareStatement(req);
         stmt.setString(1, item.getName());
         stmt.setString(2, item.getFilename());
@@ -181,6 +181,20 @@ public class MediaDatabase
     }
     
     /**
+     * Increments the number of views of a video
+     * @param mediaID The Media element's unique ID
+     * @throws SQLException Thrown if the database is not accessible to us for whatever reason
+     */
+    public static void incrementViews(String mediaID) throws SQLException{
+    	PreparedStatement stmt = null;
+        Connection con = getConnection();
+        String req = "UPDATE MediaDB SET views = views + 1 WHERE id = ?;";
+        stmt = con.prepareStatement(req);
+        stmt.setString(1, mediaID);
+        stmt.executeUpdate();
+    }
+    
+    /**
      * Updates notifications for the users subscribed to a certain collection.
      * @param media The item to propagate
      * @throws SQLException Thrown if the database is not accessible to us for whatever reason
@@ -217,24 +231,38 @@ public class MediaDatabase
     public static Media[] getPopularMedia(int size)
         throws SQLException
     {
-        PreparedStatement stmt = null;
+    	PreparedStatement stmt = null;
         Connection con = getConnection();
-        String req = "SELECT * FROM MediaDB WHERE published=1 ORDER BY views DESC;";
+        String req = "SELECT category FROM MediaDB GROUP BY category;";
         stmt = con.prepareStatement(req);
         ResultSet rs = stmt.executeQuery();
-        ArrayList<Media> raw = new ArrayList<Media>();
-        for(int i = 1; i < size && rs.next(); i++)
-        {
-            Media temp = new Media(rs.getString("name"), rs.getString("id"), rs.getString("filename"), rs.getString("category"), rs.getInt("published"));
-            temp.setPoster(rs.getString("poster"));
-            temp.setCollectionID(rs.getString("collectionid"));
-            temp.setEpisode(rs.getInt("episode"));
-            temp.setSeason(rs.getInt("season"));
-            temp.setViews(rs.getInt("views"));
-            temp.setYear(rs.getString("year"));
-            raw.add(temp);
+        ArrayList<String> categs = new ArrayList<String>();
+        while(rs.next()){
+        	categs.add(rs.getString("category"));
         }
-
+        
+        ArrayList<Media> raw = new ArrayList<Media>();
+        for(String currentCateg : categs){
+	        req = "SELECT * FROM MediaDB WHERE category=? AND published = 1 ORDER BY views DESC LIMIT ?;";
+	        stmt = con.prepareStatement(req);
+	        stmt.setString(1, currentCateg);
+	        stmt.setInt(2, size);
+	        rs = stmt.executeQuery();
+	        
+	        while(rs.next())
+	        {
+	            Media temp = new Media(rs.getString("name"), rs.getString("id"), rs.getString("filename"), rs.getString("category"), rs.getInt("published"));
+	            temp.setPoster(rs.getString("poster"));
+	            temp.setCollectionID(rs.getString("collectionid"));
+	            temp.setEpisode(rs.getInt("episode"));
+	            temp.setSeason(rs.getInt("season"));
+	            temp.setViews(rs.getInt("views"));
+	            temp.setYear(rs.getString("year"));
+	            raw.add(temp);
+	        }
+	        
+        }
+        
         Media result[] = new Media[raw.size()];
         for(int i = 0; i < raw.size(); i++)
             result[i] = (Media)raw.get(i);
@@ -285,28 +313,61 @@ public class MediaDatabase
     {
         PreparedStatement stmt = null;
         Connection con = getConnection();
-        String req = "SELECT * FROM MediaDB WHERE published=1 AND collectionid!='' GROUP BY collectionid UNION SELECT * FROM MediaDB WHERE published=1 AND collectionid='';";
+        String req = "SELECT category FROM MediaDB GROUP BY category;";
         stmt = con.prepareStatement(req);
         ResultSet rs = stmt.executeQuery();
-        ArrayList<Media> raw = new ArrayList<Media>();
-        rs.setFetchDirection(ResultSet.FETCH_REVERSE);
-        for(int i = 1; i < size && rs.next(); i++)
-        {
-            Media temp = new Media(rs.getString("name"), rs.getString("id"), rs.getString("filename"), rs.getString("category"), rs.getInt("published"));
-            temp.setPoster(rs.getString("poster"));
-            temp.setCollectionID(rs.getString("collectionid"));
-            temp.setEpisode(rs.getInt("episode"));
-            temp.setSeason(rs.getInt("season"));
-            temp.setViews(rs.getInt("views"));
-            temp.setYear(rs.getString("year"));
-            raw.add(temp);
+        ArrayList<String> categs = new ArrayList<String>();
+        while(rs.next()){
+        	categs.add(rs.getString("category"));
         }
-
+        
+        ArrayList<Media> raw = new ArrayList<Media>();
+        for(String currentCateg : categs){
+	        req = "SELECT * FROM MediaDB WHERE category=? AND published = 1 ORDER BY date DESC LIMIT ?;";
+	        stmt = con.prepareStatement(req);
+	        stmt.setString(1, currentCateg);
+	        stmt.setInt(2, size);
+	        rs = stmt.executeQuery();
+	        
+	        while(rs.next())
+	        {
+	            Media temp = new Media(rs.getString("name"), rs.getString("id"), rs.getString("filename"), rs.getString("category"), rs.getInt("published"));
+	            temp.setPoster(rs.getString("poster"));
+	            temp.setCollectionID(rs.getString("collectionid"));
+	            temp.setEpisode(rs.getInt("episode"));
+	            temp.setSeason(rs.getInt("season"));
+	            temp.setViews(rs.getInt("views"));
+	            temp.setYear(rs.getString("year"));
+	            raw.add(temp);
+	        }
+	        
+        }
+        
         Media result[] = new Media[raw.size()];
         for(int i = 0; i < raw.size(); i++)
             result[i] = (Media)raw.get(i);
 
         return result;
+    }
+    
+    /**
+     * Will attempt to extract a collection's category, assuming at least one episode has been published,
+     * returns null on failure.
+     * @param collectionID The collection's unique ID
+     * @return The collection's category, null on empty return
+     * @throws SQLException Thrown if the database is not accessible to us for whatever reason
+     */
+    public static String getCollectionCategoryById(String collectionID) throws SQLException{
+    	PreparedStatement stmt = null;
+        Connection con = getConnection();
+        String req = "SELECT category FROM MediaDB WHERE collectionid = ? AND published = 1 LIMIT 1;";
+        stmt = con.prepareStatement(req);
+        stmt.setString(1, collectionID);
+        ResultSet rs = stmt.executeQuery();
+        if(rs.next()){
+        	return rs.getString("category");
+        }
+        return null;
     }
 
     /**
@@ -328,16 +389,32 @@ public class MediaDatabase
         stmt = con.prepareStatement(req);
         stmt.setString(1, "%" + request + "%");
         stmt.setString(2, "%" + request + "%");
-        Media item; int k=0;
+        Media item=null; int k=0;
+        String collectionIDs = "";
         for(ResultSet rs = stmt.executeQuery(); rs.next() && k<=resultCap; raw.add(item), k++)
         {
             item = new Media(rs.getString("name"), rs.getString("id"), rs.getString("filename"), rs.getString("category"), rs.getInt("published"));
             item.setPoster(rs.getString("poster"));
             item.setYear(rs.getString("year"));
             item.setCollectionID(rs.getString("collectionid"));
+            if(item.getCollectionID() != "")
+            	collectionIDs += item.getCollectionID();
             item.setEpisode(rs.getInt("episode"));
             item.setSeason(rs.getInt("season"));
             item.setViews(rs.getInt("views"));
+        }
+        
+        req = "SELECT * FROM CollectionsDB WHERE name like ?;";
+        stmt = con.prepareStatement(req);
+        stmt.setString(1, "%" + request + "%");
+        for(ResultSet rs = stmt.executeQuery(); rs.next() && k<=resultCap; )
+        {
+        	if(collectionIDs.contains(rs.getString("id")))
+        		continue;
+        	item = new Media("", "", "", getCollectionCategoryById(rs.getString("id")), 1);
+        	item.setCollectionID(rs.getString("id"));
+        	item.setPoster(rs.getString("poster"));
+        	k++; raw.add(item);
         }
 
         Media result[] = new Media[raw.size()];

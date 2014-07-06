@@ -41,6 +41,7 @@ public class PlayMedia extends HttpServlet
             if(item==null){
             	throw new Exception("Media not found exception");
             }
+            MediaDatabase.incrementViews(item.getId());
             request.setAttribute("media", item);
             if(userID!=null){
             	UsersDatabase.setMediaWatched(userID, item.getId());

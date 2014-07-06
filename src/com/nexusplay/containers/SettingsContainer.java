@@ -9,8 +9,8 @@ package com.nexusplay.containers;
 public class SettingsContainer
 {
 	
-	private final static String absoluteMediaPath = "/media-downloads";
-	//private final static String absoluteMediaPath = "C:/media-downloads";
+	private final static String absoluteMediaPath = "/home/alex/Torrents";
+	//private final static String absoluteMediaPath = "C:/media/downloads";
     private final static String mediaSource = "/media";
     private final static String posterFolder = "posters";
     private final static String posterSource = mediaSource + "/" + posterFolder;

@@ -14,7 +14,7 @@ import java.sql.SQLException;
  */
 public class UpdaterAgent extends Thread
 {
-    private String path = SettingsContainer.getAbsoluteMediaPath();;
+    private String path = SettingsContainer.getAbsoluteMediaPath();
     private File mediaFolder;
 
     /**
@@ -66,17 +66,21 @@ public class UpdaterAgent extends Thread
         int j = (afile = files).length;
         for(int i = 0; i < j; i++)
         {
+        	
             File file = afile[i];
+            String mediaPath = parentFolder + "/" + file.getName();
+        	if(mediaPath.startsWith(File.separator))
+        		mediaPath = mediaPath.substring(1);
             if(file.isDirectory())
                 checkFolder(file, parentFolder + "/" + file.getName());
             else
-            if(isSupportedFormat(file) && !MediaDatabase.checkExists(parentFolder + "/" + file.getName()))
+            if(isSupportedFormat(file) && !MediaDatabase.checkExists(mediaPath))
             {
-                Media newMedia = new Media(parentFolder + "/" + file.getName());
+                Media newMedia = new Media(mediaPath);
                 try {
 					MediaDatabase.pushMedia(newMedia);
 				} catch (Exception e) {
-					//should not happen since we already if the item existed
+					//should not happen since we already checked if the item existed
 					e.printStackTrace();
 					System.err.println("More than one thread is adding media to the database!");
 				}

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://java.sun.com/xml/ns/javaee" xmlns:web="http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd" id="WebApp_ID" version="3.0">
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://java.sun.com/xml/ns/javaee" xmlns:web="http://java.sun.com/xml/ns/javaee" xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd" id="WebApp_ID" version="3.0">
   <display-name>NexusPlay</display-name>
   <welcome-file-list>
     <welcome-file>MainPage</welcome-file>
@@ -34,6 +34,14 @@
     <servlet-name>Search</servlet-name>
     <url-pattern>/search</url-pattern>
   </servlet-mapping>
+  <servlet>
+    <servlet-name>FileServlet</servlet-name>
+    <servlet-class>com.nexusplay.security.FileServlet</servlet-class>
+</servlet>
+<servlet-mapping>
+    <servlet-name>FileServlet</servlet-name>
+    <url-pattern>*.mp4</url-pattern>
+</servlet-mapping>
   <mime-mapping>
     <extension>.mp4</extension>
     <mime-type>video/mp4</mime-type>
@@ -44,14 +52,12 @@
   	</listener-class>
   </listener>
   <filter>
-	  <filter-name>QuerySafetyFilter</filter-name>
-	  <filter-class>com.nexusplay.security.QuerySafetyFilter</filter-class>
+    <filter-name>QuerySafetyFilter</filter-name>
+    <filter-class>com.nexusplay.security.QuerySafetyFilter</filter-class>
   </filter>
   <filter-mapping>
-	  <filter-name>QuerySafetyFilter</filter-name>
-	  <url-pattern>/*</url-pattern>
-	  <dispatcher>REQUEST</dispatcher>
+    <filter-name>QuerySafetyFilter</filter-name>
+    <url-pattern>/*</url-pattern>
+    <dispatcher>REQUEST</dispatcher>
   </filter-mapping>
-
-	
 </web-app>

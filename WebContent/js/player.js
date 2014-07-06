@@ -46,14 +46,16 @@ $(document).ready(function(){
 		    	 * playback status.
 		    	 */
 		    	function storePlaybackState(){
-					$.ajax({
-						type: "GET",
-						url: "./StorePlaybackState",
-						data: { 
-							id : mediaID,
-							time : mediaElement.currentTime
-						}
-					});
+		    		if(mediaElement.currentTime != mediaElement.duration){
+						$.ajax({
+							type: "GET",
+							url: "./StorePlaybackState",
+							data: { 
+								id : mediaID,
+								time : mediaElement.currentTime
+							}
+						});
+		    		}
 				}
 		    	
 		    	/**
