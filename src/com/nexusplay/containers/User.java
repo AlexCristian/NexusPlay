@@ -55,7 +55,6 @@ public class User {
 		StringTokenizer pausedTokenizer = new StringTokenizer(PMpaused, ";");
 		while(pausedTokenizer.hasMoreElements()){
 			String item = pausedTokenizer.nextToken();
-			//CHECK HERE FOR BUGS
 			paused.put(item.substring(0, item.indexOf(",")), item.substring(item.indexOf(",")+1));
 		}
 	}
@@ -75,30 +74,66 @@ public class User {
 		paused = new HashMap<String, String>();
 	}
 	
-	
+	/**
+	 * Generates a new unique ID
+	 */
 	public void generateId()
     {
         id = (new BigInteger(130, RandomContainer.getRandom())).toString(32);
     }
 	
+	/**
+	 * 
+	 * @return The user's email address
+	 */
 	public String getEmail() {
 		return email;
 	}
+	
+	/**
+	 * 
+	 * @param email The user's new email address
+	 */
 	public void setEmail(String email) {
 		this.email = email;
 	}
+	
+	/**
+	 * 
+	 * @return The user's nickname
+	 */
 	public String getNickname() {
 		return nickname;
 	}
+	
+	/**
+	 * 
+	 * @param nickname The user's new nickname
+	 */
 	public void setNickname(String nickname) {
 		this.nickname = nickname;
 	}
+	
+	/**
+	 * 
+	 * @return The user's password hash
+	 */
 	public String getPassword() {
 		return password;
 	}
+	
+	/**
+	 * 
+	 * @param password The user's new password hash
+	 */
 	public void setPassword(String password) {
 		this.password = password;
 	}
+	
+	/**
+	 * 
+	 * @return The serialized IDs of the Media objects the user has watched
+	 */
 	public String getWatchedSerialized(){
 		String resp = new String();
 		for(String item : watched){
@@ -106,15 +141,36 @@ public class User {
 		}
 		return resp;
 	}
+	
+	/**
+	 * 
+	 * @return An array containing the IDs of the Media objects the user has watched
+	 */
 	public ArrayList<String> getWatched() {
 		return watched;
 	}
+	
+	/**
+	 * Searches for the parameter ID in the viewed Media IDs array.
+	 * @param mediaID The ID to look for
+	 * @return True or false if the ID has not been watched
+	 */
 	public boolean isWatched(String mediaID){
 		return watched.contains(mediaID);
 	}
+	
+	/**
+	 * Adds a Media ID to the watched list.
+	 * @param watched The watched object's ID
+	 */
 	public void setWatched(ArrayList<String> watched) {
 		this.watched = watched;
 	}
+	
+	/**
+	 * 
+	 * @return The serialized IDs of the Collections the user is subscribed to
+	 */
 	public String getSubscriptionsSerialized(){
 		String resp = new String();
 		for(String item : subscriptions){
@@ -122,12 +178,28 @@ public class User {
 		}
 		return resp;
 	}
+	
+	/**
+	 * 
+	 * @return An array containing the IDs of the Collection objects the user 
+	 * is subscribed to
+	 */
 	public ArrayList<String> getSubscriptions() {
 		return subscriptions;
 	}
+	
+	/**
+	 * 
+	 * @param subscriptions The new subscription list
+	 */
 	public void setSubscriptions(ArrayList<String> subscriptions) {
 		this.subscriptions = subscriptions;
 	}
+	
+	/**
+	 * Subscribes a User to the specified Collection.
+	 * @param collectionID The Collection's ID 
+	 */
 	public void subscribe(String collectionID){
 		subscriptions.add(collectionID);
 		try {
@@ -137,15 +209,24 @@ public class User {
 			e.printStackTrace();
 		}
 	}
+	
+	/**
+	 * Unsubscribes a User from the specified Collection.
+	 * @param collectionID The Collection ID to be removed
+	 */
 	public void unsubscribe(String collectionID){
 		subscriptions.remove(collectionID);
 		try {
 			UsersDatabase.replaceUser(this);
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
+	
+	/**
+	 * 
+	 * @return The serialized IDs of the Media objects the user has paused
+	 */
 	public String getPausedSerialized(){
 		String resp = new String();
 		
@@ -155,44 +236,91 @@ public class User {
 		
 		return resp;
 	}
+	
+	/**
+	 * Stores the paused state of a Media object.
+	 * @param id The Media object's unique ID
+	 * @param time The point in time when the video was paused
+	 */
 	public void storePausedState(String id, String time){
 		paused.put(id, time);
 		try {
 			UsersDatabase.replaceUser(this);
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
+	
+	/**
+	 * Removes an object's paused state from the database
+	 * @param id The Media object's unique ID
+	 */
 	public void popPausedState(String id){
 		paused.remove(id);
 		try {
 			UsersDatabase.replaceUser(this);
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
+	
+	/**
+	 * Fetches the pause time of a stored item
+	 * @param id The Media's ID
+	 * @return The time at which the video was paused
+	 */
 	public String getPausedTimeByID(String id){
 		if(paused.containsKey(id))
 			return paused.get(id);
 		else return "0";
 	}
+	
+	/**
+	 * 
+	 * @return A HashMap with the user's paused Media
+	 */
 	public HashMap<String, String> getPaused() {
 		return paused;
 	}
+	
+	/**
+	 * 
+	 * @param paused The new HashMap to store the user's paused Media
+	 */
 	public void setPaused(HashMap<String, String> paused) {
 		this.paused = paused;
 	}
+	
+	/**
+	 * 
+	 * @return The user's unique ID
+	 */
 	public String getId() {
 		return id;
 	}
+	
+	/**
+	 * 
+	 * @param id The user's new unique ID
+	 */
 	public void setId(String id) {
 		this.id = id;
 	}
+	
+	/**
+	 * The user's new episode notifications for the 
+	 * Collections the User's subscribed to.
+	 * @return An array containing Media IDs
+	 */
 	public ArrayList<String> getNotifications() {
 		return notifications;
 	}
+	
+	/**
+	 * The user's serialized new episode notifications
+	 * for the Collections the User's subscribed to.
+	 * @return A serialized String containing Media IDs
+	 */
 	public String getNotificationsSerialized(){
 		String resp = new String();
 		for(String item : notifications){
@@ -200,6 +328,11 @@ public class User {
 		}
 		return resp;
 	}
+	
+	/**
+	 * Sets a new array for the user's new episode notifications.
+	 * @param notifications The array that holds our episodes
+	 */
 	public void setNotifications(ArrayList<String> notifications) {
 		this.notifications = notifications;
 	}

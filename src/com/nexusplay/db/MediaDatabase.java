@@ -200,9 +200,9 @@ public class MediaDatabase
             ResultSet rs = stmt.executeQuery();
             while(rs.next()){
             	String id = rs.getString("id");
-            	req="UPDATE UsersDB SET notifications=concat(notifications,'?;') WHERE id=?;";
+            	req="UPDATE UsersDB SET notifications=concat(notifications, ?) WHERE id=?;";
             	stmt = con.prepareStatement(req);
-            	stmt.setString(1, media.getId());
+            	stmt.setString(1, media.getId() + ";");
             	stmt.setString(2, id);
             	stmt.executeUpdate();
             }
