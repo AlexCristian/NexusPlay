@@ -42,8 +42,8 @@ public class User {
 		}
 		subscriptions=new ArrayList<String>();
 		StringTokenizer subscriptionsTokenizer = new StringTokenizer(PMsubscriptions, ";");
-		subscriptions.add(subscriptionsTokenizer.nextToken());
 		while(subscriptionsTokenizer.hasMoreElements()){
+			subscriptions.add(subscriptionsTokenizer.nextToken());
 		}
 		notifications=new ArrayList<String>();
 		StringTokenizer notificationsTokenizer = new StringTokenizer(PMnotifications, ";");
