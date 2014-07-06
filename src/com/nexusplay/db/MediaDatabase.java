@@ -323,10 +323,12 @@ public class MediaDatabase
         
         ArrayList<Media> raw = new ArrayList<Media>();
         for(String currentCateg : categs){
-	        req = "SELECT * FROM MediaDB WHERE category=? AND published = 1 ORDER BY date DESC LIMIT ?;";
+	        req = "SELECT * FROM (SELECT * FROM MediaDB WHERE category=? AND published = 1 AND collectionid <> '' GROUP BY collectionid UNION ALL SELECT * FROM MediaDB WHERE category = ? AND published = 1 AND collectionid = '') dum ORDER BY date DESC LIMIT ?;";
 	        stmt = con.prepareStatement(req);
 	        stmt.setString(1, currentCateg);
-	        stmt.setInt(2, size);
+	        stmt.setString(2, currentCateg);
+	        //ORDER BY date DESC LIMIT ?
+	        stmt.setInt(3, size);
 	        rs = stmt.executeQuery();
 	        
 	        while(rs.next())
