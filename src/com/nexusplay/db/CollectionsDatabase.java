@@ -48,17 +48,18 @@ public class CollectionsDatabase {
 	        ResultSet rs = stmt.executeQuery();
 	        if(rs.next())
 	            throw new Exception("Duplicate item!");
-	        boolean pp = true;
+	        boolean pp = false;
 	        
 	        //make sure the ID is unique
 	        do
 	        {
-	            pp = false;
-	            item.generateId();
 	            req = "SELECT * FROM CollectionsDB WHERE id=?;";
 	            stmt = con.prepareStatement(req);
+	            if(pp)
+	            	item.generateId();
 	            stmt.setString(1, item.getID());
 	            rs = stmt.executeQuery();
+	            pp=false;
 	            if(rs.next())
 	                pp = true;
 	        } while(pp);

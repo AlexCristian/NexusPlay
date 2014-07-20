@@ -31,7 +31,7 @@ public class PlayMedia extends HttpServlet
 				userID = user.getId();
         		request.setAttribute("user", user);
 			} catch (Exception e) {
-				// TODO Auto-generated catch block
+				request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
 				e.printStackTrace();
 			}
         }
@@ -53,10 +53,10 @@ public class PlayMedia extends HttpServlet
         }
         catch(SQLException e)
         {
-        	request.getRequestDispatcher("/templates/exceptions/SQLError.jsp").include(request, response);
+        	request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
             e.printStackTrace();
         } catch (Exception e) {
-        	request.getRequestDispatcher("/templates/exceptions/Error.jsp").include(request, response);
+        	request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
 			e.printStackTrace();
 		}
 

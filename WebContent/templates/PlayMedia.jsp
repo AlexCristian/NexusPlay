@@ -16,7 +16,7 @@
 		<%
 			for(Subtitle sub : subs){
 		%>
-		 <track type="text/vtt" kind="subtitles" label="<%= sub.getLanguage() %>" src="<%=request.getContextPath()+SettingsContainer.getMediaSource() %>/<%= sub.getFilename() %>" srclang="<%= sub.getSourceLanguage()%>" default></track>
+		 <track type="text/vtt" kind="subtitles" label="<%= sub.getLanguage() %>" src="<%=request.getContextPath()+SettingsContainer.getSubtitleSource() %>/<%= sub.getId() %>.<%= sub.getFileFormat() %>" srclang="<%= sub.getSourceLanguage()%>" default></track>
 		<% } %>
 	</video>
 </div>

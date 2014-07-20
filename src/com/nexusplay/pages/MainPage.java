@@ -28,7 +28,7 @@ public class MainPage extends HttpServlet
         		User user = UsersDatabase.getUserById((String) request.getSession().getAttribute("userID"));
 				request.setAttribute("user", user);
 			} catch (Exception e) {
-				// TODO Auto-generated catch block
+				request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
 				e.printStackTrace();
 			}
         }

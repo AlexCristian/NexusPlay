@@ -7,6 +7,49 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
+.messageText{
+	padding-left:20px;
+}
+.messageBox > table{
+	color:black;
+	width:100%;
+}
+.message-image{
+	height:130px;
+}
+.messageTitle{
+	width: 100%;
+	color: white;
+	padding: 9px 15px;
+	height: 20px;
+}
+.messageTitle > h5{
+	color: white;
+}
+.notificationTitle{
+	background-color: rgb(0, 135, 195);
+}
+.errorTitle{
+	background-color: rgb(194, 31, 0);
+}
+.innerMessage{
+	padding: 9px 15px;
+}
+.messageBox{
+	background: #f5f5f5;
+	height: 200px;
+	margin: auto;
+	margin-top:20px;
+	margin-bottom:20px;
+	width: 560px;
+	overflow:hidden;
+	-webkit-border-bottom-right-radius: 6px;
+	-webkit-border-bottom-left-radius: 6px;
+	-moz-border-radius-bottomright: 6px;
+	-moz-border-radius-bottomleft: 6px;
+	border-bottom-right-radius: 6px;
+	border-bottom-left-radius: 6px;
+}
 .addsub-table{
 	width: 25px;
 	max-width: 25px;
@@ -190,7 +233,7 @@ tr:hover > td > .episode:after{
 -moz-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
 box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
 }
-.collection > .modal-header > div > h3, h4, h5{
+.collection > .modal-header > div > h3, .collection > .modal-header > div > h4, .collection > .modal-header > div > h5{
 	margin-bottom: 10px;
 	color:white;
 }

@@ -15,6 +15,11 @@ public class SettingsContainer
     private final static String posterFolder = "posters";
     private final static String posterSource = mediaSource + "/" + posterFolder;
     private final static String absolutePosterPath = absoluteMediaPath + "/" + posterFolder;
+    
+    private final static String subtitleFolder = "subtitles";
+    private final static String subtitleSource = mediaSource + "/" + subtitleFolder;
+    private final static String absoluteSubtitlePath = absoluteMediaPath + "/" + subtitleFolder;
+    
     private final static String administratorNickname = "admin";
 
     private final static String dbURL = "localhost";
@@ -110,5 +115,26 @@ public class SettingsContainer
 	 */
 	public static String getDbPass() {
 		return dbPass;
+	}
+
+	/**
+	 * @return the subtitlefolder
+	 */
+	public static String getSubtitleFolder() {
+		return subtitleFolder;
+	}
+
+	/**
+	 * @return the subtitlesource
+	 */
+	public static String getSubtitleSource() {
+		return subtitleSource;
+	}
+
+	/**
+	 * @return the absolutesubtitlepath
+	 */
+	public static String getAbsoluteSubtitlePath() {
+		return absoluteSubtitlePath;
 	}
 }

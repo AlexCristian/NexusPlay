@@ -5,22 +5,13 @@
 <head>
 		<title>Alex's Nexus</title>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-		<script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.js'></script>
-		<script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.color.js'></script>
-		<script type='text/javascript' src='<%=request.getContextPath()%>/js/sha1.js'></script>
-		<script type='text/javascript' src='<%=request.getContextPath()%>/js/fittext.js'></script>
-		<script type='text/javascript' src='<%=request.getContextPath()%>/js/main.js'></script>
-		<script type='text/javascript' src='<%=request.getContextPath()%>/player/lib/mediaelement.js'></script>
-		<script type='text/javascript' src='<%=request.getContextPath()%>/player/lib/mediaelementplayer.js'></script>		
+		<script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.js'></script>		
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/bootstrap.js'></script>
-		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/player/skin/mediaelementplayer.css' />
 		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/bootstrap.min.css' />
 		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/bootstrap-responsive.css' />
 		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/typeplate-unminified.css' />
 		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/default.css' />
-		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/player.css' />
-		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/fineuploader-3.5.0.css' />
-	</head>
+</head>
 <body style = "background: none !important;">
 <script type="text/javascript">
 	$(document).ready(function(){
@@ -49,7 +40,6 @@
 		});
 	});
 </script>
-<script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.fineuploader-3.5.0.min.js'></script>
 <script type='text/javascript' src='<%=request.getContextPath()%>/js/iframe.xss.response-3.5.0.js'></script>
 
 	<%
@@ -59,7 +49,7 @@
 	<div class="well uncategHolder" id="<%= item.getId() %>hold">
 		<h5><%= item.getFilename() %></h5>
 		<p><b><i>Suggested metadata</i></b></p>
-		<form name="PublishMedia" action="PublishMedia" method="post" enctype="multipart/form-data">
+		<form name="PublishMedia" action="PublishMedia?id=<%= item.getId() %>" method="post" enctype="multipart/form-data">
 			<div class="adminPosterHolder">
 				<img style="display: inline-table; width:135px;" src=".<%= item.getPoster() %>"/>
 				<input type="submit" id="<%= item.getId() %>" class="publish submitButton pull-right topBarButton normalTopBarButton" style="color:white;" value="Publish">

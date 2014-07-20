@@ -1,8 +1,9 @@
 package com.nexusplay.elements;
 
+import java.io.File;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -20,8 +21,12 @@ import org.apache.commons.fileupload.servlet.ServletFileUpload;
 
 import com.nexusplay.containers.Collection;
 import com.nexusplay.containers.Media;
+import com.nexusplay.containers.SettingsContainer;
+import com.nexusplay.containers.Subtitle;
 import com.nexusplay.db.CollectionsDatabase;
 import com.nexusplay.db.MediaDatabase;
+import com.nexusplay.db.SubtitlesDatabase;
+import com.nexusplay.security.RandomContainer;
 
 /**
  * Servlet implementation class PublishMedia
@@ -50,83 +55,126 @@ public class PublishMedia extends HttpServlet {
 	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		response.setContentType("text/html");
-		PrintWriter out = response.getWriter();
-
-		out.println("Hello<br/>");
 
 		boolean isMultipartContent = ServletFileUpload.isMultipartContent(request);
 		if (!isMultipartContent) {
-			out.println("You are not trying to upload<br/>");
+			request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
 			return;
 		}
-		out.println("You are trying to upload<br/>");
 
-		FileItemFactory factory = new DiskFileItemFactory();
-		ServletFileUpload upload = new ServletFileUpload(factory);
-		try {
-			List<FileItem> fields = upload.parseRequest(request);
-			out.println("Number of fields: " + fields.size() + "<br/><br/>");
-			Iterator<FileItem> it = fields.iterator();
-			if (!it.hasNext()) {
-				out.println("No fields found");
-				return;
-			}
-			out.println("<table border=\"1\">");
-			while (it.hasNext()) {
-				out.println("<tr>");
-				FileItem fileItem = it.next();
-				boolean isFormField = fileItem.isFormField();
-				if (isFormField) {
-					out.println("<td>regular form field</td><td>FIELD NAME: " + fileItem.getFieldName() + 
-							"<br/>STRING: " + fileItem.getString()
-							);
-					out.println("</td>");
-				} else {
-					out.println("<td>file form field</td><td>FIELD NAME: " + fileItem.getFieldName() +
-							"<br/>STRING: " + fileItem.getString() +
-							"<br/>NAME: " + fileItem.getName() +
-							"<br/>CONTENT TYPE: " + fileItem.getContentType() +
-							"<br/>SIZE (BYTES): " + fileItem.getSize() +
-							"<br/>TO STRING: " + fileItem.toString()
-							);
-					out.println("</td>");
-				}
-				out.println("</tr>");
-			}
-			out.println("</table>");
-		} catch (FileUploadException e) {
-			e.printStackTrace();
-		}
-		
-		/*
 		Media media = null;
 		try {
 			media = MediaDatabase.getMediaById(request.getParameter("id"));
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		media.setCategory(request.getParameter("category"));
-		media.setEpisode(Integer.parseInt(request.getParameter("episode")));
-		media.setSeason(Integer.parseInt(request.getParameter("season")));
-		media.setName(request.getParameter("name"));
 		media.setPublished(1);
-		media.setYear(request.getParameter("year"));
+		ArrayList<Subtitle> subs = new ArrayList<Subtitle>();
+		FileItemFactory factory = new DiskFileItemFactory();
+		ServletFileUpload upload = new ServletFileUpload(factory);
 		try {
-			Collection coll= null;
-			coll = CollectionsDatabase.getCollectionByName(request.getParameter("collection"));
-			media.setCollectionID(coll.getID());
-			media.setPoster(coll.getPoster());
-		} catch (Exception e1) {
-			//Not part of a collection
+			List<FileItem> fields = upload.parseRequest(request);
+			Iterator<FileItem> it = fields.iterator();
+			if (!it.hasNext()) {
+				request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
+				return;
+			}
+			while (it.hasNext()) {
+				FileItem fileItem = it.next();
+				boolean isFormField = fileItem.isFormField();
+				if (isFormField) {
+					if(fileItem.getFieldName().equals("Category"))
+						media.setCategory(fileItem.getString());
+					else if(fileItem.getFieldName().equals("Episode"))
+						media.setEpisode(Integer.parseInt(fileItem.getString()));
+					else if(fileItem.getFieldName().equals("Season"))
+						media.setSeason(Integer.parseInt(fileItem.getString()));
+					else if(fileItem.getFieldName().equals("Name"))						
+						media.setName(fileItem.getString());
+					else if(fileItem.getFieldName().equals("Year"))
+						media.setYear(fileItem.getString());
+					else if(fileItem.getFieldName().contains("Subtitle language ")){
+						int nrSub = Integer.parseInt(fileItem.getFieldName().replace("Subtitle language ", "")) -1;
+						while(subs.size()<=nrSub){
+							subs.add(null);
+						}
+						if(subs.get(nrSub) == null){
+							subs.set(nrSub, new Subtitle(media.getId(), "", ""));
+						}
+						subs.get(nrSub).setLanguage(fileItem.getString());
+					}else if(fileItem.getFieldName() == "collection"){
+						try {
+							Collection coll= null;
+							coll = CollectionsDatabase.getCollectionByName(fileItem.getString());
+							media.setCollectionID(coll.getID());
+							media.setPoster(coll.getPoster());
+						} catch (Exception e1) {
+							//Not part of a collection
+						}
+					}
+				} else {
+					if(fileItem.getFieldName().equals("poster") && !fileItem.getName().equals("")){
+						
+						long randId; File uploadedFile;
+                        do{
+	                        randId = RandomContainer.getRandom().nextLong();
+	                        uploadedFile = new File(SettingsContainer.getAbsolutePosterPath() + "/" + randId + fileItem.getName().substring(fileItem.getName().lastIndexOf(".")));
+                        }while(uploadedFile.exists());
+                        try {
+                        	File temp = new File(SettingsContainer.getAbsolutePosterPath());
+                        	temp.mkdirs();
+							fileItem.write(uploadedFile);
+						} catch (Exception e) {
+							request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+							e.printStackTrace();
+							return;
+						}
+                        media.setPoster(SettingsContainer.getPosterSource()+"/"+randId + fileItem.getName().substring(fileItem.getName().lastIndexOf(".")));
+					}else if(fileItem.getFieldName().contains("Subtitle file ") && !fileItem.getName().equals("")){
+						int nrSub = Integer.parseInt(fileItem.getFieldName().replace("Subtitle file ", ""))-1;
+						while(subs.size()<=nrSub){
+							subs.add(null);
+						}
+						if(subs.get(nrSub) == null){
+							subs.set(nrSub, new Subtitle(media.getId(), "", ""));
+						}
+						File uploadedFile = new File(SettingsContainer.getAbsoluteSubtitlePath() + "/" + subs.get(nrSub).getId() + fileItem.getName().substring(fileItem.getName().lastIndexOf(".")));
+						try {
+							File temp = new File(SettingsContainer.getAbsoluteSubtitlePath());
+                        	temp.mkdirs();
+							fileItem.write(uploadedFile);
+						} catch (Exception e) {
+							request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+							e.printStackTrace();
+							return;
+						}
+						subs.get(nrSub).setFilename(SettingsContainer.getSubtitleSource()+"/"+ subs.get(nrSub).getId() + fileItem.getName().substring(fileItem.getName().lastIndexOf(".")));
+					}
+						
+				}
+			}
+		} catch (FileUploadException e) {
+			e.printStackTrace();
 		}
+		
 		try {
 			MediaDatabase.replaceMedia(media);
 			MediaDatabase.propagateMediaNotification(media);
+			for(Subtitle item : subs){
+				if(!item.getFilename().equals("") && !item.getLanguage().equals("")){
+					SubtitlesDatabase.pushSubtitle(item);
+				}
+			}
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
+			request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
 			e.printStackTrace();
-		}*/
+			return;
+		} catch (Exception e) {
+			request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+			e.printStackTrace();
+			return;
+		}
+		request.getRequestDispatcher("/templates/information_screens/Success.jsp").include(request, response);
 	}
 
 }

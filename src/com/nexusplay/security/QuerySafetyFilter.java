@@ -45,7 +45,7 @@ public class QuerySafetyFilter implements Filter {
 			// pass the request along the filter chain
 			chain.doFilter(request, response);
 		}catch(Exception e){
-			response.getWriter().write("Invalid characters present! Please restate your query.");
+			request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
 		}
 	}
 

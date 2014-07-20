@@ -51,17 +51,18 @@ public class ChangesDatabase {
         ResultSet rs = stmt.executeQuery();
         if(rs.next())
             throw new Exception("Duplicate item!");
-        boolean pp = true;
+        boolean pp = false;
         
         //make sure the ID is unique
         do
         {
-            pp = false;
             req = "SELECT * FROM ChangesDB WHERE id=?;";
             stmt = con.prepareStatement(req);
-            item.generateId();
+            if(pp)
+            	item.generateId();
             stmt.setString(1, item.getId());
             rs = stmt.executeQuery();
+            pp=false;
             if(rs.next())
                 pp = true;
         } while(pp);

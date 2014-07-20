@@ -45,7 +45,7 @@ public class ControlPanel extends HttpServlet {
         if(request.getSession().getAttribute("userID")!=null && user.getNickname().equals(SettingsContainer.getAdministratorNickname())){
 			request.getRequestDispatcher("/templates/ControlPanel.jsp").include(request, response);
         }else{
-        	request.getRequestDispatcher("/templates/exceptions/Error.jsp").include(request, response);
+        	request.getRequestDispatcher("/templates/information_screens/AccessDenied.jsp").include(request, response);
         }
         request.getRequestDispatcher("/templates/elements/Footer.jsp").include(request, response);
 	}
