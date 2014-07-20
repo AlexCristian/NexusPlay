@@ -41,6 +41,14 @@ public class Subtitle {
 	}
 	
 	/**
+	 * Gets "srclang" HTML tag
+	 * @return The String corresponding to the HTML tag
+	 */
+	public String getSourceLanguage(){
+		return language.substring(0,2).toLowerCase();
+	}
+	
+	/**
      * Generates a new unique ID for the item
      */
 	public void generateId()

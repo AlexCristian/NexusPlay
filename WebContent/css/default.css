@@ -180,8 +180,12 @@ box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
 	width: 100% !important;
 	margin:auto;
 }
+.publish{
+	width:100% !important;
+}
 .submitButton{
 	background-color:rgb(0, 112, 255) !important;
+	border:0;
 }
 .submitButton:hover{
 	background-color:rgb(0, 133, 255) !important

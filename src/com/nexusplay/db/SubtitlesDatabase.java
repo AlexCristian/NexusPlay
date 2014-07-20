@@ -114,4 +114,18 @@ public class SubtitlesDatabase {
         rs.next();
         return new Subtitle(rs.getString("mediaID"), rs.getString("language"), rs.getString("id"), rs.getString("filename"));
     }
+    
+    /**
+     * Deletes a subtitle from the database
+     * @param id The object's ID
+     * @throws SQLException Thrown if the database is not accessible to us for whatever reason
+     */
+    public static void deleteSubtitle(String id) throws SQLException{
+    	Connection con = getConnection();
+        PreparedStatement stmt = null;
+        String req = "DELETE FROM SubtitlesDB WHERE id=?;";
+        stmt = con.prepareStatement(req);
+        stmt.setString(1, id);
+        stmt.executeUpdate();
+    }
 }

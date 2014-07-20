@@ -133,6 +133,20 @@ public class ChangesDatabase {
         rs.next();
         return new Change(rs.getString("changedContent"), rs.getString("originalContent"), rs.getString("targetID"), rs.getInt("votes"), rs.getString("id"));
     }
+    
+    /**
+     * Deletes a change from the database
+     * @param id The object's ID
+     * @throws SQLException Thrown if the database is not accessible to us for whatever reason
+     */
+    public static void deleteChange(String id) throws SQLException{
+    	Connection con = getConnection();
+        PreparedStatement stmt = null;
+        String req = "DELETE FROM ChangesDB WHERE id=?;";
+        stmt = con.prepareStatement(req);
+        stmt.setString(1, id);
+        stmt.executeUpdate();
+    }
 	
 	
 }
