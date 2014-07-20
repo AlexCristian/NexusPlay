@@ -7,9 +7,10 @@
 			  $("#" + $(this).data("target")).css("display","inline-block");
 			});
 	});
-	function resizeIframe(obj) {
-	    obj.style.height = obj.contentWindow.document.body.scrollHeight + 'px';
-	    obj.style.width = obj.contentWindow.document.body.scrollWidth + 'px';
+	function resizeIframe(id) {
+		obj = document.getElementById(id + 'ifrm');
+	    obj.style.height = (obj.contentWindow.document.getElementById(id + "hold").scrollHeight + 20) + 'px';
+	    obj.style.width = (obj.contentWindow.document.getElementById(id + "hold").scrollWidth + 20) + 'px';
 	  }
 </script>
 <script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.fineuploader-3.5.0.min.js'></script>
@@ -41,7 +42,7 @@ User user = (User) request.getAttribute("user");
 		Media[] unpublished = MediaDatabase.getUnpublishedMedia();
 		for(Media item : unpublished){
 		%>	
-			<iframe src="EditMedia?media=<%=item.getId() %>" seamless frameborder="0" scrolling="no" onload='javascript:resizeIframe(this);'></iframe>
+			<iframe id="<%=item.getId() %>ifrm" src="EditMedia?media=<%=item.getId() %>" seamless frameborder="0" scrolling="no" onload='javascript:resizeIframe("<%=item.getId() %>");'></iframe>
 		<%
 		}
 	%>

@@ -36,6 +36,17 @@
 			        	$("." + $(this).attr('id')+"h").hide();
 			        }
 			    });
+		i = 1;
+		$('#add-sub').click(function (){
+			newRow = "<tr>";
+			newRow += "<td class='addsub-table'>" + i + "</td>"
+			newRow += "<td class='language-table'><input style='width: 135px;' type='text' name='Subtitle language " + i + "' placeholder=\"Subtitle's language\"></td>";
+			newRow += "<td class='file-table'><input type='file' size='50' name='Subtitle file " + i + "'></td>";
+			newRow += "</tr>";
+			console.log(newRow);
+			$('#substable > tbody:last').append(newRow);
+			i++;
+		});
 	});
 </script>
 <script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.fineuploader-3.5.0.min.js'></script>
@@ -71,7 +82,7 @@
 				</tr>
 				<tr>
 					<td>Collectible</td>
-					<td><input id="<%= i %>" type="checkbox" name="Collectible" style="margin-bottom:10px; margin-left:10px;" onclick="javascript:parent.resizeIframe(this);"></td>
+					<td><input id="<%= i %>" type="checkbox" name="Collectible" style="margin-bottom:10px; margin-left:10px;" onclick="javascript:parent.resizeIframe('<%=item.getId() %>');"></td>
 				</tr>
 				<tr style="display:none;" class="<%= i %>h">
 					<td>Collection</td>
@@ -94,6 +105,21 @@
 				<tr style="display:none;" class="<%= i %>h">
 					<td>Episode</td>
 					<td><input id="<%= item.getId() %>ep" type="text" name="Episode" placeholder="Episode" style="margin-bottom:10px; margin-left:10px;" value="<%= item.getEpisode() %>"></td>
+				</tr>
+				<tr>
+					<td colspan="2">
+						<table id="substable" class="table-bordered" style="width:100%;">
+							<thead class="topBarButton normalTopBarButton">
+								<tr>
+									<th id="add-sub" class="addsub-table" onclick="javascript:parent.resizeIframe('<%=item.getId() %>');">+</th>
+									<th class='language-table'>Language</th>
+									<th class='file-table'>Source file</th>
+								</tr>
+							</thead>
+							<tbody>
+							</tbody>
+						</table>
+					</td>
 				</tr>
 			</table>
 		</form>

@@ -7,6 +7,27 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
+.addsub-table{
+	width: 25px;
+	max-width: 25px;
+	overflow:hidden;
+	text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.language-table{
+	width: 150px;
+	max-width: 150px;
+	overflow:hidden;
+	text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.file-table{
+	width: 160px;
+	max-width: 160px;
+	overflow:hidden;
+	text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .collectionHeader{
 	height:200px;
 	overflow:hidden;
