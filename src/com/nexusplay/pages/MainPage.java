@@ -28,7 +28,9 @@ public class MainPage extends HttpServlet
         		User user = UsersDatabase.getUserById((String) request.getSession().getAttribute("userID"));
 				request.setAttribute("user", user);
 			} catch (Exception e) {
-				// TODO Auto-generated catch block
+				request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+				request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
+				request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 				e.printStackTrace();
 			}
         }
@@ -42,7 +44,7 @@ public class MainPage extends HttpServlet
         }
         catch(SQLException e)
         {
-        	request.getRequestDispatcher("/templates/exceptions/SQLError.jsp").include(request, response);
+        	request.getRequestDispatcher("/templates/information_screens/SQLError.jsp").include(request, response);
             e.printStackTrace();
         }
         request.getRequestDispatcher("/templates/elements/Footer.jsp").include(request, response);

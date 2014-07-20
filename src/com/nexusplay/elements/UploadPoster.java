@@ -27,7 +27,8 @@ import com.nexusplay.db.MediaDatabase;
 import com.nexusplay.security.RandomContainer;
 
 /**
- * Servlet implementation class UploadPoster
+ * Obsolete class for uploading posters via AJAX.
+ * Still in use for Collection poster upload.
  */
 @WebServlet("/UploadPoster")
 public class UploadPoster extends HttpServlet {

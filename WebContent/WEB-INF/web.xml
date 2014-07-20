@@ -37,11 +37,11 @@
   <servlet>
     <servlet-name>FileServlet</servlet-name>
     <servlet-class>com.nexusplay.security.FileServlet</servlet-class>
-</servlet>
-<servlet-mapping>
+  </servlet>
+  <servlet-mapping>
     <servlet-name>FileServlet</servlet-name>
     <url-pattern>*.mp4</url-pattern>
-</servlet-mapping>
+  </servlet-mapping>
   <mime-mapping>
     <extension>.mp4</extension>
     <mime-type>video/mp4</mime-type>

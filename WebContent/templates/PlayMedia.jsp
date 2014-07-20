@@ -5,6 +5,7 @@
 	<%  
 		Media item = (Media) request.getAttribute("media");
 		User user = (User) request.getAttribute("user");
+		Subtitle[] subs = (Subtitle[]) request.getAttribute("subs");
 	%>
 	<script>
 		var mediaID = "<%=request.getParameter("w") %>";
@@ -12,7 +13,11 @@
 	</script>
 
 	<video id="media-player" src="<%=request.getContextPath()+SettingsContainer.getMediaSource() %>/<%=item.getId() %>.<%=item.getFileFormat() %>" height="400px" width="100%">
-		<!-- <track type="text/vtt" kind="subtitles" label="English subtitles" src="<%=request.getContextPath()+SettingsContainer.getMediaSource() %>/path-to-subs.vtt" srclang="en" default></track>  -->
+		<%
+			for(Subtitle sub : subs){
+		%>
+		 <track type="text/vtt" kind="subtitles" label="<%= sub.getLanguage() %>" src="<%=request.getContextPath()+SettingsContainer.getSubtitleSource() %>/<%= sub.getId() %>.<%= sub.getFileFormat() %>" srclang="<%= sub.getSourceLanguage()%>" default></track>
+		<% } %>
 	</video>
 </div>
 <div class="videoContent">

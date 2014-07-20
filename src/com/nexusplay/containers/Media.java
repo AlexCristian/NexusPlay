@@ -97,6 +97,7 @@ public class Media
         views = 1;
         filename = mediaPath;
         published = 0;
+        generateId();
         mediaPath = removeExtension(mediaPath);
         if(mediaPath.lastIndexOf(File.separator) > 0)
             mediaPath = mediaPath.substring(mediaPath.lastIndexOf(File.separator) + 1);

@@ -46,7 +46,9 @@ public class CollectionSearch extends HttpServlet {
 		try {
 			results = CollectionsDatabase.searchCollections(query, 5);
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 			e.printStackTrace();
 		}
 		for(Collection item : results){

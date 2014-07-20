@@ -9,19 +9,24 @@ package com.nexusplay.containers;
 public class SettingsContainer
 {
 	
-	private final static String absoluteMediaPath = "/home/alex/Torrents";
+	private final static String absoluteMediaPath = "/home/alex/Media";
 	//private final static String absoluteMediaPath = "C:/media/downloads";
     private final static String mediaSource = "/media";
     private final static String posterFolder = "posters";
     private final static String posterSource = mediaSource + "/" + posterFolder;
     private final static String absolutePosterPath = absoluteMediaPath + "/" + posterFolder;
+    
+    private final static String subtitleFolder = "subtitles";
+    private final static String subtitleSource = mediaSource + "/" + subtitleFolder;
+    private final static String absoluteSubtitlePath = absoluteMediaPath + "/" + subtitleFolder;
+    
     private final static String administratorNickname = "admin";
 
-    private final static String dbURL = "localhost";
-    private final static String dbPort = "3306";
-    private final static String dbName = "NexusPlayDB";
-    private final static String dbUserName = "nexusplay";
-    private final static String dbPass = "nexusplay";
+    private static String dbURL = "localhost";
+    private static String dbPort = "3306";
+    private static String dbName = "nexusplay";
+    private static String dbUserName = "play";
+    private static String dbPass = "nexuspass";
 
     /**
      * 
@@ -110,5 +115,26 @@ public class SettingsContainer
 	 */
 	public static String getDbPass() {
 		return dbPass;
+	}
+
+	/**
+	 * @return the subtitlefolder
+	 */
+	public static String getSubtitleFolder() {
+		return subtitleFolder;
+	}
+
+	/**
+	 * @return the subtitlesource
+	 */
+	public static String getSubtitleSource() {
+		return subtitleSource;
+	}
+
+	/**
+	 * @return the absolutesubtitlepath
+	 */
+	public static String getAbsoluteSubtitlePath() {
+		return absoluteSubtitlePath;
 	}
 }
