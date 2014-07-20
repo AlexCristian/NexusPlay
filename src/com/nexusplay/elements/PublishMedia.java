@@ -58,7 +58,9 @@ public class PublishMedia extends HttpServlet {
 
 		boolean isMultipartContent = ServletFileUpload.isMultipartContent(request);
 		if (!isMultipartContent) {
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
 			request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 			return;
 		}
 
@@ -76,7 +78,9 @@ public class PublishMedia extends HttpServlet {
 			List<FileItem> fields = upload.parseRequest(request);
 			Iterator<FileItem> it = fields.iterator();
 			if (!it.hasNext()) {
+				request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
 				request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
+				request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 				return;
 			}
 			while (it.hasNext()) {
@@ -125,7 +129,9 @@ public class PublishMedia extends HttpServlet {
                         	temp.mkdirs();
 							fileItem.write(uploadedFile);
 						} catch (Exception e) {
+							request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
 							request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+							request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 							e.printStackTrace();
 							return;
 						}
@@ -144,7 +150,9 @@ public class PublishMedia extends HttpServlet {
                         	temp.mkdirs();
 							fileItem.write(uploadedFile);
 						} catch (Exception e) {
+							request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
 							request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+							request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 							e.printStackTrace();
 							return;
 						}
@@ -166,15 +174,21 @@ public class PublishMedia extends HttpServlet {
 				}
 			}
 		} catch (SQLException e) {
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
 			request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 			e.printStackTrace();
 			return;
 		} catch (Exception e) {
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
 			request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 			e.printStackTrace();
 			return;
 		}
+		request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
 		request.getRequestDispatcher("/templates/information_screens/Success.jsp").include(request, response);
+		request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 	}
 
 }

@@ -37,8 +37,11 @@ public class ControlPanel extends HttpServlet {
 			user = UsersDatabase.getUserById((String) request.getSession().getAttribute("userID"));
 			request.setAttribute("user", user);
 		} catch (Exception e1) {
-			// TODO Auto-generated catch block
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 			e1.printStackTrace();
+			return;
 		}
 		request.getRequestDispatcher("/templates/elements/Header.jsp").include(request, response);
 		

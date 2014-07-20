@@ -40,8 +40,11 @@ public class Search extends HttpServlet {
 	            request.getRequestDispatcher("/templates/elements/MediaDisplayer.jsp").include(request, response);
 			}
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 			e.printStackTrace();
+			return;
 		}
         out.close();
 	}

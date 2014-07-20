@@ -49,7 +49,9 @@ public class EditMedia extends HttpServlet {
         if(request.getSession().getAttribute("userID")!=null && user.getNickname().equals(SettingsContainer.getAdministratorNickname())){
 			request.getRequestDispatcher("/templates/EditMedia.jsp").include(request, response);
         }else{
-        	request.getRequestDispatcher("/templates/exceptions/Error.jsp").include(request, response);
+        	request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/AccessDenied.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
         }
 	}
 

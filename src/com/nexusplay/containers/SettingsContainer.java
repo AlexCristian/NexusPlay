@@ -22,11 +22,11 @@ public class SettingsContainer
     
     private final static String administratorNickname = "admin";
 
-    private final static String dbURL = "localhost";
-    private final static String dbPort = "3306";
-    private final static String dbName = "NexusPlayDB";
-    private final static String dbUserName = "nexusplay";
-    private final static String dbPass = "nexusplay";
+    private static String dbURL = "localhost";
+    private static String dbPort = "3306";
+    private static String dbName = "nexusplay";
+    private static String dbUserName = "play";
+    private static String dbPass = "nexuspass";
 
     /**
      * 

@@ -40,7 +40,9 @@ public class AddRemoveSubscription extends HttpServlet {
 		try {
 			user = UsersDatabase.getUserById((String) request.getSession().getAttribute("userID"));
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 			e.printStackTrace();
 		}
 		if(user!=null){

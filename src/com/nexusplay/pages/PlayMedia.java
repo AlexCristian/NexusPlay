@@ -31,8 +31,11 @@ public class PlayMedia extends HttpServlet
 				userID = user.getId();
         		request.setAttribute("user", user);
 			} catch (Exception e) {
+				request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
 				request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
+				request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 				e.printStackTrace();
+				return;
 			}
         }
         request.getRequestDispatcher("/templates/elements/Header.jsp").include(request, response);
