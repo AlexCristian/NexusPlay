@@ -7,14 +7,49 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
+.playerActionTab > button{
+	background: transparent url(../player/skin/controls.png) no-repeat;
+	height: 12px;
+	width: 12px;
+	border: none;
+	margin:5px;
+	margin-top:10px;
+}
+.proposeChangeButton > button{
+	background-position: -114px -17px;
+}
+.proposeChangeButton:hover > button{
+	background-position: -115px -50px;
+}
+.editButton > button{
+	background-position: -97px -18px;
+}
+.editButton:hover > button{
+	background-position: -97px -50px;
+}
+.playerActionTabsContainer{
+	position:absolute;
+	right: 0px;
+}
 .playerActionTab{
+	float:right;
 	background: #3a3c3d url(background.png);
 	background: -webkit-linear-gradient(#4a4c4d, #2b2d2d);
 	background: -moz-linear-gradient(#4a4c4d, #2b2d2d);
 	background: -o-linear-gradient(#4a4c4d, #2b2d2d);
 	background: -ms-linear-gradient(#4a4c4d, #2b2d2d);
 	background: linear-gradient(#4a4c4d, #2b2d2d);
-	
+	width: 20px;
+	height: 35px;
+	margin-right: 10px;
+	margin-left: 10px;
+	display: inline-table;
+	-webkit-border-bottom-right-radius: 10px;
+	-webkit-border-bottom-left-radius: 10px;
+	-moz-border-radius-bottomright: 10px;
+	-moz-border-radius-bottomleft: 10px;
+	border-bottom-right-radius: 10px;
+	border-bottom-left-radius: 10px;
 }
 .messageText{
 	padding-left:20px;
@@ -156,6 +191,7 @@ body{
 
 .videoContent{
 	background-color: rgb(17, 17, 17);
+	position: relative;
 }
 .metaText > h5, .metaText > h2{
 	color:white;

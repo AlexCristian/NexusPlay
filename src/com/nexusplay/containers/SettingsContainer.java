@@ -24,9 +24,9 @@ public class SettingsContainer
 
     private static String dbURL = "localhost";
     private static String dbPort = "3306";
-    private static String dbName = "nexusplay";
-    private static String dbUserName = "play";
-    private static String dbPass = "nexuspass";
+    private static String dbName = "NexusPlayDB";
+    private static String dbUserName = "nexusplay";
+    private static String dbPass = "nexusplay";
 
     /**
      * 

@@ -21,6 +21,14 @@
 	</video>
 </div>
 <div class="videoContent">
+	<div class="playerActionTabsContainer">
+		<div class="playerActionTab proposeChangeButton">
+			<button type="button" aria-controls="mep_0" title="Report a subtitle error" aria-label="Report a subtitle error"></button>
+		</div>
+		<div class="playerActionTab editButton">
+			<button type="button" aria-controls="mep_0" title="Edit metadata" aria-label="Edit metadata"></button>
+		</div>
+	</div>
 	<div class="metadata">
 		<table>
 			<% if(item.getCollectionID().isEmpty()){ %>
