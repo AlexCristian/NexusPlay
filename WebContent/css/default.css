@@ -7,6 +7,15 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
+.playerActionTab{
+	background: #3a3c3d url(background.png);
+	background: -webkit-linear-gradient(#4a4c4d, #2b2d2d);
+	background: -moz-linear-gradient(#4a4c4d, #2b2d2d);
+	background: -o-linear-gradient(#4a4c4d, #2b2d2d);
+	background: -ms-linear-gradient(#4a4c4d, #2b2d2d);
+	background: linear-gradient(#4a4c4d, #2b2d2d);
+	
+}
 .messageText{
 	padding-left:20px;
 }
