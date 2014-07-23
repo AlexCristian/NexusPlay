@@ -10,8 +10,10 @@ import javax.servlet.http.HttpServletResponse;
 
 import com.nexusplay.containers.Media;
 import com.nexusplay.containers.SettingsContainer;
+import com.nexusplay.containers.Subtitle;
 import com.nexusplay.containers.User;
 import com.nexusplay.db.MediaDatabase;
+import com.nexusplay.db.SubtitlesDatabase;
 import com.nexusplay.db.UsersDatabase;
 
 /**
@@ -36,15 +38,22 @@ public class EditMedia extends HttpServlet {
 		response.setContentType("text/html");
         User user = null;
         Media item = null;
+        Subtitle[] subs = null;
 		try {
 			user = UsersDatabase.getUserById((String) request.getSession().getAttribute("userID"));
 			request.setAttribute("user", user);
 			item = MediaDatabase.getMediaById(request.getParameter("media"));
 			request.setAttribute("media", item);
+			subs = SubtitlesDatabase.getAssociatedSubtitles(request.getParameter("media"));
+			request.setAttribute("subtitles", subs);
 		} catch (Exception e1) {
-			// TODO Auto-generated catch block
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 			e1.printStackTrace();
+			return;
 		}
+		
 		
         if(request.getSession().getAttribute("userID")!=null && user.getNickname().equals(SettingsContainer.getAdministratorNickname())){
 			request.getRequestDispatcher("/templates/EditMedia.jsp").include(request, response);

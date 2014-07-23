@@ -1,12 +1,28 @@
 <%@page import="com.nexusplay.db.CollectionsDatabase"%>
 <%@ page language="java" contentType="text/html; charset=utf-8"
     pageEncoding="utf-8" import="com.nexusplay.containers.*, com.nexusplay.db.MediaDatabase"%>
-<div class='playerContainer'>
-	<%  
+<script type="text/javascript">
+function resizeIframe(id) {
+		obj = document.getElementById(id + 'ifrm');
+	    obj.style.height = (obj.contentWindow.document.getElementById(id + "hold").scrollHeight + 20) + 'px';
+	    obj.style.width = (obj.contentWindow.document.getElementById(id + "hold").scrollWidth + 20) + 'px';
+	  }
+</script>
+<%  
 		Media item = (Media) request.getAttribute("media");
 		User user = (User) request.getAttribute("user");
 		Subtitle[] subs = (Subtitle[]) request.getAttribute("subs");
 	%>
+<div id="edit-media-modal" class="modal hide fade">
+  <div class="modal-header">
+    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+    <h5>Edit media</h3>
+  </div>
+  <div class="modal-body">
+         <iframe id="<%=item.getId() %>ifrm" src="EditMedia?media=<%=item.getId() %>" seamless frameborder="0" scrolling="no" onload='javascript:resizeIframe("<%=item.getId() %>");'></iframe>
+  </div>
+</div>
+<div class='playerContainer'>
 	<script>
 		var mediaID = "<%=request.getParameter("w") %>";
 		var resumeLocation = "<%= ((user!=null) ? user.getPausedTimeByID(request.getParameter("w")) : "0") %>";
@@ -21,14 +37,18 @@
 	</video>
 </div>
 <div class="videoContent">
+	<% if(user != null){ %>
 	<div class="playerActionTabsContainer">
 		<div class="playerActionTab proposeChangeButton">
 			<button type="button" aria-controls="mep_0" title="Report a subtitle error" aria-label="Report a subtitle error"></button>
 		</div>
-		<div class="playerActionTab editButton">
+		<% if(user.getNickname().equals(SettingsContainer.getAdministratorNickname())){ %>
+		<div class="playerActionTab editButton" href="#edit-media-modal" data-toggle="modal">
 			<button type="button" aria-controls="mep_0" title="Edit metadata" aria-label="Edit metadata"></button>
 		</div>
+		<% } %>
 	</div>
+	<% } %>
 	<div class="metadata">
 		<table>
 			<% if(item.getCollectionID().isEmpty()){ %>

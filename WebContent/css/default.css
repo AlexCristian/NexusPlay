@@ -7,6 +7,18 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
+.addsub-table{
+	text-align:center;
+}
+.addsub-table > button{
+	float:center;
+}
+#edit-media-modal > .modal-body{
+	max-height: 500px;
+}
+#edit-media-modal{
+	width:600px;
+}
 .playerActionTab > button{
 	background: transparent url(../player/skin/controls.png) no-repeat;
 	height: 12px;

@@ -23,9 +23,11 @@ import com.nexusplay.containers.Collection;
 import com.nexusplay.containers.Media;
 import com.nexusplay.containers.SettingsContainer;
 import com.nexusplay.containers.Subtitle;
+import com.nexusplay.containers.User;
 import com.nexusplay.db.CollectionsDatabase;
 import com.nexusplay.db.MediaDatabase;
 import com.nexusplay.db.SubtitlesDatabase;
+import com.nexusplay.db.UsersDatabase;
 import com.nexusplay.security.RandomContainer;
 
 /**
@@ -55,6 +57,25 @@ public class PublishMedia extends HttpServlet {
 	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		response.setContentType("text/html");
+		
+		User user = null;
+		try {
+			user = UsersDatabase.getUserById((String) request.getSession().getAttribute("userID"));
+		} catch (Exception e1) {
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
+			e1.printStackTrace();
+			return;
+		}
+		
+        if(!user.getNickname().equals(SettingsContainer.getAdministratorNickname())){
+        	request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+        	request.getRequestDispatcher("/templates/information_screens/AccessDenied.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
+			return;
+        }
+        
 
 		boolean isMultipartContent = ServletFileUpload.isMultipartContent(request);
 		if (!isMultipartContent) {
@@ -115,7 +136,13 @@ public class PublishMedia extends HttpServlet {
 						} catch (Exception e1) {
 							//Not part of a collection
 						}
+					}else if(fileItem.getFieldName().contains("Existing ")){
+						String id = fileItem.getFieldName().replace("Existing ", "");
+						Subtitle sub = SubtitlesDatabase.getSubtitleByID(id);
+						sub.setLanguage(fileItem.getString());
+						SubtitlesDatabase.replaceSubtitle(sub);
 					}
+						
 				} else {
 					if(fileItem.getFieldName().equals("poster") && !fileItem.getName().equals("")){
 						
@@ -162,7 +189,17 @@ public class PublishMedia extends HttpServlet {
 				}
 			}
 		} catch (FileUploadException e) {
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 			e.printStackTrace();
+			return;
+		} catch (Exception e){
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
+			e.printStackTrace();
+			return;
 		}
 		
 		try {

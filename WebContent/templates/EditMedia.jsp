@@ -1,5 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8"
-    pageEncoding="UTF-8" import="com.nexusplay.containers.Media"%>
+    pageEncoding="UTF-8" import="com.nexusplay.containers.Media, com.nexusplay.containers.Subtitle"%>
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
 <html>
 <head>
@@ -30,7 +30,7 @@
 		i = 1;
 		$('#add-sub').click(function (){
 			newRow = "<tr>";
-			newRow += "<td class='addsub-table'>" + i + "</td>"
+			newRow += "<td class='addsub-table'><button type='button' class='close' aria-hidden='true' onclick=\"javascript:deleteRow('" + i + "');\">×</button></td>";
 			newRow += "<td class='language-table'><input style='width: 135px;' type='text' name='Subtitle language " + i + "' placeholder=\"Subtitle's language\"></td>";
 			newRow += "<td class='file-table'><input type='file' size='50' name='Subtitle file " + i + "'></td>";
 			newRow += "</tr>";
@@ -44,7 +44,8 @@
 
 	<%
 		Media item = (Media) request.getAttribute("media");
-		int i = 1;
+		Subtitle[] subs = (Subtitle[]) request.getAttribute("subtitles");
+		int i = 1, j=1;
 	%>
 	<div class="well uncategHolder" id="<%= item.getId() %>hold">
 		<h5><%= item.getFilename() %></h5>
@@ -107,6 +108,15 @@
 								</tr>
 							</thead>
 							<tbody>
+							<% for(Subtitle sub : subs){ %>
+								<tr>
+									<td class='addsub-table'><button type="button" class="close" aria-hidden="true" onclick="javascript:deleteSubtitle('<%=item.getId() %>');">×</button></td>
+									<td class='language-table'><input style='width: 135px;' type='text' name='Existing <%=sub.getId() %>' placeholder="Subtitle's language" value="<%=sub.getLanguage() %>"></td>
+									<td class='file-table'><a href=".<%=sub.getFilename() %>"><%=sub.getFilename() %></a></td>
+								</tr>
+							<% 
+								j++;
+								} %>
 							</tbody>
 						</table>
 					</td>
