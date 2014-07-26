@@ -58,6 +58,7 @@ public class PublishMedia extends HttpServlet {
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		response.setContentType("text/html");
 		
+		ArrayList<String> existingSubsIDs = new ArrayList<String>();
 		User user = null;
 		try {
 			user = UsersDatabase.getUserById((String) request.getSession().getAttribute("userID"));
@@ -141,6 +142,7 @@ public class PublishMedia extends HttpServlet {
 						Subtitle sub = SubtitlesDatabase.getSubtitleByID(id);
 						sub.setLanguage(fileItem.getString());
 						SubtitlesDatabase.replaceSubtitle(sub);
+						existingSubsIDs.add(id);
 					}
 						
 				} else {
@@ -203,6 +205,13 @@ public class PublishMedia extends HttpServlet {
 		}
 		
 		try {
+			Subtitle[] storedSubs = SubtitlesDatabase.getAssociatedSubtitles(media.getId());
+			for(Subtitle sub : storedSubs){
+				if(!existingSubsIDs.contains(sub.getId())){
+					SubtitlesDatabase.deleteSubtitle(sub.getId());
+				}
+			}
+			
 			MediaDatabase.replaceMedia(media);
 			MediaDatabase.propagateMediaNotification(media);
 			for(Subtitle item : subs){

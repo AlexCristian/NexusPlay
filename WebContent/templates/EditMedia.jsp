@@ -14,6 +14,7 @@
 </head>
 <body style = "background: none !important;">
 <script type="text/javascript">
+	var deleteSubtitle;
 	$(document).ready(function(){
 		$('.menu-button').click(function (e) {
 			  $(".controlContent").hide();
@@ -29,8 +30,8 @@
 			    });
 		i = 1;
 		$('#add-sub').click(function (){
-			newRow = "<tr>";
-			newRow += "<td class='addsub-table'><button type='button' class='close' aria-hidden='true' onclick=\"javascript:deleteRow('" + i + "');\">×</button></td>";
+			newRow = "<tr id='subrow-" + i + "'>";
+			newRow += "<td class='addsub-table'><button type='button' class='close' aria-hidden='true' onclick=\"javascript:deleteSubtitle('" + i + "');\">×</button></td>";
 			newRow += "<td class='language-table'><input style='width: 135px;' type='text' name='Subtitle language " + i + "' placeholder=\"Subtitle's language\"></td>";
 			newRow += "<td class='file-table'><input type='file' size='50' name='Subtitle file " + i + "'></td>";
 			newRow += "</tr>";
@@ -38,6 +39,11 @@
 			$('#substable > tbody:last').append(newRow);
 			i++;
 		});
+		
+		deleteSubtitle = function(id){
+			$("#subrow-" + id).remove();
+			
+		};
 	});
 </script>
 <script type='text/javascript' src='<%=request.getContextPath()%>/js/iframe.xss.response-3.5.0.js'></script>
@@ -109,7 +115,7 @@
 							</thead>
 							<tbody>
 							<% for(Subtitle sub : subs){ %>
-								<tr>
+								<tr id="subrow-<%=item.getId() %>">
 									<td class='addsub-table'><button type="button" class="close" aria-hidden="true" onclick="javascript:deleteSubtitle('<%=item.getId() %>');">×</button></td>
 									<td class='language-table'><input style='width: 135px;' type='text' name='Existing <%=sub.getId() %>' placeholder="Subtitle's language" value="<%=sub.getLanguage() %>"></td>
 									<td class='file-table'><a href=".<%=sub.getFilename() %>"><%=sub.getFilename() %></a></td>
