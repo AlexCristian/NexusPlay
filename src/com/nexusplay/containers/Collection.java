@@ -46,7 +46,7 @@ public class Collection {
 		this.name = name;
 		this.year = year;
 		this.poster = poster;
-		
+		generateId();
 	}
 	/**
 	 * Assigns a unique ID to the Collection.

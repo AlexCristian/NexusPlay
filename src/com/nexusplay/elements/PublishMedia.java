@@ -128,7 +128,7 @@ public class PublishMedia extends HttpServlet {
 							subs.set(nrSub, new Subtitle(media.getId(), "", ""));
 						}
 						subs.get(nrSub).setLanguage(fileItem.getString());
-					}else if(fileItem.getFieldName() == "collection"){
+					}else if(fileItem.getFieldName().equals("Collection")){
 						try {
 							Collection coll= null;
 							coll = CollectionsDatabase.getCollectionByName(fileItem.getString());

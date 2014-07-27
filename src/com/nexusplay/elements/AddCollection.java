@@ -70,8 +70,8 @@ public class AddCollection extends HttpServlet {
                         File path = new File(SettingsContainer.getAbsolutePosterPath());
                         long randId; File uploadedFile;
                         do{
-                        randId = RandomContainer.getRandom().nextLong();
-                        uploadedFile = new File(path + "/" + randId + fileName.substring(fileName.lastIndexOf(".")));
+	                        randId = RandomContainer.getRandom().nextLong();
+	                        uploadedFile = new File(path + "/" + randId + fileName.substring(fileName.lastIndexOf(".")));
                         }while(uploadedFile.exists());
                         item.write(uploadedFile);
                         coll = new Collection(request.getParameter("name"), request.getParameter("year"),SettingsContainer.getPosterSource()+"/"+randId + fileName.substring(fileName.lastIndexOf(".")));
