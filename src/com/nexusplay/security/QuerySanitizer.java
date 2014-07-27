@@ -2,10 +2,10 @@ package com.nexusplay.security;
 
 public class QuerySanitizer {
 
-	private final static String allowedCharacters="abcdefghijklmnopqrstuvwxyz"
-			+ "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	private final static String allowedCharacters="abcdefghijklmnopqrstuvwxyzăâîțș"
+			+ "ABCDEFGHIJKLMNOPQRSTUVWXYZĂÂÎȚȘ"
 			+ "1234567890"
-			+ "!?:@,._- ";
+			+ "!?:@,._- «»" + '\n' + "\"";
 	public static String sanitizeQueryString(String s) throws Exception{
 		s=s.trim();
 		for(int i=0; i< s.length(); i++){

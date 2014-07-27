@@ -39,7 +39,7 @@ public class ConnectionManager
         }
         try
         {
-            conn = DriverManager.getConnection("jdbc:mysql://"+url+":"+port+"/"+dbName, userName, password);
+            conn = DriverManager.getConnection("jdbc:mysql://"+url+":"+port+"/"+dbName+"?useUnicode=true&characterEncoding=UTF-8", userName, password);
         }
         catch(Exception e)
         {

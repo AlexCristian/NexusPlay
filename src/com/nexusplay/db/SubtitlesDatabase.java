@@ -1,5 +1,6 @@
 package com.nexusplay.db;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -122,11 +123,46 @@ public class SubtitlesDatabase {
      * @throws SQLException Thrown if the database is not accessible to us for whatever reason
      */
     public static void deleteSubtitle(String id) throws SQLException{
+    	Subtitle sub = getSubtitleByID(id);
+    	File item = new File(sub.getFilename());
+    	item.delete();
     	Connection con = getConnection();
         PreparedStatement stmt = null;
         String req = "DELETE FROM SubtitlesDB WHERE id=?;";
         stmt = con.prepareStatement(req);
         stmt.setString(1, id);
         stmt.executeUpdate();
+    }
+    
+    /**
+     * Overwrites an existing Subtitle object with the data provided.
+     * @param item The item to be updated
+     * @return False if there is no object to overwrite, true on success
+     * @throws SQLException Thrown if the database is not accessible to us for whatever reason
+     */
+    public static boolean replaceSubtitle(Subtitle item)
+        throws SQLException
+    {
+        PreparedStatement stmt = null;
+        Connection con = getConnection();
+        String req = "SELECT * FROM SubtitlesDB WHERE id like ?;";
+        stmt = con.prepareStatement(req);
+        stmt.setString(1, "%" + item.getId() + "%");
+        ResultSet rs = stmt.executeQuery();
+        if(!rs.next())
+        {
+            return false;
+        } else
+        {
+        	req = "UPDATE SubtitlesDB SET mediaID=? ,language=?, filename=? WHERE id=?;";
+            stmt = con.prepareStatement(req);
+            stmt.setString(1, item.getMediaID());
+            stmt.setString(2, item.getLanguage());
+            stmt.setString(3, item.getFilename());
+            stmt.setString(4, item.getId());
+            
+            stmt.executeUpdate();
+            return true;
+        }
     }
 }

@@ -7,6 +7,167 @@ body{
 				url(../img/black.png) 0px 0px repeat;
 	
 }
+.count-votes{
+	display: inline-block;
+	color: white;
+	font-size: 16px;
+	font-weight: bolder;
+}
+.changed-sub{
+	width: 400px;
+	border: 0;
+	border-radius: 0px;
+	-webkit-border-bottom-left-radius: 4px;
+	-moz-border-radius-bottomleft: 4px;
+	border-bottom-left-radius: 4px;
+	background-color:white;
+	color: #222222;
+	text-align:left;
+	font-size: 14px;
+	line-height: 20px;
+	font-weight: normal;
+}
+.original-sub{
+	background-color: #222222;
+	color: white;
+	text-align: right;
+	margin: 0;
+	width: 443px;
+	font-size: 14px;
+	line-height: 20px;
+	font-weight: normal;
+	height: 25px;
+	padding-top: 5px;
+	padding-right: 10px;
+	-webkit-border-top-left-radius: 4px;
+	-webkit-border-top-right-radius: 4px;
+	-moz-border-radius-topleft: 4px;
+	-moz-border-radius-topright: 4px;
+	border-top-left-radius: 4px;
+	border-top-right-radius: 4px;
+	font-weight: normal;
+}
+.changed-sub{
+	margin: 0;
+	width: 402px;
+	font-size: 14px;
+	line-height: 20px;
+	font-weight: normal;
+	height: 22px;
+	display:inline-block;
+	padding-top: 5px;
+	padding-left: 10px;
+	font-weight: normal;
+}
+.proposed-change{
+	display: inline-block;
+	text-align: left;
+	margin-bottom:20px;
+}
+.vote-box:hover{
+	background-color:rgb(231, 55, 0);
+}
+.vote-box{
+	-webkit-border-bottom-right-radius: 4px;
+	-moz-border-radius-bottomright: 4px;
+	border-bottom-right-radius: 4px;
+	background-color:rgb(194, 31, 0);
+	height: 17px;
+	width: 30px;
+	padding: 6px;
+	display:inline-block;
+	position: relative;
+	text-align: center;
+	right: 5px;
+	transition: all .5s ease;
+	-moz-transition: all .5s ease;
+	-webkit-transition: all .5s ease;
+	-o-transition: all .5s ease;
+}
+.modal-header{
+	border-bottom: 0;
+}
+.proposed-change > input{
+	width: 400px;
+	border: 0;
+	border-radius: 0px;
+	-webkit-border-bottom-left-radius: 4px;
+	-moz-border-radius-bottomleft: 4px;
+	border-bottom-left-radius: 4px;
+	margin:0;
+	display: inline-block;
+	vertical-align: top;
+}
+.error-modal-body > h5{
+	color:white;
+}
+.error-modal-body{
+	background-color: rgb(17, 17, 17) !important;
+	text-align: center;
+}
+.addsub-table{
+	text-align:center;
+}
+.addsub-table > button{
+	float:center;
+}
+#edit-media-modal > .modal-body{
+	max-height: 500px;
+}
+#edit-media-modal > .modal-body > iframe{
+	height: 480px;
+	width: 560px;
+	overflow-y: scroll;
+}
+#edit-media-modal{
+	width:600px;
+}
+.playerActionTab > .player-action-button{
+	background: transparent url(../player/skin/controls.png) no-repeat;
+	height: 12px;
+	width: 12px;
+	border: none;
+	margin:5px;
+	margin-top:10px;
+	-webkit-appearance: none;
+    border-radius: 0;
+}
+.proposeChangeButton > #propose-change-button{
+	background-position: -114px -17px;
+}
+.proposeChangeButton:hover > #propose-change-button{
+	background-position: -115px -50px;
+}
+.editButton > #edit-meta-button{
+	background-position: -97px -18px;
+}
+.editButton:hover > #edit-meta-button{
+	background-position: -97px -50px;
+}
+.playerActionTabsContainer{
+	position:absolute;
+	right: 0px;
+}
+.playerActionTab{
+	float:right;
+	background: #3a3c3d url(background.png);
+	background: -webkit-linear-gradient(#4a4c4d, #2b2d2d);
+	background: -moz-linear-gradient(#4a4c4d, #2b2d2d);
+	background: -o-linear-gradient(#4a4c4d, #2b2d2d);
+	background: -ms-linear-gradient(#4a4c4d, #2b2d2d);
+	background: linear-gradient(#4a4c4d, #2b2d2d);
+	width: 20px;
+	height: 35px;
+	margin-right: 10px;
+	margin-left: 10px;
+	display: inline-table;
+	-webkit-border-bottom-right-radius: 10px;
+	-webkit-border-bottom-left-radius: 10px;
+	-moz-border-radius-bottomright: 10px;
+	-moz-border-radius-bottomleft: 10px;
+	border-bottom-right-radius: 10px;
+	border-bottom-left-radius: 10px;
+}
 .messageText{
 	padding-left:20px;
 }
@@ -147,6 +308,7 @@ body{
 
 .videoContent{
 	background-color: rgb(17, 17, 17);
+	position: relative;
 }
 .metaText > h5, .metaText > h2{
 	color:white;
@@ -256,10 +418,11 @@ box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 20px 20px rgba(0, 0, 0, 0.1) inset;
 }
 .adminPosterHolder{
 	width:135px;
-	display: inline-table;
+	display: inline-block;
+	vertical-align:top;
 }
 .adminTable{
-	display: inline-table;
+	display: inline-block;
 	margin-left:10px;
 }
 .uncategHolder{

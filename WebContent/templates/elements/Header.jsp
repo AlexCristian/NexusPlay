@@ -6,6 +6,7 @@
 	<head>
 		<title>Alex's Nexus</title>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<meta charset="UTF-8">
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.color.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/sha1.js'></script>

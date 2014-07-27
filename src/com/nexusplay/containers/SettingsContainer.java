@@ -24,11 +24,27 @@ public class SettingsContainer
 
     private static String dbURL = "localhost";
     private static String dbPort = "3306";
-    private static String dbName = "nexusplay";
-    private static String dbUserName = "play";
-    private static String dbPass = "nexuspass";
+    private static String dbName = "NexusPlayDB";
+    private static String dbUserName = "nexusplay";
+    private static String dbPass = "nexusplay";
+    
+    private static int votesRequired = 4;
 
     /**
+	 * @return the votesRequired
+	 */
+	public static int getVotesRequired() {
+		return votesRequired;
+	}
+
+	/**
+	 * @param votesRequired the votesRequired to set
+	 */
+	public static void setVotesRequired(int votesRequired) {
+		SettingsContainer.votesRequired = votesRequired;
+	}
+
+	/**
      * 
      * @return The web location where the media can be accessed 
      */

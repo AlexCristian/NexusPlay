@@ -1,7 +1,10 @@
 package com.nexusplay.pages;
 
+import com.nexusplay.containers.Change;
 import com.nexusplay.containers.Media;
+import com.nexusplay.containers.Subtitle;
 import com.nexusplay.containers.User;
+import com.nexusplay.db.ChangesDatabase;
 import com.nexusplay.db.MediaDatabase;
 import com.nexusplay.db.SubtitlesDatabase;
 import com.nexusplay.db.UsersDatabase;
@@ -51,7 +54,16 @@ public class PlayMedia extends HttpServlet
             if(userID!=null){
             	UsersDatabase.setMediaWatched(userID, item.getId());
             }
-            request.setAttribute("subs", SubtitlesDatabase.getAssociatedSubtitles(item.getId()));
+            Subtitle[] subs = SubtitlesDatabase.getAssociatedSubtitles(item.getId());
+            request.setAttribute("subs", subs);
+            Change[][] changes = new Change[subs.length][];
+            String[] changeCorrelation = new String[subs.length];
+            for(int i=0; i<subs.length; i++){
+            	changes[i] = ChangesDatabase.getAssociatedChanges(subs[i].getId());
+            	changeCorrelation[i] = subs[i].getSourceLanguage();
+            }
+            request.setAttribute("changes", changes);
+            request.setAttribute("changes-correlation", changeCorrelation);
             request.getRequestDispatcher("/templates/PlayMedia.jsp").include(request, response);
         }
         catch(SQLException e)

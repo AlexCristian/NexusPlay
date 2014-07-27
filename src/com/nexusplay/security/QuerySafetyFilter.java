@@ -36,6 +36,7 @@ public class QuerySafetyFilter implements Filter {
 	 */
 	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
 
+		response.setCharacterEncoding("UTF-8");
 		try{
 			ArrayList<String> params = Collections.list(request.getParameterNames());
 			for(String parameter : params){

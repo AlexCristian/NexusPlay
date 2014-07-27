@@ -23,9 +23,11 @@ import com.nexusplay.containers.Collection;
 import com.nexusplay.containers.Media;
 import com.nexusplay.containers.SettingsContainer;
 import com.nexusplay.containers.Subtitle;
+import com.nexusplay.containers.User;
 import com.nexusplay.db.CollectionsDatabase;
 import com.nexusplay.db.MediaDatabase;
 import com.nexusplay.db.SubtitlesDatabase;
+import com.nexusplay.db.UsersDatabase;
 import com.nexusplay.security.RandomContainer;
 
 /**
@@ -55,6 +57,26 @@ public class PublishMedia extends HttpServlet {
 	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		response.setContentType("text/html");
+		
+		ArrayList<String> existingSubsIDs = new ArrayList<String>();
+		User user = null;
+		try {
+			user = UsersDatabase.getUserById((String) request.getSession().getAttribute("userID"));
+		} catch (Exception e1) {
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
+			e1.printStackTrace();
+			return;
+		}
+		
+        if(!user.getNickname().equals(SettingsContainer.getAdministratorNickname())){
+        	request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+        	request.getRequestDispatcher("/templates/information_screens/AccessDenied.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
+			return;
+        }
+        
 
 		boolean isMultipartContent = ServletFileUpload.isMultipartContent(request);
 		if (!isMultipartContent) {
@@ -115,7 +137,14 @@ public class PublishMedia extends HttpServlet {
 						} catch (Exception e1) {
 							//Not part of a collection
 						}
+					}else if(fileItem.getFieldName().contains("Existing ")){
+						String id = fileItem.getFieldName().replace("Existing ", "");
+						Subtitle sub = SubtitlesDatabase.getSubtitleByID(id);
+						sub.setLanguage(fileItem.getString());
+						SubtitlesDatabase.replaceSubtitle(sub);
+						existingSubsIDs.add(id);
 					}
+						
 				} else {
 					if(fileItem.getFieldName().equals("poster") && !fileItem.getName().equals("")){
 						
@@ -137,6 +166,10 @@ public class PublishMedia extends HttpServlet {
 						}
                         media.setPoster(SettingsContainer.getPosterSource()+"/"+randId + fileItem.getName().substring(fileItem.getName().lastIndexOf(".")));
 					}else if(fileItem.getFieldName().contains("Subtitle file ") && !fileItem.getName().equals("")){
+						if(!fileItem.getName().contains(".") || !fileItem.getName().substring(fileItem.getName().lastIndexOf(".")).equals(".vtt")){
+							throw new FileUploadException("Invalid subtitle format");
+						}
+						
 						int nrSub = Integer.parseInt(fileItem.getFieldName().replace("Subtitle file ", ""))-1;
 						while(subs.size()<=nrSub){
 							subs.add(null);
@@ -162,10 +195,27 @@ public class PublishMedia extends HttpServlet {
 				}
 			}
 		} catch (FileUploadException e) {
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/InvalidParameters.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
 			e.printStackTrace();
+			return;
+		} catch (Exception e){
+			request.getRequestDispatcher("/templates/elements/MinimalHeader.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/information_screens/InternalError.jsp").include(request, response);
+			request.getRequestDispatcher("/templates/elements/MinimalFooter.jsp").include(request, response);
+			e.printStackTrace();
+			return;
 		}
 		
 		try {
+			Subtitle[] storedSubs = SubtitlesDatabase.getAssociatedSubtitles(media.getId());
+			for(Subtitle sub : storedSubs){
+				if(!existingSubsIDs.contains(sub.getId())){
+					SubtitlesDatabase.deleteSubtitle(sub.getId());
+				}
+			}
+			
 			MediaDatabase.replaceMedia(media);
 			MediaDatabase.propagateMediaNotification(media);
 			for(Subtitle item : subs){
