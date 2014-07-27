@@ -12,3 +12,5 @@ Features:
 - Supports subscriptions, users can be notified of newly added media in a category.
 - Handles TV shows correctly, organizing them by episodes and seasons.
 - Cross platform, relies on HTML5 playback with Flash fallback.
+- Supports cross-device subtitling
+- Allows users to collectively modify translated subtitles
