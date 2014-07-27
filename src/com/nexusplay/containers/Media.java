@@ -106,18 +106,19 @@ public class Media
         mediaPath = mediaPath.replace('-', ' ');
         try
         {
-            URL url = new URL((new StringBuilder("http://imdbapi.org/?q=")).append(mediaPath.replaceAll(" ", "+")).toString());
+            URL url = new URL((new StringBuilder("http://www.omdbapi.com/?t=")).append(mediaPath.replaceAll(" ", "+")).toString());
             URLConnection connection = url.openConnection();
             connection.addRequestProperty("User-Agent", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0)");
             connection.connect();
             StringBuilder builder = new StringBuilder();
             BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            String line;
+            String line, jsonResult;
             while((line = reader.readLine()) != null) 
                 builder.append(line);
-            for(jsonResult = builder.toString(); mediaPath.contains(" ") && jsonResult.contentEquals("{\"code\":404, \"error\":\"Film not found\"}"); mediaPath = mediaPath.substring(0, mediaPath.lastIndexOf(" ")))
+            jsonResult = builder.toString();
+            for(; mediaPath.contains(" ") && jsonResult.contentEquals("{\"Response\":\"False\",\"Error\":\"Movie not found!\"}"); mediaPath = mediaPath.substring(0, mediaPath.lastIndexOf(" ")))
             {
-                url = new URL((new StringBuilder("http://imdbapi.org/?q=")).append(mediaPath.replaceAll(" ", "+")).toString());
+                url = new URL((new StringBuilder("http://www.omdbapi.com/?t=")).append(mediaPath.replaceAll(" ", "+")).toString());
                 connection = url.openConnection();
                 connection.addRequestProperty("User-Agent", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0)");
                 connection.connect();
@@ -125,18 +126,20 @@ public class Media
                 reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
                 while((line = reader.readLine()) != null) 
                     builder.append(line);
+                jsonResult = builder.toString();
             }
 
             if(mediaPath.contains(" "))
             {
-                jsonResult = jsonResult.substring(1, jsonResult.length() - 1);
+                //jsonResult = jsonResult.substring(1, jsonResult.length() - 1);
                 gson = new Gson();
                 JsonParser parser = new JsonParser();
                 jsonObject = parser.parse(jsonResult).getAsJsonObject();
-                name = (String)gson.fromJson(jsonObject.get("title"), String.class);
-                poster = savePoster((String)gson.fromJson(jsonObject.get("poster"), String.class));
-                year = (String)gson.fromJson(jsonObject.get("year"), String.class);
-                category = (String)gson.fromJson(jsonObject.get("type"), String.class);
+                name = (String)gson.fromJson(jsonObject.get("Title"), String.class);
+                poster = savePoster((String)gson.fromJson(jsonObject.get("Poster"), String.class));
+                year = (String)gson.fromJson(jsonObject.get("Year"), String.class);
+                category = (String)gson.fromJson(jsonObject.get("Type"), String.class);
+                category = matchCategory(category);
             }
         }
         catch(Exception e)
@@ -149,6 +152,14 @@ public class Media
             name = attemptEpisodeParsing(filename);
         if(episode != 0)
             category = "TV Shows";
+    }
+    
+    private String matchCategory(String categ){
+    	if(categ.equals("movie"))
+    		return "Movies";
+    	else if(categ.equals("series"))
+    		return "TV Shows";
+    	return categ;
     }
 
     /**

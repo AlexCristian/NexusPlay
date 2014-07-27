@@ -12,10 +12,16 @@
 		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/typeplate-unminified.css' />
 		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/default.css' />
 </head>
+	<%
+		Media item = (Media) request.getAttribute("media");
+		Subtitle[] subs = (Subtitle[]) request.getAttribute("subtitles");
+		int i = 1, j=1;
+	%>
 <body style = "background: none !important;">
 <script type="text/javascript">
 	var deleteSubtitle;
 	$(document).ready(function(){
+		window.parent.resizeIframe('<%=item.getId() %>');
 		$('.menu-button').click(function (e) {
 			  $(".controlContent").hide();
 			  $("#" + $(this).data("target")).css("display","inline-block");
@@ -47,12 +53,6 @@
 	});
 </script>
 <script type='text/javascript' src='<%=request.getContextPath()%>/js/iframe.xss.response-3.5.0.js'></script>
-
-	<%
-		Media item = (Media) request.getAttribute("media");
-		Subtitle[] subs = (Subtitle[]) request.getAttribute("subtitles");
-		int i = 1, j=1;
-	%>
 	<div class="well uncategHolder" id="<%= item.getId() %>hold">
 		<h5><%= item.getFilename() %></h5>
 		<p><b><i>Suggested metadata</i></b></p>
@@ -68,7 +68,7 @@
 				</tr>
 				<tr>
 					<td>Poster</td>
-					<td><input type="file" size="50" name="poster" style="margin-bottom:10px; margin-left:10px;"></td>
+					<td><input id="media-poster" type="file" size="50" name="poster" style="margin-bottom:10px; margin-left:10px; width:220px !important;"></td>
 				<tr>
 					<td>Category</td>
 					<td><input id="<%= item.getId() %>c" type="text" name="Category" placeholder="Category" style="margin-bottom:10px; margin-left:10px;" value="<%= item.getCategory() %>"></td>

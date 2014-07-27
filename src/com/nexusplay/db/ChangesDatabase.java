@@ -18,7 +18,7 @@ import com.nexusplay.containers.Subtitle;
 public class ChangesDatabase {
 
 	private static final String tableDefinition = "CREATE TABLE IF NOT EXISTS ChangesDB(targetID VARCHAR(1000), "
-			+ "changedContent VARCHAR(100), originalContent VARCHAR(100), id VARCHAR(1000), votes INT(1));";
+			+ "changedContent VARCHAR(100), originalContent VARCHAR(100), id VARCHAR(1000), votes VARCHAR(1000)) DEFAULT CHARACTER SET = utf8;";
 	
 	/**
 	 * Opens a connection while at the same time making sure the table exists.
@@ -72,7 +72,7 @@ public class ChangesDatabase {
         stmt.setString(2, item.getChangedContent());
         stmt.setString(3, item.getOriginalContent());
         stmt.setString(4, item.getId());
-        stmt.setInt(5, item.getVotes());
+        stmt.setString(5, item.getVotes());
         stmt.executeUpdate();
     }
     
@@ -99,7 +99,7 @@ public class ChangesDatabase {
      * @return A Change array with the query results
      * @throws SQLException Thrown if the database is not accessible to us for whatever reason
      */
-    public static Change[] getAssociatedSubtitles(String targetID) throws SQLException{
+    public static Change[] getAssociatedChanges(String targetID) throws SQLException{
     	Connection con = getConnection();
         PreparedStatement stmt = null;
         String req = "SELECT * FROM ChangesDB WHERE targetID=?;";
@@ -108,7 +108,7 @@ public class ChangesDatabase {
         ResultSet rs = stmt.executeQuery();
         ArrayList<Change> raw = new ArrayList<Change>();
         while(rs.next()){
-        	Change current = new Change(rs.getString("changedContent"), rs.getString("originalContent"), rs.getString("targetID"), rs.getInt("votes"), rs.getString("id"));
+        	Change current = new Change(rs.getString("changedContent"), rs.getString("originalContent"), rs.getString("targetID"), rs.getString("votes"), rs.getString("id"));
         	raw.add(current);
         }
         Change[] result = new Change[raw.size()];
@@ -132,7 +132,7 @@ public class ChangesDatabase {
         stmt.setString(1, id);
         ResultSet rs = stmt.executeQuery();
         rs.next();
-        return new Change(rs.getString("changedContent"), rs.getString("originalContent"), rs.getString("targetID"), rs.getInt("votes"), rs.getString("id"));
+        return new Change(rs.getString("changedContent"), rs.getString("originalContent"), rs.getString("targetID"), rs.getString("votes"), rs.getString("id"));
     }
     
     /**
@@ -147,6 +147,22 @@ public class ChangesDatabase {
         stmt = con.prepareStatement(req);
         stmt.setString(1, id);
         stmt.executeUpdate();
+    }
+    
+    /**
+     * Increments votes on a specified change.
+     * @param id The object's ID
+     * @param userID The voter's ID
+     * @throws SQLException Thrown if the database is not accessible to us for whatever reason
+     */
+    public static void voteUpChange(String id, String userID) throws SQLException{
+    	Connection con = getConnection();
+        PreparedStatement stmt = null;
+    	String req="UPDATE ChangesDB SET votes=concat(votes, ?) WHERE id=?;";
+    	stmt = con.prepareStatement(req);
+    	stmt.setString(1, userID + ";");
+    	stmt.setString(2, id);
+    	stmt.executeUpdate();
     }
 	
 	

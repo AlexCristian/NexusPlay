@@ -166,6 +166,10 @@ public class PublishMedia extends HttpServlet {
 						}
                         media.setPoster(SettingsContainer.getPosterSource()+"/"+randId + fileItem.getName().substring(fileItem.getName().lastIndexOf(".")));
 					}else if(fileItem.getFieldName().contains("Subtitle file ") && !fileItem.getName().equals("")){
+						if(!fileItem.getName().contains(".") || !fileItem.getName().substring(fileItem.getName().lastIndexOf(".")).equals(".vtt")){
+							throw new FileUploadException("Invalid subtitle format");
+						}
+						
 						int nrSub = Integer.parseInt(fileItem.getFieldName().replace("Subtitle file ", ""))-1;
 						while(subs.size()<=nrSub){
 							subs.add(null);

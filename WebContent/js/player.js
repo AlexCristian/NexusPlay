@@ -1,7 +1,7 @@
 /**
  * Prevent video seek reset loop
  */
-var hasResetFrame = false;
+var hasResetFrame = false, currentLang = 'none', videoElement;
 $(document).ready(function(){
 		
 		/**
@@ -40,6 +40,8 @@ $(document).ready(function(){
 		    keyActions: [],
 		 	// method that fires when the Flash or Silverlight object is ready
 		    success: function (mediaElement, domObject) {   
+		    	
+		    	videoElement = mediaElement;
 
 		    	/**
 		    	 * AJAX call to the server in order to store the current
@@ -118,12 +120,25 @@ $(document).ready(function(){
 				$(window).on('beforeunload', function(e) {
 					storePlaybackState();               
 			    });
-
 				
 				/**
 				 * Enable responsive captions
 				 */
 				$(".mejs-captions-text").addClass("zeta");
+				
+				
+				/**
+				 * Know at all times what language (if any) is selected
+				 */
+				currentLang='none';
+				$(".mejs-captions-selector > ul > li > input").click(function(){
+					currentLang = this.value;
+					if(currentLang == 'none'){
+						$("#proposeChange").hide();
+					}else{
+						$("#proposeChange").show();
+					}
+				});
 				
 				/**
 				 * Some browsers don't support native WebVTT, while others do.
@@ -138,14 +153,6 @@ $(document).ready(function(){
 					for (var i = 0; i < mediaElement.textTracks.length; i++) {
 						mediaElement.textTracks[i].mode = 'hidden';
 					}
-					
-					/**
-					 * Know at all times what language (if any) is selected
-					 */
-					currentLang='none';
-					$(".mejs-captions-selector > ul > li > input").click(function(){
-						currentLang = this.value;						
-					});
 					
 					/**
 					 * Detect iOS fullscreen mode & switch on native captioning 
