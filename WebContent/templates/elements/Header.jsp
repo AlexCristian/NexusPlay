@@ -10,17 +10,14 @@
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/jquery.color.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/sha1.js'></script>
-		<script type='text/javascript' src='<%=request.getContextPath()%>/js/fittext.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/main.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/player/lib/mediaelement.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/player/lib/mediaelementplayer.js'></script>		
 		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/player/skin/mediaelementplayer.css' />
 		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/bootstrap.min.css' />
-		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/bootstrap-responsive.css' />
 		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/typeplate-unminified.css' />
 		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/default.css' />
 		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/player.css' />
-		<link rel='stylesheet' type='text/css' href='<%=request.getContextPath()%>/css/fineuploader-3.5.0.css' />
 	</head>
 	<body>
 		<div id="login" class="modal hide fade">

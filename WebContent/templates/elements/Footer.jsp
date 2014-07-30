@@ -12,7 +12,6 @@
 		</div>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/player.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/bootstrap.js'></script>
-		<script type='text/javascript' src='<%=request.getContextPath()%>/js/modernizr.js'></script>
 		<script type='text/javascript' src='<%=request.getContextPath()%>/js/respond.min.js'></script>
 	</body>
 </html>
