@@ -1,4 +1,4 @@
-NexusPlay
+Nexus Play
 =========
 
 Web media center
@@ -14,3 +14,19 @@ Features:
 - Cross platform, relies on HTML5 playback with Flash fallback.
 - Supports cross-device subtitling
 - Allows users to collectively modify translated subtitles
+
+Some screenshots of Nexus Play in action:
+
+![Alt text](https://raw.githubusercontent.com/AlexCristian/NexusPlay/master/screenshots/screenshot_1.png?raw=true "Main page")
+
+TV show organized by seasons
+![Alt text](https://raw.githubusercontent.com/AlexCristian/NexusPlay/master/screenshots/screenshot_2.png?raw=true "TV Show view")
+
+Video player
+![Alt text](https://raw.githubusercontent.com/AlexCristian/NexusPlay/master/screenshots/screenshot_4.png?raw=true "Video player")
+
+Library search
+![Alt text](https://raw.githubusercontent.com/AlexCristian/NexusPlay/master/screenshots/screenshot_5.png?raw=true "Search")
+
+Subtitle support
+![Alt text](https://raw.githubusercontent.com/AlexCristian/NexusPlay/master/screenshots/screenshot_6.png?raw=true "Subtitle support")
