@@ -30,3 +30,6 @@ Library search
 
 Subtitle support
 ![Alt text](https://raw.githubusercontent.com/AlexCristian/NexusPlay/master/screenshots/screenshot_6.png?raw=true "Subtitle support")
+
+Voting up a proposed subtitle change, or submitting a new one
+![Alt text](https://raw.githubusercontent.com/AlexCristian/NexusPlay/master/screenshots/screenshot_7.png?raw=true "Collective subtitling")
