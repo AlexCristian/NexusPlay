@@ -84,7 +84,7 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 	}
 }
 
-templ subtitleReport(mediaID int64, track store.Subtitle, cue store.Cue, changes []store.Change, msg, msgKind string) {
+templ subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []store.Change, msg, msgKind string) {
 	<div class="report" id="subtitle-report">
 		<h2 id="modal-title" class="modal-heading">Report a subtitle error</h2>
 		<div class="report-body">
@@ -120,7 +120,15 @@ templ subtitleReport(mediaID int64, track store.Subtitle, cue store.Cue, changes
 			} else {
 				<h3>Suggest a correction</h3>
 			}
-			<form class="proposed-change" hx-post={ "/cues/" + itoa(cue.ID) + "/changes" } hx-target="#subtitle-report" hx-swap="outerHTML">
+			<form
+				class="proposed-change"
+				method="post"
+				action={ templ.SafeURL("/cues/" + itoa(cue.ID) + "/changes") }
+				hx-post={ "/cues/" + itoa(cue.ID) + "/changes" }
+				hx-target="#subtitle-report"
+				hx-swap="outerHTML"
+			>
+				<input type="hidden" name="csrf_token" value={ csrf }/>
 				<div class="original-sub">{ cue.Text }</div>
 				<div class="changed-sub">
 					<textarea name="text" rows="2" required aria-label="Corrected line">{ cue.Text }</textarea>

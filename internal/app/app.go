@@ -1,0 +1,87 @@
+// Package app wires NexusPlay's parts together. The command and the
+// integration tests both start the server through it.
+package app
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/exec"
+	"time"
+
+	"github.com/AlexCristian/NexusPlay/internal/config"
+	"github.com/AlexCristian/NexusPlay/internal/library"
+	"github.com/AlexCristian/NexusPlay/internal/metadata"
+	"github.com/AlexCristian/NexusPlay/internal/store"
+	"github.com/AlexCristian/NexusPlay/internal/stream"
+	"github.com/AlexCristian/NexusPlay/internal/web"
+)
+
+// App is a configured server with its background workers.
+type App struct {
+	Cfg        config.Config
+	Log        *slog.Logger
+	Store      *store.Store
+	Scanner    *library.Scanner
+	Transcodes *stream.Manager
+	Handler    http.Handler
+}
+
+// New checks the environment, opens the database and builds the HTTP handler.
+func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error) {
+	for _, dir := range []string{cfg.DataDir, cfg.PosterDir()} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("create %s: %w", dir, err)
+		}
+	}
+	if _, err := os.Stat(cfg.MediaDir); err != nil {
+		return nil, fmt.Errorf("media folder: %w", err)
+	}
+	for _, bin := range []string{cfg.FFmpegPath, cfg.FFprobePath} {
+		if _, err := exec.LookPath(bin); err != nil {
+			return nil, fmt.Errorf("%s not found: install ffmpeg or set NEXUSPLAY_FFMPEG / NEXUSPLAY_FFPROBE", bin)
+		}
+	}
+
+	st, err := store.Open(ctx, cfg.DBPath())
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	meta := metadata.New(cfg.TMDBAPIKey, cfg.PosterDir())
+	scanner := &library.Scanner{
+		Store: st, Prober: library.Prober{Path: cfg.FFprobePath}, Meta: meta,
+		MediaDir: cfg.MediaDir, Interval: cfg.ScanInterval, Log: log.With("component", "scanner"),
+	}
+	transcodes, err := stream.NewManager(cfg.FFmpegPath, cfg.TranscodeDir(), cfg.MaxTranscodes, log.With("component", "transcode"))
+	if err != nil {
+		st.Close()
+		return nil, fmt.Errorf("transcode folder: %w", err)
+	}
+	srv := &web.Server{Cfg: cfg, Store: st, Scanner: scanner, Meta: meta, Transcodes: transcodes, Log: log}
+	return &App{Cfg: cfg, Log: log, Store: st, Scanner: scanner, Transcodes: transcodes, Handler: srv.Handler()}, nil
+}
+
+// Start runs the scanner, the transcode janitor and session cleanup until ctx ends.
+func (a *App) Start(ctx context.Context) {
+	go a.Scanner.Run(ctx)
+	go a.Transcodes.Janitor(ctx)
+	go func() {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if err := a.Store.DeleteExpiredSessions(ctx); err != nil {
+					a.Log.Warn("session cleanup", "err", err)
+				}
+			}
+		}
+	}()
+}
+
+// Close releases the database.
+func (a *App) Close() error { return a.Store.Close() }

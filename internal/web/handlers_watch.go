@@ -287,7 +287,7 @@ func (s *Server) renderReport(w http.ResponseWriter, r *http.Request, track stor
 		s.serverError(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, subtitleReport(track.MediaID, track, cue, changes, msg, kind))
+	s.render(w, r, http.StatusOK, subtitleReport(viewer(r).CSRF, track, cue, changes, msg, kind))
 }
 
 func (s *Server) proposeChange(w http.ResponseWriter, r *http.Request) {
@@ -342,6 +342,11 @@ func (s *Server) afterVote(w http.ResponseWriter, r *http.Request, cueID int64, 
 	track, err := s.Store.SubtitleByID(r.Context(), subID)
 	if err != nil {
 		s.serverError(w, r, err)
+		return
+	}
+	if !isHTMX(r) {
+		// A plain form post (scripts not loaded yet): go back to the video.
+		http.Redirect(w, r, "/watch/"+itoa(track.MediaID), http.StatusSeeOther)
 		return
 	}
 	s.renderReport(w, r, track, cue, msg, kind)

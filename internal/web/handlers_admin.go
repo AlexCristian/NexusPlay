@@ -138,7 +138,7 @@ func (s *Server) saveMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if name := strings.TrimSpace(r.FormValue("collection")); name != "" {
-		c, err := s.findOrCreateCollection(ctx, name, u.Category)
+		c, err := s.findOrCreateCollection(ctx, name, u.Category, u.Year)
 		if err != nil {
 			s.serverError(w, r, err)
 			return
@@ -163,7 +163,7 @@ func (s *Server) saveMedia(w http.ResponseWriter, r *http.Request) {
 
 // findOrCreateCollection returns the named collection, creating it (with
 // TMDB details when available) if it does not exist yet.
-func (s *Server) findOrCreateCollection(ctx context.Context, name, category string) (store.Collection, error) {
+func (s *Server) findOrCreateCollection(ctx context.Context, name, category, year string) (store.Collection, error) {
 	c, err := s.Store.CollectionByName(ctx, name)
 	if err == nil || !errors.Is(err, store.ErrNotFound) {
 		return c, err
@@ -171,7 +171,8 @@ func (s *Server) findOrCreateCollection(ctx context.Context, name, category stri
 	if category == "" {
 		category = "TV Shows"
 	}
-	c = store.Collection{Name: name, Category: category}
+	// For an episode, the year guessed from "Show (2019)/..." is the show's year.
+	c = store.Collection{Name: name, Category: category, Year: year}
 	s.fillFromTMDB(ctx, &c)
 	if c.ID, err = s.Store.CreateCollection(ctx, c); errors.Is(err, store.ErrDuplicate) {
 		return s.Store.CollectionByName(ctx, name)

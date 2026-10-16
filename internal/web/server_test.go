@@ -233,14 +233,22 @@ func TestSubtitleFlow(t *testing.T) {
 		t.Fatalf("report dialog: %d", resp.StatusCode)
 	}
 	cue, _ := e.store.CueAt(ctx, sub, 1500)
-	resp, body = a.do("POST", "/cues/"+itoa(cue.ID)+"/changes", url.Values{"text": {"Hello"}}, map[string]string{"X-CSRF-Token": a.csrf})
+	htmx := func(c *client) map[string]string {
+		return map[string]string{"X-CSRF-Token": c.csrf, "HX-Request": "true"}
+	}
+	resp, body = a.do("POST", "/cues/"+itoa(cue.ID)+"/changes", url.Values{"text": {"Hello"}}, htmx(a))
 	if resp.StatusCode != 200 || !strings.Contains(body, "Correction submitted") {
 		t.Fatalf("propose: %d %s", resp.StatusCode, body)
 	}
 	changes, _ := e.store.Changes(ctx, cue.ID, 0)
-	resp, body = b.do("POST", "/changes/"+itoa(changes[0].ID)+"/vote", url.Values{}, map[string]string{"X-CSRF-Token": b.csrf})
+	resp, body = b.do("POST", "/changes/"+itoa(changes[0].ID)+"/vote", url.Values{}, htmx(b))
 	if resp.StatusCode != 200 || !strings.Contains(body, "Change applied") {
 		t.Fatalf("vote: %d %s", resp.StatusCode, body)
+	}
+	// Without htmx (scripts not loaded yet) the form still works and returns to the video.
+	resp, _ = a.do("POST", "/cues/"+itoa(cue.ID)+"/changes", url.Values{"text": {"Hello!"}, "csrf_token": {a.csrf}}, nil)
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/watch/"+itoa(id) {
+		t.Errorf("plain form post: %d to %q", resp.StatusCode, resp.Header.Get("Location"))
 	}
 	_, vtt := e.client().do("GET", "/subtitles/"+itoa(sub), nil, nil)
 	if !strings.Contains(vtt, "WEBVTT") || !strings.Contains(vtt, "Hello") {

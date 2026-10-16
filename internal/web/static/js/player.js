@@ -40,23 +40,40 @@
     });
   }
 
-  function startHLS() {
-    // Safari plays HLS natively; other browsers use hls.js over Media Source Extensions.
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      showStatus("Preparing video…");
-      video.src = src;
+  // hls.js handles resuming itself (startPosition); everything else resumes
+  // on loadedmetadata below.
+  var usingHlsJs = false;
+
+  function nativeHLS() {
+    if (!video.canPlayType("application/vnd.apple.mpegurl")) {
+      showStatus("This browser cannot play this video.");
       return;
     }
+    video.src = src;
+  }
+
+  function startHLS() {
     showStatus("Preparing video…");
+    // Prefer hls.js wherever Media Source Extensions exist. Recent Chrome also
+    // claims native HLS support, but its native player fails on a playlist
+    // that ffmpeg is still writing; native HLS is the fallback for iOS.
+    if (!window.MediaSource && !window.ManagedMediaSource) {
+      nativeHLS();
+      return;
+    }
     loadScript("/static/vendor/hls.light.min.js").then(function () {
       if (!window.Hls || !window.Hls.isSupported()) {
-        showStatus("This browser cannot play this video.");
+        nativeHLS();
         return;
       }
+      usingHlsJs = true;
       var hls = new window.Hls({
         manifestLoadingTimeOut: 70000, // the first request waits for ffmpeg to start
         manifestLoadingMaxRetry: 2,
-        startPosition: resumeAt > 5 ? resumeAt : -1
+        // While ffmpeg is still writing, the playlist is an open "event"
+        // playlist that hls.js would treat as live and join near its end.
+        // Always start at the beginning (or the resume point) instead.
+        startPosition: resumeAt > 5 ? resumeAt : 0
       });
       hls.on(window.Hls.Events.ERROR, function (_, data) {
         if (!data.fatal) return;
@@ -86,10 +103,10 @@
     if (video.error) showStatus("This video could not be played.");
   });
 
-  // Resume where the viewer left off (hls.js handles this with startPosition).
-  var resumed = useHLS && !video.canPlayType("application/vnd.apple.mpegurl");
+  // Resume where the viewer left off.
+  var resumed = false;
   video.addEventListener("loadedmetadata", function () {
-    if (resumed) return;
+    if (resumed || usingHlsJs) return;
     resumed = true;
     if (resumeAt > 5 && (!video.duration || resumeAt < video.duration - 10)) {
       video.currentTime = resumeAt;
