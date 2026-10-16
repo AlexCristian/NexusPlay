@@ -101,8 +101,9 @@ func (c *Converter) Run(ctx context.Context) {
 	c.init()
 	if err := checkWritable(c.MediaDir); err != nil {
 		c.mu.Lock()
-		c.disabled = "The media folder is read-only, so originals cannot be replaced. " +
-			"In Docker, mount it without :ro."
+		c.disabled = fmt.Sprintf("Conversion is off: the media folder is read-only or not writable by this "+
+			"server's user (UID %d), so originals cannot be replaced. In Docker, mount it without :ro and make "+
+			"sure that user owns it, or set user: in docker-compose.yml to the folder's owner.", os.Getuid())
 		c.mu.Unlock()
 		c.Log.Warn("automatic conversion disabled", "reason", err)
 		return

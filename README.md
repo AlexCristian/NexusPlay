@@ -30,9 +30,12 @@ Features
 Quick start with Docker
 -----------------------
 
+Prebuilt images for `linux/amd64` and `linux/arm64` are published to
+`ghcr.io/alexcristian/nexusplay`. Next to `docker-compose.yml`:
+
 ```sh
-mkdir media            # put your videos here
-docker compose up -d   # builds the image and starts the server
+mkdir media                                # put your videos here
+docker compose pull && docker compose up -d
 ```
 
 Open http://localhost:8080 and register. **The first account becomes the administrator.**
@@ -41,12 +44,22 @@ Then open the **Control panel** to publish the videos the scanner found.
 Without Compose:
 
 ```sh
-docker build -t nexusplay .
 docker run -d --name nexusplay -p 8080:8080 \
   -v /path/to/videos:/media \
   -v nexusplay-data:/data \
-  nexusplay
+  ghcr.io/alexcristian/nexusplay:go-rewrite
 ```
+
+To build the image yourself instead, uncomment `build: .` in `docker-compose.yml` and run
+`docker compose up -d --build`.
+
+| Image tag | What it is |
+|---|---|
+| `go-rewrite` | Latest build of the `go-rewrite` branch |
+| `master` | Latest build of `master` |
+| `latest` | Latest build of the default branch (`master`) |
+| `1.2.3`, `1.2` | A release, from a `v1.2.3` git tag |
+| `sha-1abb108` | One exact commit |
 
 **Nexus Play rewrites your media folder.** Files that are not browser-ready MP4s are converted
 and the originals deleted, so the folder is mounted writable and must be writable by the
@@ -54,6 +67,72 @@ container's user (UID 1000). To keep your originals untouched, set `NEXUSPLAY_CO
 mount the folder read-only (`:ro`); conversion then switches itself off and those files play
 through on-the-fly HLS instead. Everything else Nexus Play stores (database, posters,
 transcode scratch space) lives in `/data`.
+
+Install on a NAS
+----------------
+
+Any NAS that runs Docker with Compose works (Synology Container Manager, QNAP Container
+Station, Unraid, TrueNAS, or plain Docker over SSH). The commands below run in an SSH session
+on the NAS.
+
+**1. Check the CPU type.** Images exist for 64-bit Intel/AMD and 64-bit ARM:
+
+```sh
+uname -m
+```
+
+| Output | Supported |
+|---|---|
+| `x86_64` | Yes (`linux/amd64`) |
+| `aarch64` or `arm64` | Yes (`linux/arm64`) |
+| `armv7l` or anything else | No prebuilt image; older 32-bit ARM models are not covered |
+
+**2. Make a folder and get the compose file.** For example, on a Synology:
+
+```sh
+mkdir -p /volume1/docker/nexusplay && cd /volume1/docker/nexusplay
+curl -fsSLO https://raw.githubusercontent.com/AlexCristian/NexusPlay/go-rewrite/docker-compose.yml
+```
+
+Point the media volume at your videos by editing the left side of `./media:/media`, for example
+`/volume1/video:/media`.
+
+**3. Set the user the container runs as.** Nexus Play must be able to write to the media
+folder, because it converts files to MP4 and deletes the originals. By default the container
+runs as UID 1000, which on most NAS systems owns nothing. Find the owner of your media folder:
+
+```sh
+ls -ln /volume1/video    # third and fourth columns: UID and GID
+id your-nas-username     # or look up your own account
+```
+
+Then uncomment the `user:` line in `docker-compose.yml` with those numbers. On a Synology the
+first admin account is usually `1026:100`. When you set `user:`, also replace the
+`nexusplay-data:/data` volume with a folder that user owns, such as `./data:/data`, and create
+it first with `mkdir data`. The named volume is created owned by UID 1000 and would not be
+writable. If you prefer Nexus Play never to change your media folder, mount it with `:ro`
+instead; conversion then switches itself off and the control panel says so.
+
+**4. Start it, and later update it, with the same command:**
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+`pull` downloads the newest image for the tag in the compose file; `up -d` recreates the
+container only if the image changed. Your database and settings live in the data volume and
+survive updates. To remove old images afterwards: `docker image prune`.
+
+**5. If `pull` says "denied" or "unauthorized".** Packages on ghcr.io start out private. Either:
+
+- make the package public: on GitHub, open your profile's **Packages** tab, then
+  **nexusplay → Package settings → Change visibility → Public**; or
+- keep it private and log in on the NAS once with a personal access token (classic) that has
+  only the `read:packages` scope:
+
+  ```sh
+  docker login ghcr.io -u AlexCristian    # paste the token as the password
+  ```
 
 Running without Docker
 ----------------------

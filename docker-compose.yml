@@ -1,16 +1,27 @@
-# Run with: docker compose up -d
-# Then open http://localhost:8080 and register: the first account becomes the administrator.
+# Run with:     docker compose pull && docker compose up -d
+# Update with:  docker compose pull && docker compose up -d   (same command)
+# Then open http://<this machine>:8080 and register: the first account becomes the administrator.
 services:
   nexusplay:
-    build: .
-    image: nexusplay:latest
+    # Prebuilt for amd64 and arm64 by CI. Switch the tag to "latest" once the
+    # go-rewrite branch is merged into master.
+    image: ghcr.io/alexcristian/nexusplay:go-rewrite
+    # To build from this checkout instead of pulling, uncomment the next line and
+    # run: docker compose up -d --build
+    # build: .
     container_name: nexusplay
     restart: unless-stopped
+    # Run as the NAS user that owns your media folder, e.g. Synology's first
+    # admin user is usually 1026 with group 100 (find yours with: id <username>).
+    # Without this line the container runs as UID 1000. If you set it, also switch
+    # the data volume below to a folder that user owns, e.g. ./data:/data, since
+    # the named volume is created owned by UID 1000.
+    # user: "1026:100"
     ports:
       - "8080:8080"
     volumes:
-      # Your videos. Writable, because files that are not browser-ready MP4s are
-      # converted and the originals DELETED. Add :ro (or set NEXUSPLAY_CONVERT=false)
+      # Your videos. Must be WRITABLE: files that are not browser-ready MP4s are
+      # converted and the originals deleted. Add :ro (or set NEXUSPLAY_CONVERT=false)
       # to keep originals untouched; those files then play through on-the-fly HLS.
       - ./media:/media
       # Database, posters and transcode scratch space.
@@ -22,7 +33,7 @@ services:
       NEXUSPLAY_REQUIRE_LOGIN: ${NEXUSPLAY_REQUIRE_LOGIN:-false}
       # Convert non-MP4 videos in the background and delete the originals.
       NEXUSPLAY_CONVERT: ${NEXUSPLAY_CONVERT:-true}
-      # How many files to convert at the same time.
+      # How many files to convert at the same time. Keep 1 on a small NAS.
       NEXUSPLAY_MAX_CONVERSIONS: ${NEXUSPLAY_MAX_CONVERSIONS:-1}
       # Set to "true" when serving over HTTPS (behind a reverse proxy).
       NEXUSPLAY_SECURE_COOKIES: ${NEXUSPLAY_SECURE_COOKIES:-false}
