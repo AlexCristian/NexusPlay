@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Check generated templates are up to date
+        run: |
+          go run github.com/a-h/templ/cmd/templ@v0.3.1070 generate
+          git diff --exit-code -- '*_templ.go'
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race ./...
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: nexusplay:ci
+          load: true
+      - name: Smoke test
+        run: |
+          mkdir -p media
+          docker run -d --name np -p 8080:8080 -v "$PWD/media:/media:ro" nexusplay:ci
+          for i in $(seq 1 30); do curl -fsS http://localhost:8080/healthz && break; sleep 1; done
+          curl -fsS http://localhost:8080/ | grep -q "Nexus Play"
+          docker logs np

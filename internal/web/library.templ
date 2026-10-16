@@ -1,0 +1,290 @@
+package web
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/AlexCristian/NexusPlay/internal/store"
+)
+
+// Season is one season's episodes in a collection.
+type Season struct {
+	Number   int
+	Episodes []store.Media
+}
+
+func posterURL(name string) string {
+	if name == "" {
+		return "/static/img/no-poster.svg"
+	}
+	return "/posters/" + name
+}
+
+func watchURL(id int64) templ.SafeURL {
+	return templ.SafeURL("/watch/" + strconv.FormatInt(id, 10))
+}
+
+func collectionURL(id int64) string {
+	return "/collections/" + strconv.FormatInt(id, 10)
+}
+
+func seasonLabel(n int) string {
+	if n == 0 {
+		return "Specials"
+	}
+	return "Season " + strconv.Itoa(n)
+}
+
+func seasonSummary(c store.Collection, seasons []Season) string {
+	s := "1 Season"
+	if len(seasons) != 1 {
+		s = strconv.Itoa(len(seasons)) + " Seasons"
+	}
+	if c.Year != "" {
+		s += ", " + c.Year
+	}
+	return s
+}
+
+func minutes(sec float64) string {
+	return strconv.Itoa(int(sec/60)) + " min"
+}
+
+templ homePage(p Page, recent []store.Tile, cats []store.Category) {
+	@shell(p) {
+		<div class="above-panel">
+			@searchBox(p.Query)
+		</div>
+		<section class="panel library-panel" id="library">
+			@libraryView(p, recent, cats)
+		</section>
+		<section class="panel featurette">
+			<h2><strong>Nexus Play</strong><span class="muted">, the open-source web media center.</span></h2>
+			<p class="lead">
+				Easily access your media anytime, anywhere. Nexus Play is a lightweight, self-hosted
+				media center: your own personal streaming service, with the benefits of open-source software.
+			</p>
+		</section>
+	}
+}
+
+templ libraryView(p Page, recent []store.Tile, cats []store.Category) {
+	if len(recent) == 0 && len(cats) == 0 {
+		<div class="empty">
+			<h2>Your library is empty</h2>
+			if p.V.IsAdmin() {
+				<p>Add videos to the media folder, then publish them from the <a href="/admin">control panel</a>.</p>
+			} else {
+				<p>Nothing has been published yet. Check back soon.</p>
+			}
+		</div>
+	} else {
+		<div class="tabs" data-tabs>
+			<div class="tab-list" role="tablist">
+				<button type="button" role="tab" class="tab" aria-selected="true" data-tab="tab-recent">Just added</button>
+				for i, c := range cats {
+					<button type="button" role="tab" class="tab" aria-selected="false" data-tab={ fmt.Sprintf("tab-%d", i) }>{ c.Name }</button>
+				}
+			</div>
+			<div class="tile-strip">
+				<div class="tab-panel" id="tab-recent" role="tabpanel">
+					@tileGrid(recent)
+				</div>
+				for i, c := range cats {
+					<div class="tab-panel" id={ fmt.Sprintf("tab-%d", i) } role="tabpanel" hidden>
+						@tileGrid(c.Tiles)
+					</div>
+				}
+			</div>
+		</div>
+	}
+}
+
+templ searchResults(q string, tiles []store.Tile) {
+	<div class="tabs">
+		<div class="tab-list">
+			<h2 class="tab" aria-selected="true">Results for “{ q }”</h2>
+		</div>
+		<div class="tile-strip">
+			if len(tiles) == 0 {
+				<p class="strip-empty">Nothing matches your search.</p>
+			} else {
+				@tileGrid(tiles)
+			}
+		</div>
+	</div>
+}
+
+templ tileGrid(tiles []store.Tile) {
+	<ul class="tiles">
+		for _, t := range tiles {
+			<li>
+				if t.IsCollection {
+					<a class="tile" href={ templ.SafeURL(collectionURL(t.ID)) } hx-get={ collectionURL(t.ID) } hx-target="#modal-body">
+						@tileBody(t)
+					</a>
+				} else {
+					<a class="tile" href={ watchURL(t.ID) }>
+						@tileBody(t)
+					</a>
+				}
+			</li>
+		}
+	</ul>
+}
+
+templ tileBody(t store.Tile) {
+	<img src={ posterURL(t.Poster) } alt="" loading="lazy" width="140" height="210"/>
+	<span class="tile-title" title={ t.Title }>{ t.Title }</span>
+	<span class="tile-meta">
+		if t.Watched {
+			<span class="watched" title="Watched">
+				@icon("check")
+			</span>
+		}
+		{ t.Year }
+	</span>
+}
+
+templ collectionDialog(v Viewer, c store.Collection, seasons []Season, subscribed bool, watched map[int64]bool) {
+	<div class="collection">
+		<header class="collection-header">
+			<div class="poster-wrapper">
+				<img src={ posterURL(c.Poster) } alt="" width="140" height="210"/>
+				if v.User != nil {
+					@subscribeRibbon(c.ID, subscribed)
+				}
+			</div>
+			<div class="collection-meta">
+				<h2 id="modal-title">{ c.Name }</h2>
+				<p class="collection-sub">{ seasonSummary(c, seasons) }</p>
+				if len(seasons) > 0 {
+					<div class="season-tabs" role="tablist" data-tabs data-tabs-scope=".collection">
+						for i, s := range seasons {
+							<button
+								type="button"
+								role="tab"
+								class="season-tab"
+								aria-selected={ strconv.FormatBool(i == 0) }
+								data-tab={ fmt.Sprintf("season-%d-%d", c.ID, s.Number) }
+							>{ seasonLabel(s.Number) }</button>
+						}
+					</div>
+				}
+			</div>
+		</header>
+		<div class="collection-body">
+			if c.Overview != "" {
+				<p class="overview">{ c.Overview }</p>
+			}
+			for i, s := range seasons {
+				<div class="tab-panel" id={ fmt.Sprintf("season-%d-%d", c.ID, s.Number) } role="tabpanel" hidden?={ i != 0 }>
+					<table class="episodes">
+						<thead>
+							<tr><th scope="col">Episode</th><th scope="col">Title</th></tr>
+						</thead>
+						<tbody>
+							for _, e := range s.Episodes {
+								<tr>
+									<td>{ strconv.Itoa(e.Episode) }</td>
+									<td>
+										<a href={ watchURL(e.ID) }>{ e.Title }</a>
+										if watched[e.ID] {
+											<span class="watched" title="Watched">
+												@icon("check")
+											</span>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ subscribeRibbon(collectionID int64, subscribed bool) {
+	<button
+		type="button"
+		class={ "ribbon", templ.KV("ribbon-on", subscribed) }
+		hx-post={ collectionURL(collectionID) + "/subscribe" }
+		hx-swap="outerHTML"
+		aria-pressed={ strconv.FormatBool(subscribed) }
+		title="Get notified when new episodes are added"
+	>
+		if subscribed {
+			Subscribed
+		} else {
+			Subscribe
+		}
+	</button>
+}
+
+templ resumeList(items []store.Resume) {
+	if len(items) == 0 {
+		<p class="popover-empty">Nothing paused right now.</p>
+	} else {
+		<ul class="mini-list">
+			for _, r := range items {
+				<li>
+					<a href={ watchURL(r.Media.ID) }>
+						<img src={ posterURL(r.Media.Poster) } alt="" width="40" height="60"/>
+						<span>
+							{ displayTitle(r.Media) }
+							<small>
+								@icon("pause")
+								{ minutes(r.Position) }
+							</small>
+						</span>
+					</a>
+				</li>
+			}
+		</ul>
+	}
+}
+
+templ notificationList(items []store.Media) {
+	if len(items) == 0 {
+		<p class="popover-empty">No new episodes. Subscribe to a show from its poster.</p>
+	} else {
+		<ul class="mini-list">
+			for _, m := range items {
+				<li>
+					<a href={ watchURL(m.ID) }>
+						<img src={ posterURL(m.Poster) } alt="" width="40" height="60"/>
+						<span>{ displayTitle(m) }</span>
+					</a>
+				</li>
+			}
+		</ul>
+	}
+}
+
+// displayTitle names an episode with its show, e.g. "Cosmos · S1E3 · The Harmony of the Worlds".
+func displayTitle(m store.Media) string {
+	if m.CollectionName == "" {
+		return m.Title
+	}
+	return fmt.Sprintf("%s · S%dE%d · %s", m.CollectionName, m.Season, m.Episode, m.Title)
+}
+
+templ searchPage(p Page, q string, tiles []store.Tile) {
+	@shell(p) {
+		<div class="above-panel">
+			@searchBox(q)
+		</div>
+		<section class="panel library-panel" id="library">
+			@searchResults(q, tiles)
+		</section>
+	}
+}
+
+templ collectionPage(p Page, dialog templ.Component) {
+	@shell(p) {
+		<section class="panel collection-page">
+			@dialog
+		</section>
+	}
+}

@@ -1,0 +1,9 @@
+.git
+.github
+data
+media
+*.db
+*.db-*
+Dockerfile
+docker-compose.yml
+README.md

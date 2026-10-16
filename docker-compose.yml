@@ -1,0 +1,25 @@
+# Run with: docker compose up -d
+# Then open http://localhost:8080 and register: the first account becomes the administrator.
+services:
+  nexusplay:
+    build: .
+    image: nexusplay:latest
+    container_name: nexusplay
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Your videos. Read-only: NexusPlay never modifies the media folder.
+      - ./media:/media:ro
+      # Database, posters and transcode scratch space.
+      - nexusplay-data:/data
+    environment:
+      # Optional: a TMDB API key (v3) or read access token (v4) for posters and descriptions.
+      NEXUSPLAY_TMDB_API_KEY: ${NEXUSPLAY_TMDB_API_KEY:-}
+      # Set to "true" to hide the library from visitors who are not signed in.
+      NEXUSPLAY_REQUIRE_LOGIN: ${NEXUSPLAY_REQUIRE_LOGIN:-false}
+      # Set to "true" when serving over HTTPS (behind a reverse proxy).
+      NEXUSPLAY_SECURE_COOKIES: ${NEXUSPLAY_SECURE_COOKIES:-false}
+
+volumes:
+  nexusplay-data:

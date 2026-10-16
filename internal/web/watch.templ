@@ -1,0 +1,146 @@
+package web
+
+import (
+	"strconv"
+
+	"github.com/AlexCristian/NexusPlay/internal/store"
+)
+
+// Playback describes how the browser should load a video.
+type Playback struct {
+	Direct bool
+	URL    string
+}
+
+func fmtSeconds(f float64) string { return strconv.FormatFloat(f, 'f', 1, 64) }
+
+func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resumeAt float64) {
+	@shell(p) {
+		<script src="/static/js/player.js" defer></script>
+		<div class="player-container">
+			<video
+				id="player"
+				class="player"
+				controls
+				playsinline
+				preload="metadata"
+				data-media-id={ itoa(m.ID) }
+				data-src={ pb.URL }
+				data-hls={ strconv.FormatBool(!pb.Direct) }
+				data-resume={ fmtSeconds(resumeAt) }
+				data-signed-in={ strconv.FormatBool(p.V.User != nil) }
+			>
+				for _, s := range subs {
+					<track kind="subtitles" id={ "sub-" + itoa(s.ID) } src={ "/subtitles/" + itoa(s.ID) } srclang={ s.Language } label={ s.Label }/>
+				}
+			</video>
+			<p id="player-status" class="player-status" role="status" hidden></p>
+		</div>
+		<section class="video-content">
+			if p.V.User != nil {
+				<div class="player-actions">
+					<button type="button" id="report-subtitle" class="player-action" title="Report a subtitle error" hidden>
+						@icon("flag")
+						<span>Report a subtitle error</span>
+					</button>
+					if p.V.IsAdmin() {
+						<a class="player-action" href={ templ.SafeURL("/admin/media/" + itoa(m.ID)) } title="Edit metadata">
+							@icon("pencil")
+							<span>Edit</span>
+						</a>
+					}
+				</div>
+			}
+			<div class="metadata">
+				if m.CollectionID != 0 {
+					<a href={ templ.SafeURL(collectionURL(m.CollectionID)) } hx-get={ collectionURL(m.CollectionID) } hx-target="#modal-body" class="watch-poster">
+						<img src={ posterURL(m.Poster) } alt={ m.CollectionName } width="120" height="180"/>
+					</a>
+					<div class="meta-text">
+						<h1>{ m.CollectionName }</h1>
+						<p class="meta-sub">{ seasonLabel(m.Season) }, Episode { strconv.Itoa(m.Episode) }: { m.Title }</p>
+						if m.Overview != "" {
+							<p class="overview">{ m.Overview }</p>
+						}
+					</div>
+				} else {
+					<span class="watch-poster">
+						<img src={ posterURL(m.Poster) } alt="" width="120" height="180"/>
+					</span>
+					<div class="meta-text">
+						<h1>{ m.Title }</h1>
+						if m.Year != "" {
+							<p class="meta-sub">Released in { m.Year }</p>
+						}
+						if m.Overview != "" {
+							<p class="overview">{ m.Overview }</p>
+						}
+					</div>
+				}
+			</div>
+		</section>
+	}
+}
+
+templ subtitleReport(mediaID int64, track store.Subtitle, cue store.Cue, changes []store.Change, msg, msgKind string) {
+	<div class="report" id="subtitle-report">
+		<h2 id="modal-title" class="modal-heading">Report a subtitle error</h2>
+		<div class="report-body">
+			if msg != "" {
+				@alert(msgKind, msg)
+			}
+			<p class="report-track">{ track.Label } · line at { cueTime(cue.StartMS) }</p>
+			if len(changes) > 0 {
+				<h3>Vote up a proposed change</h3>
+				<ul class="changes">
+					for _, c := range changes {
+						<li class="proposed-change">
+							<div class="original-sub">{ c.OriginalText }</div>
+							<div class="changed-sub">
+								<span>{ c.ProposedText }</span>
+								<button
+									type="button"
+									class={ "vote-box", templ.KV("voted", c.VotedByMe) }
+									hx-post={ "/changes/" + itoa(c.ID) + "/vote" }
+									hx-target="#subtitle-report"
+									hx-swap="outerHTML"
+									title="Vote for this correction"
+									disabled?={ c.VotedByMe }
+								>
+									<span class="count-votes">{ strconv.Itoa(c.Votes) }</span>
+									@icon("thumbs-up")
+								</button>
+							</div>
+						</li>
+					}
+				</ul>
+				<h3>or submit your own</h3>
+			} else {
+				<h3>Suggest a correction</h3>
+			}
+			<form class="proposed-change" hx-post={ "/cues/" + itoa(cue.ID) + "/changes" } hx-target="#subtitle-report" hx-swap="outerHTML">
+				<div class="original-sub">{ cue.Text }</div>
+				<div class="changed-sub">
+					<textarea name="text" rows="2" required aria-label="Corrected line">{ cue.Text }</textarea>
+					<button type="submit" class="vote-box" title="Submit your correction">
+						@icon("thumbs-up")
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+}
+
+func cueTime(ms int64) string {
+	s := ms / 1000
+	return strconv.FormatInt(s/3600, 10) + ":" + pad2(s/60%60) + ":" + pad2(s%60)
+}
+
+func pad2(n int64) string {
+	if n < 10 {
+		return "0" + strconv.FormatInt(n, 10)
+	}
+	return strconv.FormatInt(n, 10)
+}

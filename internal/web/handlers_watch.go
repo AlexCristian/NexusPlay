@@ -1,0 +1,348 @@
+package web
+
+import (
+	"errors"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/AlexCristian/NexusPlay/internal/store"
+	"github.com/AlexCristian/NexusPlay/internal/stream"
+	"github.com/AlexCristian/NexusPlay/internal/subtitle"
+)
+
+// loadMedia fetches the media named in the path. Unpublished media is only
+// visible to administrators, who preview it before publishing.
+func (s *Server) loadMedia(w http.ResponseWriter, r *http.Request) (store.Media, bool) {
+	id, ok := pathID(r)
+	if !ok {
+		s.notFound(w, r)
+		return store.Media{}, false
+	}
+	m, err := s.Store.MediaByID(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) || (err == nil && !m.Published && !viewer(r).IsAdmin()) {
+		s.notFound(w, r)
+		return m, false
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return m, false
+	}
+	return m, true
+}
+
+func (s *Server) watch(w http.ResponseWriter, r *http.Request) {
+	m, ok := s.loadMedia(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	subs, err := s.Store.Subtitles(ctx, m.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	v := viewer(r)
+	var resumeAt float64
+	if v.User != nil {
+		if resumeAt, err = s.Store.Progress(ctx, v.ID(), m.ID); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		if err := s.Store.ClearNotification(ctx, v.ID(), m.ID); err != nil {
+			s.Log.Warn("clearing notification", "err", err)
+		}
+	}
+	if m.Published {
+		if err := s.Store.IncrementViews(ctx, m.ID); err != nil {
+			s.Log.Warn("counting view", "err", err)
+		}
+	}
+	pb := Playback{Direct: stream.DirectPlayable(m.Path, m.VideoCodec, m.AudioCodec)}
+	if pb.Direct {
+		pb.URL = "/media/" + itoa(m.ID) + "/file"
+	} else {
+		pb.URL = "/media/" + itoa(m.ID) + "/hls/index.m3u8"
+	}
+	title := m.Title
+	if m.CollectionName != "" {
+		title = m.CollectionName + " · " + m.Title
+	}
+	s.render(w, r, http.StatusOK, watchPage(s.page(r, title), m, pb, subs, resumeAt))
+}
+
+// mediaPath resolves a media item's file, refusing anything outside the media folder.
+func (s *Server) mediaPath(m store.Media) (string, error) {
+	p := filepath.Join(s.Cfg.MediaDir, filepath.FromSlash(m.Path))
+	rel, err := filepath.Rel(s.Cfg.MediaDir, p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", errors.New("media path escapes the media folder")
+	}
+	return p, nil
+}
+
+var videoTypes = map[string]string{
+	".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm",
+	".mkv": "video/x-matroska", ".mov": "video/quicktime", ".avi": "video/x-msvideo",
+	".ts": "video/mp2t", ".wmv": "video/x-ms-wmv",
+}
+
+// mediaFile streams the original file with range-request support.
+func (s *Server) mediaFile(w http.ResponseWriter, r *http.Request) {
+	m, ok := s.loadMedia(w, r)
+	if !ok {
+		return
+	}
+	p, err := s.mediaPath(m)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		s.notFound(w, r)
+		return
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if ct, ok := videoTypes[strings.ToLower(path.Ext(m.Path))]; ok {
+		w.Header().Set("Content-Type", ct)
+	}
+	http.ServeContent(w, r, "", info.ModTime(), f)
+}
+
+var hlsFile = regexp.MustCompile(`^(index\.m3u8|seg\d{5}\.ts)$`)
+
+// hls serves an on-demand transcode for files browsers cannot play directly.
+func (s *Server) hls(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("file")
+	if !hlsFile.MatchString(name) {
+		s.notFound(w, r)
+		return
+	}
+	m, ok := s.loadMedia(w, r)
+	if !ok {
+		return
+	}
+	dir := s.Transcodes.Touch(m.ID)
+	if dir == "" || name == "index.m3u8" {
+		src, err := s.mediaPath(m)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		dir, err = s.Transcodes.Playlist(r.Context(), m.ID, src, m.VideoCodec, m.AudioCodec)
+		if errors.Is(err, stream.ErrBusy) {
+			w.Header().Set("Retry-After", "30")
+			http.Error(w, "The server is busy converting other videos. Try again in a minute.", http.StatusServiceUnavailable)
+			return
+		}
+		if err != nil {
+			if r.Context().Err() == nil {
+				s.Log.Error("transcode", "media", m.ID, "err", err)
+				http.Error(w, "This video could not be converted for playback.", http.StatusInternalServerError)
+			}
+			return
+		}
+	}
+	file := filepath.Join(dir, name)
+	if name == "index.m3u8" {
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		w.Header().Set("Cache-Control", "no-cache")
+	} else {
+		// After a restart the segment may be a few seconds away from existing.
+		if !waitForFile(r, file, 30*time.Second) {
+			s.notFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "video/mp2t")
+	}
+	http.ServeFile(w, r, file)
+}
+
+func waitForFile(r *http.Request, file string, max time.Duration) bool {
+	deadline := time.Now().Add(max)
+	for {
+		if _, err := os.Stat(file); err == nil {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-r.Context().Done():
+			return false
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+}
+
+func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r)
+	if !ok {
+		s.notFound(w, r)
+		return
+	}
+	ctx := r.Context()
+	track, err := s.Store.SubtitleByID(ctx, id)
+	if err != nil {
+		s.notFound(w, r)
+		return
+	}
+	m, err := s.Store.MediaByID(ctx, track.MediaID)
+	if err != nil || (!m.Published && !viewer(r).IsAdmin()) {
+		s.notFound(w, r)
+		return
+	}
+	cues, err := s.Store.Cues(ctx, id)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	out := make([]subtitle.Cue, len(cues))
+	for i, c := range cues {
+		out[i] = subtitle.Cue{StartMS: c.StartMS, EndMS: c.EndMS, Text: c.Text}
+	}
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Write(subtitle.WriteVTT(out))
+}
+
+func (s *Server) poster(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" || filepath.Base(name) != name || strings.HasPrefix(name, ".") {
+		s.notFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	http.ServeFile(w, r, filepath.Join(s.Cfg.PosterDir(), name))
+}
+
+// saveProgress is called by the player (often through navigator.sendBeacon).
+func (s *Server) saveProgress(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.FormValue("media_id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad media_id", http.StatusBadRequest)
+		return
+	}
+	pos, err := strconv.ParseFloat(r.FormValue("position"), 64)
+	if err != nil || pos < 0 {
+		http.Error(w, "bad position", http.StatusBadRequest)
+		return
+	}
+	m, err := s.Store.MediaByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "unknown media", http.StatusNotFound)
+		return
+	}
+	finished := r.FormValue("finished") == "1" || (m.Duration > 0 && pos >= m.Duration*0.95)
+	if err := s.Store.SaveProgress(r.Context(), viewer(r).ID(), id, pos, finished); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// subtitleReport opens the "Report a subtitle error" dialog for the line on
+// screen at time t (milliseconds) in the given track.
+func (s *Server) subtitleReport(w http.ResponseWriter, r *http.Request) {
+	m, ok := s.loadMedia(w, r)
+	if !ok {
+		return
+	}
+	trackID, err := strconv.ParseInt(r.URL.Query().Get("track"), 10, 64)
+	if err != nil {
+		s.errorPage(w, r, http.StatusBadRequest, "Bad request", "Choose a subtitle track first.")
+		return
+	}
+	ms, _ := strconv.ParseInt(r.URL.Query().Get("t"), 10, 64)
+	track, err := s.Store.SubtitleByID(r.Context(), trackID)
+	if err != nil || track.MediaID != m.ID {
+		s.notFound(w, r)
+		return
+	}
+	cue, err := s.Store.CueAt(r.Context(), trackID, ms)
+	if errors.Is(err, store.ErrNotFound) {
+		s.render(w, r, http.StatusOK, alert("info", "No subtitle line has been shown yet. Pause on the line you want to correct."))
+		return
+	} else if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.renderReport(w, r, track, cue, "", "")
+}
+
+func (s *Server) renderReport(w http.ResponseWriter, r *http.Request, track store.Subtitle, cue store.Cue, msg, kind string) {
+	changes, err := s.Store.Changes(r.Context(), cue.ID, viewer(r).ID())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, subtitleReport(track.MediaID, track, cue, changes, msg, kind))
+}
+
+func (s *Server) proposeChange(w http.ResponseWriter, r *http.Request) {
+	cueID, ok := pathID(r)
+	if !ok {
+		s.notFound(w, r)
+		return
+	}
+	text := strings.TrimSpace(r.FormValue("text"))
+	if text == "" || len(text) > 500 {
+		s.errorPage(w, r, http.StatusBadRequest, "Bad request", "A correction must be between 1 and 500 characters.")
+		return
+	}
+	applied, err := s.Store.ProposeChange(r.Context(), cueID, viewer(r).ID(), text, s.Cfg.VotesRequired)
+	s.afterVote(w, r, cueID, applied, err, "Correction submitted. It is applied once enough people vote for it.")
+}
+
+func (s *Server) voteChange(w http.ResponseWriter, r *http.Request) {
+	changeID, ok := pathID(r)
+	if !ok {
+		s.notFound(w, r)
+		return
+	}
+	cueID, err := s.Store.CueForChange(r.Context(), changeID)
+	if err != nil {
+		s.errorPage(w, r, http.StatusNotFound, "Not found", "That correction no longer exists. It may have just been applied.")
+		return
+	}
+	applied, err := s.Store.VoteChange(r.Context(), changeID, viewer(r).ID(), s.Cfg.VotesRequired)
+	s.afterVote(w, r, cueID, applied, err, "Vote submitted.")
+}
+
+func (s *Server) afterVote(w http.ResponseWriter, r *http.Request, cueID int64, applied bool, err error, okMsg string) {
+	msg, kind := okMsg, "success"
+	switch {
+	case errors.Is(err, store.ErrAlreadyVoted), errors.Is(err, store.ErrUnchanged):
+		msg, kind = err.Error()+".", "error"
+	case errors.Is(err, store.ErrNotFound):
+		s.notFound(w, r)
+		return
+	case err != nil:
+		s.serverError(w, r, err)
+		return
+	case applied:
+		msg = "Change applied! It shows the next time the video is loaded."
+	}
+	cue, subID, err := s.Store.CueByID(r.Context(), cueID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	track, err := s.Store.SubtitleByID(r.Context(), subID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.renderReport(w, r, track, cue, msg, kind)
+}

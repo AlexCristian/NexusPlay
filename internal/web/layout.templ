@@ -1,0 +1,140 @@
+package web
+
+import (
+	"fmt"
+	"net/http"
+)
+
+// Page carries what every full page needs.
+type Page struct {
+	Title string
+	V     Viewer
+	Query string
+}
+
+func (s *Server) page(r *http.Request, title string) Page {
+	return Page{Title: title, V: viewer(r), Query: r.URL.Query().Get("q")}
+}
+
+func csrfHeaders(v Viewer) string {
+	if v.User == nil {
+		return "{}"
+	}
+	return fmt.Sprintf(`{"X-CSRF-Token": %q}`, v.CSRF)
+}
+
+templ layout(p Page) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="color-scheme" content="dark"/>
+			<meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "allowScriptTags": false, "responseHandling": [{"code": "204", "swap": false}, {"code": "[23]..", "swap": true}, {"code": "[45]..", "swap": true, "error": true}]}'/>
+			if p.Title != "" {
+				<title>{ p.Title } · Nexus Play</title>
+			} else {
+				<title>Nexus Play</title>
+			}
+			<link rel="icon" href="/static/img/icon.svg" type="image/svg+xml"/>
+			<link rel="stylesheet" href="/static/css/app.css"/>
+			<script src="/static/vendor/htmx.min.js" defer></script>
+			<script src="/static/js/app.js" defer></script>
+		</head>
+		{ children... }
+	</html>
+}
+
+// shell is the body every page shares: top bar, content, modal and footer.
+templ shell(p Page) {
+	@layout(p) {
+		<body hx-headers={ csrfHeaders(p.V) }>
+			@topBar(p)
+			<main class="page">
+				{ children... }
+			</main>
+			<footer class="footer">
+				Built on Nexus Play, an open-source web media center.
+				<a href="https://github.com/AlexCristian/NexusPlay">Source code</a>
+			</footer>
+			<dialog id="modal" class="modal" aria-labelledby="modal-title">
+				<button type="button" class="modal-close" data-close-modal aria-label="Close">
+					@icon("x")
+				</button>
+				<div id="modal-body"></div>
+			</dialog>
+		</body>
+	}
+}
+
+templ topBar(p Page) {
+	<header id="top-bar" class="top-bar">
+		<nav class="top-bar-inner" aria-label="Main">
+			<a class="brand" href="/">
+				@icon("play")
+				Nexus Play
+			</a>
+			if p.V.User != nil {
+				<button type="button" class="top-link" popovertarget="resume-pop" hx-get="/me/resume" hx-target="#resume-pop-body" hx-trigger="click">
+					Previously watching
+				</button>
+				<div id="resume-pop" class="popover" popover>
+					<h2 class="popover-title">Resume paused media</h2>
+					<div id="resume-pop-body"></div>
+				</div>
+				<button type="button" class="top-link" popovertarget="notif-pop" hx-get="/me/notifications" hx-target="#notif-pop-body" hx-trigger="click">
+					My subscriptions
+				</button>
+				<div id="notif-pop" class="popover" popover>
+					<h2 class="popover-title">New in your subscriptions</h2>
+					<div id="notif-pop-body"></div>
+				</div>
+				<span class="spacer"></span>
+				if p.V.IsAdmin() {
+					<a class="top-link" href="/admin">Control panel</a>
+				}
+				<span class="top-text">Welcome, { p.V.User.Nickname }</span>
+				<form method="post" action="/logout" class="inline-form">
+					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+					<button type="submit" class="top-link">Log out</button>
+				</form>
+			} else {
+				<span class="spacer"></span>
+				<a class="top-link" href="/login" hx-get="/login" hx-target="#modal-body">Log in</a>
+				<a class="top-link" href="/register" hx-get="/register" hx-target="#modal-body">Register</a>
+			}
+		</nav>
+	</header>
+}
+
+templ searchBox(q string) {
+	<form class="search" action="/search" method="get" role="search">
+		@icon("search")
+		<input
+			type="search"
+			name="q"
+			value={ q }
+			placeholder="Search media..."
+			aria-label="Search media"
+			autocomplete="off"
+			hx-get="/search"
+			hx-trigger="input changed delay:300ms, search"
+			hx-target="#library"
+			hx-push-url="true"
+		/>
+	</form>
+}
+
+templ messagePage(p Page, title, msg string) {
+	@shell(p) {
+		<section class="panel message">
+			<h1>{ title }</h1>
+			<p>{ msg }</p>
+			<p><a href="/">Back to the library</a></p>
+		</section>
+	}
+}
+
+templ alert(kind, msg string) {
+	<div class={ "alert", "alert-" + kind } role="status">{ msg }</div>
+}

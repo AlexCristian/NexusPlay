@@ -1,0 +1,298 @@
+package web
+
+import (
+	"strconv"
+
+	"github.com/AlexCristian/NexusPlay/internal/store"
+)
+
+templ controlPanel(p Page, pending []store.Media, collections []store.Collection, categories []string, metaEnabled bool, msg string) {
+	@shell(p) {
+		<section class="panel admin">
+			<header class="admin-header">
+				<h1>Control panel</h1>
+				<form method="post" action="/admin/scan">
+					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+					<button type="submit" class="button button-quiet">
+						@icon("refresh")
+						Scan library now
+					</button>
+				</form>
+			</header>
+			if msg != "" {
+				@alert("success", msg)
+			}
+			if !metaEnabled {
+				@alert("info", "Metadata lookups are off. Set NEXUSPLAY_TMDB_API_KEY to fetch posters, titles and descriptions automatically.")
+			}
+			<h2>Waiting to be published</h2>
+			if len(pending) == 0 {
+				<p class="muted">Nothing new. Files added to the media folder show up here after the next scan.</p>
+			} else {
+				<table class="admin-table">
+					<thead>
+						<tr><th scope="col">File</th><th scope="col">Detected as</th><th scope="col"></th></tr>
+					</thead>
+					<tbody>
+						for _, m := range pending {
+							<tr>
+								<td class="path">{ m.Path }</td>
+								<td>{ detectedAs(m) }</td>
+								<td><a class="button button-small" href={ templ.SafeURL("/admin/media/" + itoa(m.ID)) }>Review and publish</a></td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+			<h2>Collections</h2>
+			if len(collections) > 0 {
+				<table class="admin-table">
+					<thead>
+						<tr><th scope="col">Name</th><th scope="col">Category</th><th scope="col">Year</th><th scope="col"></th></tr>
+					</thead>
+					<tbody>
+						for _, c := range collections {
+							<tr>
+								<td>{ c.Name }</td>
+								<td>{ c.Category }</td>
+								<td>{ c.Year }</td>
+								<td><a class="button button-small" href={ templ.SafeURL("/admin/collections/" + itoa(c.ID)) }>Edit</a></td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+			<details class="admin-new">
+				<summary>New collection</summary>
+				<form class="form-grid" method="post" action="/admin/collections" enctype="multipart/form-data">
+					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+					@collectionFields(store.Collection{Category: "TV Shows"}, categories, metaEnabled)
+					<div class="form-actions">
+						<button type="submit" class="button">Create collection</button>
+					</div>
+				</form>
+			</details>
+			@categoryList(categories)
+		</section>
+	}
+}
+
+func detectedAs(m store.Media) string {
+	g := guessFor(m)
+	if g.IsEpisode() {
+		return g.Show + " · S" + strconv.Itoa(m.Season) + "E" + strconv.Itoa(m.Episode) + " · " + m.Title
+	}
+	if m.Year != "" {
+		return m.Title + " (" + m.Year + ")"
+	}
+	return m.Title
+}
+
+templ categoryList(categories []string) {
+	<datalist id="categories">
+		<option value="Movies"></option>
+		<option value="TV Shows"></option>
+		for _, c := range categories {
+			if c != "Movies" && c != "TV Shows" {
+				<option value={ c }></option>
+			}
+		}
+	</datalist>
+}
+
+templ collectionFields(c store.Collection, categories []string, metaEnabled bool) {
+	<label>
+		Name
+		<input type="text" name="name" value={ c.Name } required maxlength="200"/>
+	</label>
+	<label>
+		Category
+		<input type="text" name="category" value={ c.Category } list="categories" required maxlength="50"/>
+	</label>
+	<label>
+		Year
+		<input type="text" name="year" value={ c.Year } inputmode="numeric" maxlength="9"/>
+	</label>
+	<label class="span-2">
+		Description
+		<textarea name="overview" rows="3">{ c.Overview }</textarea>
+	</label>
+	<label>
+		Poster image
+		<input type="file" name="poster" accept="image/jpeg,image/png,image/webp"/>
+	</label>
+	if metaEnabled {
+		<label class="check">
+			<input type="checkbox" name="lookup" value="1"/>
+			Fill in missing details and poster from TMDB
+		</label>
+	}
+}
+
+templ editCollectionPage(p Page, c store.Collection, categories []string, metaEnabled bool, msg string) {
+	@shell(p) {
+		<section class="panel admin">
+			<p><a href="/admin">← Control panel</a></p>
+			<h1>Edit collection</h1>
+			if msg != "" {
+				@alert("error", msg)
+			}
+			<div class="edit-layout">
+				<img class="edit-poster" src={ posterURL(c.Poster) } alt="" width="140" height="210"/>
+				<form class="form-grid" method="post" action={ templ.SafeURL("/admin/collections/" + itoa(c.ID)) } enctype="multipart/form-data">
+					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+					@collectionFields(c, categories, metaEnabled)
+					<div class="form-actions">
+						<button type="submit" class="button">Save</button>
+					</div>
+				</form>
+			</div>
+			<form method="post" action={ templ.SafeURL("/admin/collections/" + itoa(c.ID) + "/delete") } class="danger-zone" data-confirm="Delete this collection? Its episodes stay in the library as standalone items.">
+				<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+				<button type="submit" class="button button-danger">Delete collection</button>
+			</form>
+			@categoryList(categories)
+		</section>
+	}
+}
+
+// MediaForm is the data behind the edit and publish form.
+type MediaForm struct {
+	Media          store.Media
+	CollectionName string
+	Collections    []store.Collection
+	Categories     []string
+	Subtitles      []store.Subtitle
+	MetaEnabled    bool
+	Error          string
+	Saved          bool
+}
+
+templ editMediaPage(p Page, f MediaForm) {
+	@shell(p) {
+		<section class="panel admin">
+			<p><a href="/admin">← Control panel</a></p>
+			if f.Media.Published {
+				<h1>Edit media</h1>
+			} else {
+				<h1>Review and publish</h1>
+			}
+			<p class="path">{ f.Media.Path }</p>
+			<p class="muted">{ techSummary(f.Media) }</p>
+			if f.Error != "" {
+				@alert("error", f.Error)
+			}
+			if f.Saved {
+				@alert("success", "Saved.")
+			}
+			<div class="edit-layout">
+				<img class="edit-poster" src={ posterURL(f.Media.Poster) } alt="" width="140" height="210"/>
+				<form class="form-grid" method="post" action={ templ.SafeURL("/admin/media/" + itoa(f.Media.ID)) } enctype="multipart/form-data">
+					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+					<label>
+						Title
+						<input type="text" name="title" value={ f.Media.Title } required maxlength="200"/>
+					</label>
+					<label>
+						Year
+						<input type="text" name="year" value={ f.Media.Year } inputmode="numeric" maxlength="9"/>
+					</label>
+					<label>
+						Category
+						<input type="text" name="category" value={ f.Media.Category } list="categories" maxlength="50" placeholder="Movies"/>
+						<small>Ignored for episodes: they appear under their collection's category.</small>
+					</label>
+					<label>
+						Collection
+						<input type="text" name="collection" value={ f.CollectionName } list="collections" maxlength="200" placeholder="None (standalone)"/>
+						<small>A new name creates the collection.</small>
+					</label>
+					<label>
+						Season
+						<input type="number" name="season" value={ strconv.Itoa(f.Media.Season) } min="0" max="999"/>
+					</label>
+					<label>
+						Episode
+						<input type="number" name="episode" value={ strconv.Itoa(f.Media.Episode) } min="0" max="9999"/>
+					</label>
+					<label class="span-2">
+						Description
+						<textarea name="overview" rows="3">{ f.Media.Overview }</textarea>
+					</label>
+					<label>
+						Poster image
+						<input type="file" name="poster" accept="image/jpeg,image/png,image/webp"/>
+						<small>Episodes use their collection's poster when they have none.</small>
+					</label>
+					<div class="form-actions">
+						if f.Media.Published {
+							<button type="submit" class="button">Save</button>
+						} else {
+							<button type="submit" name="publish" value="1" class="button">Save and publish</button>
+							<button type="submit" class="button button-quiet">Save without publishing</button>
+						}
+					</div>
+				</form>
+			</div>
+			<h2>Subtitles</h2>
+			if len(f.Subtitles) == 0 {
+				<p class="muted">No subtitles yet. Upload one below, or put a file named like the video (for example <code>Movie.en.srt</code>) next to it.</p>
+			} else {
+				<table class="admin-table">
+					<tbody>
+						for _, s := range f.Subtitles {
+							<tr>
+								<td colspan="2">
+									<form class="inline-fields" method="post" action={ templ.SafeURL("/admin/subtitles/" + itoa(s.ID)) }>
+										<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+										<input type="text" name="language" value={ s.Language } required maxlength="12" aria-label="Language code"/>
+										<input type="text" name="label" value={ s.Label } required maxlength="60" aria-label="Label"/>
+										<button type="submit" class="button button-small">Save</button>
+									</form>
+								</td>
+								<td>
+									<form method="post" action={ templ.SafeURL("/admin/subtitles/" + itoa(s.ID) + "/delete") } data-confirm="Delete this subtitle track and its proposed corrections?">
+										<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+										<button type="submit" class="button button-small button-danger">Delete</button>
+									</form>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+			<form class="form-grid upload-sub" method="post" action={ templ.SafeURL("/admin/media/" + itoa(f.Media.ID) + "/subtitles") } enctype="multipart/form-data">
+				<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+				<label>
+					Subtitle file (.srt or .vtt)
+					<input type="file" name="file" accept=".srt,.vtt,text/vtt" required/>
+				</label>
+				<label>
+					Language code
+					<input type="text" name="language" required maxlength="12" placeholder="en"/>
+				</label>
+				<div class="form-actions">
+					<button type="submit" class="button">Upload subtitle</button>
+				</div>
+			</form>
+			<datalist id="collections">
+				for _, c := range f.Collections {
+					<option value={ c.Name }></option>
+				}
+			</datalist>
+			@categoryList(f.Categories)
+		</section>
+	}
+}
+
+func techSummary(m store.Media) string {
+	s := m.VideoCodec
+	if m.AudioCodec != "" {
+		s += " / " + m.AudioCodec
+	}
+	if m.Duration > 0 {
+		s += " · " + minutes(m.Duration)
+	}
+	s += " · " + strconv.FormatFloat(float64(m.Size)/(1<<30), 'f', 2, 64) + " GB"
+	return s
+}
