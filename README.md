@@ -112,6 +112,35 @@ go run github.com/a-h/templ/cmd/templ@v0.3.1070 generate
 go test ./...
 ```
 
+### Integration and screenshot tests
+
+The `integration` package runs the real app end to end, with ffmpeg, SQLite and a pinned
+headless Chrome (driven from Go with chromedp, no Node needed):
+
+- **HTTP tests**: the scanner follows the media folder, transcodes produce H.264/AAC, the
+  transcode limit, progress, notifications and subtitle upload.
+- **Browser tests**: first-run setup, publishing, browsing, playback (direct and HLS), the
+  subtitle correction vote, resume, search and login. Console errors and Content Security
+  Policy violations fail the test.
+- **Screenshot tests**: key screens are compared pixel by pixel with the reference images in
+  `integration/testdata/screenshots`.
+
+```sh
+./scripts/install-chrome.sh                      # pinned Chrome for Testing, into .cache/
+go test -tags integration ./integration/
+```
+
+When a screen changes on purpose, regenerate its reference and review the new PNGs in the diff:
+
+```sh
+go test -tags integration ./integration/ -run TestScreens -update
+```
+
+A failing screen writes `<name>.actual.png` and `<name>.diff.png` (changed pixels in red) to
+`integration/testdata/screenshots/failures/`; in CI they are uploaded as an artifact.
+Screenshots are only comparable when rendered by the same Chrome build, which is why the
+version is pinned in `scripts/install-chrome.sh`. Change it there, then regenerate every reference.
+
 Project layout:
 
 | Path | Contents |
@@ -125,6 +154,8 @@ Project layout:
 | `internal/subtitle` | SRT/WebVTT parsing and writing |
 | `internal/auth` | Password hashing (argon2id) and session tokens |
 | `internal/web` | HTTP handlers, templates, CSS and JavaScript |
+| `internal/app` | Wires everything together (used by the command and the integration tests) |
+| `integration` | End-to-end, browser and screenshot tests |
 
 Third-party assets bundled in `internal/web/static`: htmx (0BSD), hls.js (Apache 2.0),
 Open Sans (SIL Open Font License, see `fonts/OFL.txt`) and icons from Lucide (ISC).

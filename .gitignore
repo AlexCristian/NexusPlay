@@ -16,3 +16,4 @@
 *.swp
 .DS_Store
 /.cache/
+/integration/testdata/screenshots/failures/

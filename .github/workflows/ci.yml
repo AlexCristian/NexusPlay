@@ -23,9 +23,38 @@ jobs:
       - name: Test
         run: go test -race ./...
 
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Cache pinned Chrome
+        uses: actions/cache@v4
+        with:
+          path: .cache/chrome
+          key: chrome-${{ hashFiles('scripts/install-chrome.sh') }}
+      - name: Install pinned Chrome
+        run: ./scripts/install-chrome.sh
+      - name: Integration and screenshot tests
+        env:
+          NEXUSPLAY_REQUIRE_INTEGRATION: "1"
+          NEXUSPLAY_SCREENSHOT_FAILURES: ${{ github.workspace }}/screenshot-failures
+        run: go test -tags integration -count=1 ./integration/
+      - name: Upload screenshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-failures
+          path: screenshot-failures/
+          if-no-files-found: ignore
+
   docker:
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, integration]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
