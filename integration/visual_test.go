@@ -4,11 +4,13 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -117,6 +119,28 @@ func TestScreens(t *testing.T) {
 			compareScreenshot(t, sc.name, sc.tab.screenshot())
 		})
 	}
+
+	// A failed conversion, listed with its reason and a Retry button. The
+	// ffmpeg here fails every conversion the same way, so the screen is stable.
+	t.Run("control-panel-conversion-failed", func(t *testing.T) {
+		broken := filepath.Join(t.TempDir(), "ffmpeg-fails-conversions")
+		ffmpeg, _ := exec.LookPath("ffmpeg")
+		os.WriteFile(broken, []byte("#!/bin/sh\ncase \"$*\" in *-progress*) echo 'Conversion failed!' >&2; exit 1;; esac\nexec "+ffmpeg+" \"$@\"\n"), 0o755)
+		fs := startServer(t, serverOpts{media: []string{movieAVI}, convert: true, ffmpeg: broken})
+		fs.waitForMedia(1)
+		fs.register("alex")
+		eventually(t, 30*time.Second, func() error {
+			f, err := fs.App.Store.ConversionFailures(context.Background())
+			if err != nil || len(f) != 1 {
+				return fmt.Errorf("waiting for the failure to be recorded: %+v %v", f, err)
+			}
+			return nil
+		})
+		tb := b.newTab(1200, 900)
+		tb.login(fs, "alex")
+		tb.navigate(fs.URL + "/admin")
+		compareScreenshot(t, "control-panel-conversion-failed", tb.screenshot())
+	})
 
 	// Phone width.
 	phone := b.newTab(390, 844)

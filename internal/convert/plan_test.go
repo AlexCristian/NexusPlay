@@ -1,0 +1,105 @@
+package convert
+
+import (
+	"slices"
+	"strings"
+	"testing"
+)
+
+func TestNeedsConversion(t *testing.T) {
+	tests := []struct {
+		file, video, audio string
+		want               bool
+	}{
+		{"a.mp4", "h264", "aac", false},
+		{"a.M4V", "h264", "mp3", false},
+		{"a.mp4", "h264", "", false},
+		{"a.mp4", "hevc", "aac", true},
+		{"a.mp4", "h264", "ac3", true},
+		{"a.mkv", "h264", "aac", true}, // only MP4s are kept
+		{"a.webm", "vp9", "opus", true},
+		{"a.avi", "mpeg4", "mp3", true},
+	}
+	for _, tt := range tests {
+		if got := NeedsConversion(tt.file, tt.video, tt.audio); got != tt.want {
+			t.Errorf("NeedsConversion(%q, %q, %q) = %v, want %v", tt.file, tt.video, tt.audio, got, tt.want)
+		}
+	}
+}
+
+func TestMakePlan(t *testing.T) {
+	src := Source{Duration: 60, Streams: []Stream{
+		{Index: 0, Type: "video", Codec: "h264", PixFmt: "yuv420p"},
+		{Index: 1, Type: "audio", Codec: "ac3", Channels: 6, Language: "fre"},
+		{Index: 2, Type: "audio", Codec: "aac", Channels: 2, Language: "eng", Default: true},
+		{Index: 3, Type: "audio", Codec: "dts", Channels: 8, Language: "eng"},
+		{Index: 4, Type: "subtitle", Codec: "subrip", Language: "eng"},
+		{Index: 5, Type: "subtitle", Codec: "ass", Language: "eng"},
+		{Index: 6, Type: "subtitle", Codec: "subrip"},
+		{Index: 7, Type: "subtitle", Codec: "hdmv_pgs_subtitle", Language: "eng"},
+		{Index: 8, Type: "attachment", Codec: "ttf"},
+		{Index: 9, Type: "video", Codec: "mjpeg", AttachPic: true},
+	}}
+	p, err := MakePlan(src, "Movie (2020)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.CopyVideo || p.Video.Index != 0 {
+		t.Errorf("8-bit H.264 should be copied: %+v", p)
+	}
+	if len(p.Audio) != 3 || p.Audio[0].Copy || !p.Audio[1].Copy || p.Audio[2].Copy {
+		t.Errorf("audio plan = %+v", p.Audio)
+	}
+	if p.Audio[0].Channels != 6 || p.Audio[0].Bitrate != 384 {
+		t.Errorf("5.1 AC-3 should become 5.1 AAC at 384k: %+v", p.Audio[0])
+	}
+	if p.Audio[2].Channels != 6 {
+		t.Errorf("7.1 should be reduced to 5.1: %+v", p.Audio[2])
+	}
+	var files []string
+	for _, s := range p.Subtitles {
+		files = append(files, s.File)
+	}
+	want := []string{"Movie (2020).eng.srt", "Movie (2020).track2.eng.srt", "Movie (2020).und.srt"}
+	if !slices.Equal(files, want) {
+		t.Errorf("subtitle files = %v, want %v", files, want)
+	}
+	if p.DroppedSubs != 1 || p.DroppedOther != 1 {
+		t.Errorf("dropped subs=%d other=%d, want 1 and 1", p.DroppedSubs, p.DroppedOther)
+	}
+
+	args := strings.Join(p.ConvertArgs("in.mkv", "out.mp4"), " ")
+	for _, wantArg := range []string{
+		"-map 0:0 -map 0:1 -map 0:2 -map 0:3", "-c:v copy", "-c:a:0 aac -b:a:0 384k -ac:a:0 6", "-c:a:1 copy",
+		"-disposition:a:0 0 -disposition:a:1 default -disposition:a:2 0", "-sn", "-movflags +faststart",
+	} {
+		if !strings.Contains(args, wantArg) {
+			t.Errorf("ffmpeg args missing %q:\n%s", wantArg, args)
+		}
+	}
+	if strings.Contains(args, "0:4") || strings.Contains(args, "0:9") {
+		t.Errorf("subtitles and cover art must not be mapped into the MP4:\n%s", args)
+	}
+}
+
+func TestMakePlanReencodes(t *testing.T) {
+	for _, v := range []Stream{
+		{Type: "video", Codec: "hevc", PixFmt: "yuv420p"},
+		{Type: "video", Codec: "h264", PixFmt: "yuv420p10le"}, // 10-bit H.264 does not play in browsers
+		{Type: "video", Codec: "mpeg4", PixFmt: "yuv420p"},
+	} {
+		p, err := MakePlan(Source{Streams: []Stream{v}}, "x")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.CopyVideo {
+			t.Errorf("%s/%s should be re-encoded", v.Codec, v.PixFmt)
+		}
+		if args := strings.Join(p.ConvertArgs("i", "o"), " "); !strings.Contains(args, "-c:v libx264") || strings.Contains(args, "-disposition:a") {
+			t.Errorf("args for %s: %s", v.Codec, args)
+		}
+	}
+	if _, err := MakePlan(Source{Streams: []Stream{{Type: "audio", Codec: "aac"}}}, "x"); err == nil {
+		t.Error("a file without video should be refused")
+	}
+}

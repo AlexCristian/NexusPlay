@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/AlexCristian/NexusPlay/internal/config"
+	"github.com/AlexCristian/NexusPlay/internal/convert"
 	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
 	"github.com/AlexCristian/NexusPlay/internal/store"
@@ -26,6 +27,7 @@ type App struct {
 	Store      *store.Store
 	Scanner    *library.Scanner
 	Transcodes *stream.Manager
+	Converter  *convert.Converter // nil when NEXUSPLAY_CONVERT is off
 	Handler    http.Handler
 }
 
@@ -59,14 +61,26 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		st.Close()
 		return nil, fmt.Errorf("transcode folder: %w", err)
 	}
-	srv := &web.Server{Cfg: cfg, Store: st, Scanner: scanner, Meta: meta, Transcodes: transcodes, Log: log}
-	return &App{Cfg: cfg, Log: log, Store: st, Scanner: scanner, Transcodes: transcodes, Handler: srv.Handler()}, nil
+	var conv *convert.Converter
+	if cfg.Convert {
+		conv = &convert.Converter{
+			Store: st, Scanner: scanner, FFmpeg: cfg.FFmpegPath, FFprobe: cfg.FFprobePath,
+			MediaDir: cfg.MediaDir, Max: cfg.MaxConversions, Log: log.With("component", "convert"),
+		}
+		scanner.OnAdded = conv.Wake
+	}
+	srv := &web.Server{Cfg: cfg, Store: st, Scanner: scanner, Meta: meta, Transcodes: transcodes, Converter: conv, Log: log}
+	return &App{Cfg: cfg, Log: log, Store: st, Scanner: scanner, Transcodes: transcodes, Converter: conv, Handler: srv.Handler()}, nil
 }
 
-// Start runs the scanner, the transcode janitor and session cleanup until ctx ends.
+// Start runs the scanner, the transcode janitor, the converter and session
+// cleanup until ctx ends.
 func (a *App) Start(ctx context.Context) {
 	go a.Scanner.Run(ctx)
 	go a.Transcodes.Janitor(ctx)
+	if a.Converter != nil {
+		go a.Converter.Run(ctx)
+	}
 	go func() {
 		t := time.NewTicker(time.Hour)
 		defer t.Stop()

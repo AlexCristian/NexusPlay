@@ -9,8 +9,10 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      # Your videos. Read-only: NexusPlay never modifies the media folder.
-      - ./media:/media:ro
+      # Your videos. Writable, because files that are not browser-ready MP4s are
+      # converted and the originals DELETED. Add :ro (or set NEXUSPLAY_CONVERT=false)
+      # to keep originals untouched; those files then play through on-the-fly HLS.
+      - ./media:/media
       # Database, posters and transcode scratch space.
       - nexusplay-data:/data
     environment:
@@ -18,6 +20,10 @@ services:
       NEXUSPLAY_TMDB_API_KEY: ${NEXUSPLAY_TMDB_API_KEY:-}
       # Set to "true" to hide the library from visitors who are not signed in.
       NEXUSPLAY_REQUIRE_LOGIN: ${NEXUSPLAY_REQUIRE_LOGIN:-false}
+      # Convert non-MP4 videos in the background and delete the originals.
+      NEXUSPLAY_CONVERT: ${NEXUSPLAY_CONVERT:-true}
+      # How many files to convert at the same time.
+      NEXUSPLAY_MAX_CONVERSIONS: ${NEXUSPLAY_MAX_CONVERSIONS:-1}
       # Set to "true" when serving over HTTPS (behind a reverse proxy).
       NEXUSPLAY_SECURE_COOKIES: ${NEXUSPLAY_SECURE_COOKIES:-false}
 

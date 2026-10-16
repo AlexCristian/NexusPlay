@@ -444,6 +444,12 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visib
 .inline-fields { display: flex; gap: 8px; align-items: center; }
 .inline-fields input { max-width: 200px; }
 .upload-sub { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e3e3e3; }
+.conversions h3 { font-size: 1rem; margin: 16px 0 4px; }
+.convert-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 8px; }
+.convert-list li { display: grid; grid-template-columns: minmax(0, 1fr) 160px 3.5em; gap: 12px; align-items: center; }
+.convert-list progress { width: 100%; accent-color: var(--red); }
+.convert-pct { text-align: right; font-variant-numeric: tabular-nums; font-size: .9rem; color: #555; }
+.convert-error { color: #8a1c00; }
 .danger-zone { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e3e3e3; }
 code { font-size: .9em; background: #f1f1f1; padding: 1px 4px; border-radius: 3px; }
 
@@ -459,6 +465,8 @@ code { font-size: .9em; background: #f1f1f1; padding: 1px 4px; border-radius: 3p
   .metadata, .edit-layout { flex-direction: column; }
   .edit-poster { width: 100px; }
   .inline-fields { flex-wrap: wrap; }
+  .convert-list li { grid-template-columns: minmax(0, 1fr) 3.5em; }
+  .convert-list progress { grid-column: 1 / -1; grid-row: 2; }
 }
 
 @media (prefers-reduced-motion: reduce) {

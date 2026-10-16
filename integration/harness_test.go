@@ -41,12 +41,14 @@ var fixtureDir string
 
 // Fixture paths, relative to the media folder.
 const (
-	movieMP4   = "Movies/The Test Movie (2020).mp4"    // H.264/AAC MP4: plays directly
-	movieSRT   = "Movies/The Test Movie (2020).en.srt" // sidecar subtitles
-	movieAVI   = "Movies/Old Format Movie (1999).avi"  // MPEG-4 Part 2/MP3: needs a full transcode
-	episode1   = "Test Show (2019)/Season 1/Test.Show.S01E01.Pilot.mkv"
-	episode2   = "Test Show (2019)/Season 1/Test.Show.S01E02.The.Second.One.mkv"
-	episode3   = "Test Show (2019)/Season 2/Test.Show.S02E01.mp4"
+	movieMP4 = "Movies/The Test Movie (2020).mp4"    // H.264/AAC MP4: plays directly
+	movieSRT = "Movies/The Test Movie (2020).en.srt" // sidecar subtitles
+	movieAVI = "Movies/Old Format Movie (1999).avi"  // MPEG-4 Part 2/MP3: needs a full transcode
+	episode1 = "Test Show (2019)/Season 1/Test.Show.S01E01.Pilot.mkv"
+	episode2 = "Test Show (2019)/Season 1/Test.Show.S01E02.The.Second.One.mkv"
+	episode3 = "Test Show (2019)/Season 2/Test.Show.S02E01.mp4"
+	// French 5.1 AC-3 and English stereo AAC, plus a built-in English subtitle track.
+	multiTrack = "Movies/Multi Language (2018).mkv"
 	fixtureLen = "12" // seconds
 )
 
@@ -96,6 +98,21 @@ func makeFixtures(dir string) error {
 		{episode3, []string{"-f", "lavfi", "-i", "testsrc=size=640x360:rate=25", "-f", "lavfi", "-i", "sine=frequency=770",
 			"-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart"}},
 	}
+	embedded := filepath.Join(dir, ".embedded.srt")
+	if err := os.WriteFile(embedded, []byte("1\n00:00:01,000 --> 00:00:03,000\nBuilt-in line\n"), 0o644); err != nil {
+		return err
+	}
+	defer os.Remove(embedded)
+	videos = append(videos, struct {
+		path string
+		args []string
+	}{multiTrack, []string{"-f", "lavfi", "-i", "testsrc=size=640x360:rate=25", "-f", "lavfi", "-i", "sine=frequency=440",
+		"-f", "lavfi", "-i", "sine=frequency=880", "-i", embedded,
+		"-map", "0:v", "-map", "1:a", "-map", "2:a", "-map", "3:s",
+		"-c:v", "libx264", "-pix_fmt", "yuv420p",
+		"-c:a:0", "ac3", "-ac:a:0", "6", "-c:a:1", "aac", "-ac:a:1", "2", "-c:s", "srt",
+		"-metadata:s:a:0", "language=fre", "-metadata:s:a:1", "language=eng", "-metadata:s:s:0", "language=eng",
+		"-disposition:a:0", "0", "-disposition:a:1", "default"}})
 	for _, v := range videos {
 		out := filepath.Join(dir, filepath.FromSlash(v.path))
 		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
@@ -146,6 +163,7 @@ type serverOpts struct {
 	media         []string // fixtures to put in the media folder
 	maxTranscodes int
 	ffmpeg        string // override the ffmpeg binary
+	convert       bool   // run the background MP4 converter
 }
 
 func startServer(t *testing.T, o serverOpts) *server {
@@ -166,6 +184,7 @@ func startServer(t *testing.T, o serverOpts) *server {
 		MediaDir: media, DataDir: filepath.Join(dir, "data"),
 		ScanInterval: time.Hour, VotesRequired: 2, MaxTranscodes: o.maxTranscodes,
 		FFmpegPath: o.ffmpeg, FFprobePath: "ffprobe",
+		Convert: o.convert, MaxConversions: 1,
 	}
 	logw := io.Discard
 	if os.Getenv("NEXUSPLAY_TEST_LOG") != "" {

@@ -18,6 +18,7 @@ import (
 
 	"github.com/AlexCristian/NexusPlay/internal/auth"
 	"github.com/AlexCristian/NexusPlay/internal/config"
+	"github.com/AlexCristian/NexusPlay/internal/convert"
 	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
 	"github.com/AlexCristian/NexusPlay/internal/store"
@@ -38,6 +39,7 @@ type Server struct {
 	Scanner    *library.Scanner
 	Meta       *metadata.Client
 	Transcodes *stream.Manager
+	Converter  *convert.Converter // nil when conversion is turned off
 	Log        *slog.Logger
 }
 
@@ -104,6 +106,8 @@ func (s *Server) Handler() http.Handler {
 	// Administration.
 	mux.Handle("GET /admin", s.admin(s.controlPanel))
 	mux.Handle("POST /admin/scan", s.admin(s.scanNow))
+	mux.Handle("GET /admin/conversions", s.admin(s.conversionsPanel))
+	mux.Handle("POST /admin/media/{id}/retry-conversion", s.admin(s.retryConversion))
 	mux.Handle("GET /admin/media/{id}", s.admin(s.editMediaPage))
 	mux.Handle("POST /admin/media/{id}", s.admin(s.saveMedia))
 	mux.Handle("POST /admin/media/{id}/subtitles", s.admin(s.uploadSubtitle))

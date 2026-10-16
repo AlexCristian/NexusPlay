@@ -1,0 +1,82 @@
+package web
+
+import (
+	"strconv"
+
+	"github.com/AlexCristian/NexusPlay/internal/convert"
+	"github.com/AlexCristian/NexusPlay/internal/store"
+)
+
+// ConversionView is the control panel's view of the conversion queue.
+type ConversionView struct {
+	Enabled  bool
+	Status   convert.Status
+	Failures []store.ConversionFailure
+}
+
+// conversionsSection refreshes itself every few seconds while work is running.
+templ conversionsSection(csrf string, v ConversionView) {
+	<section
+		id="conversions"
+		class="conversions"
+		if v.Enabled && (len(v.Status.Active) > 0 || v.Status.Queued > 0) {
+			hx-get="/admin/conversions"
+			hx-trigger="every 3s"
+			hx-swap="outerHTML"
+		}
+	>
+		<h2>Conversion to MP4</h2>
+		switch {
+			case !v.Enabled:
+				<p class="muted">Off. Set NEXUSPLAY_CONVERT=true to convert files browsers cannot play to MP4 and delete the originals.</p>
+			case v.Status.Disabled != "":
+				@alert("error", v.Status.Disabled)
+			case len(v.Status.Active) == 0 && v.Status.Queued == 0 && len(v.Failures) > 0:
+				<p class="muted">Nothing is converting. The files below need attention.</p>
+			case len(v.Status.Active) == 0 && v.Status.Queued == 0:
+				<p class="muted">Every file is a browser-ready MP4. New files in other formats are converted as soon as they are found, and the originals deleted.</p>
+			default:
+				<ul class="convert-list">
+					for _, j := range v.Status.Active {
+						<li>
+							<span class="path">{ j.Media.Path }</span>
+							<progress max="100" value={ strconv.Itoa(j.Percent) } aria-label={ "Converting " + j.Media.Title }></progress>
+							<span class="convert-pct">{ strconv.Itoa(j.Percent) }%</span>
+						</li>
+					}
+				</ul>
+				if v.Status.Queued > 0 {
+					<p class="muted">{ queuedLabel(v.Status.Queued) } waiting. Originals are deleted once their MP4 is checked.</p>
+				}
+		}
+		if len(v.Failures) > 0 {
+			<h3>Could not convert</h3>
+			<table class="admin-table">
+				<tbody>
+					for _, f := range v.Failures {
+						<tr>
+							<td>
+								<span class="path">{ f.Media.Path }</span>
+								<br/>
+								<small class="convert-error">{ f.Error }</small>
+							</td>
+							<td>
+								<form method="post" action={ templ.SafeURL("/admin/media/" + itoa(f.Media.ID) + "/retry-conversion") }>
+									<input type="hidden" name="csrf_token" value={ csrf }/>
+									<button type="submit" class="button button-small">Retry</button>
+								</form>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</section>
+}
+
+func queuedLabel(n int) string {
+	if n == 1 {
+		return "1 more file"
+	}
+	return strconv.Itoa(n) + " more files"
+}

@@ -32,6 +32,8 @@ type Scanner struct {
 	MediaDir string
 	Interval time.Duration
 	Log      *slog.Logger
+	// OnAdded, if set, is called after a scan that found new media.
+	OnAdded func()
 
 	trigger chan struct{}
 	scanMu  sync.Mutex
@@ -130,6 +132,17 @@ func (s *Scanner) runScan(ctx context.Context, debounce *time.Timer) {
 	if res.Waiting > 0 {
 		debounce.Reset(settleTime + 5*time.Second)
 	}
+	if res.Added > 0 && s.OnAdded != nil {
+		s.OnAdded()
+	}
+}
+
+// Exclusive runs fn while no scan is in progress. The converter uses it to
+// swap a file and its database row without a scan seeing half the change.
+func (s *Scanner) Exclusive(fn func() error) error {
+	s.scanMu.Lock()
+	defer s.scanMu.Unlock()
+	return fn()
 }
 
 type found struct {

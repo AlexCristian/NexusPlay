@@ -6,7 +6,7 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-templ controlPanel(p Page, pending []store.Media, collections []store.Collection, categories []string, metaEnabled bool, msg string) {
+templ controlPanel(p Page, pending []store.Media, collections []store.Collection, categories []string, metaEnabled bool, conv ConversionView, msg string) {
 	@shell(p) {
 		<section class="panel admin">
 			<header class="admin-header">
@@ -44,6 +44,7 @@ templ controlPanel(p Page, pending []store.Media, collections []store.Collection
 					</tbody>
 				</table>
 			}
+			@conversionsSection(p.V.CSRF, conv)
 			<h2>Collections</h2>
 			if len(collections) > 0 {
 				<table class="admin-table">

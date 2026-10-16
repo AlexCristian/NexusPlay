@@ -37,6 +37,11 @@ func (s *Server) controlPanel(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	conv, err := s.conversionView(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	msg := ""
 	switch r.URL.Query().Get("done") {
 	case "scan":
@@ -45,8 +50,48 @@ func (s *Server) controlPanel(w http.ResponseWriter, r *http.Request) {
 		msg = "Published."
 	case "deleted":
 		msg = "Collection deleted."
+	case "retry":
+		msg = "Queued for another conversion attempt."
 	}
-	s.render(w, r, http.StatusOK, controlPanel(s.page(r, "Control panel"), pending, colls, cats, s.Meta.Enabled(), msg))
+	s.render(w, r, http.StatusOK, controlPanel(s.page(r, "Control panel"), pending, colls, cats, s.Meta.Enabled(), conv, msg))
+}
+
+func (s *Server) conversionView(ctx context.Context) (ConversionView, error) {
+	v := ConversionView{Enabled: s.Converter != nil}
+	var err error
+	if v.Enabled {
+		if v.Status, err = s.Converter.Status(ctx); err != nil {
+			return v, err
+		}
+	}
+	v.Failures, err = s.Store.ConversionFailures(ctx)
+	return v, err
+}
+
+// conversionsPanel is polled by the control panel while conversions run.
+func (s *Server) conversionsPanel(w http.ResponseWriter, r *http.Request) {
+	v, err := s.conversionView(r.Context())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, conversionsSection(viewer(r).CSRF, v))
+}
+
+func (s *Server) retryConversion(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r)
+	if !ok {
+		s.notFound(w, r)
+		return
+	}
+	if err := s.Store.RetryConversion(r.Context(), id); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if s.Converter != nil {
+		s.Converter.Wake()
+	}
+	http.Redirect(w, r, "/admin?done=retry", http.StatusSeeOther)
 }
 
 func (s *Server) scanNow(w http.ResponseWriter, r *http.Request) {
