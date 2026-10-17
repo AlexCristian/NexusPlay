@@ -171,12 +171,22 @@ func (s *Scanner) Scan(ctx context.Context) (Result, error) {
 
 	var videos []found
 	subsByDir := map[string][]string{}
+	// unreadable lists paths (relative, slash-separated) that could not be
+	// read. Their rows are kept: a folder that fails to list on a flaky
+	// network share must not look like a folder whose files were deleted.
+	var unreadable []string
+	markUnreadable := func(p string, err error) {
+		s.Log.Warn("skipping unreadable path; its library entries are kept", "path", p, "err", err)
+		if rel, relErr := filepath.Rel(s.MediaDir, p); relErr == nil {
+			unreadable = append(unreadable, filepath.ToSlash(rel))
+		}
+	}
 	walkErr := filepath.WalkDir(s.MediaDir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if p == s.MediaDir {
 				return err
 			}
-			s.Log.Warn("skipping unreadable path", "path", p, "err", err)
+			markUnreadable(p, err)
 			return nil
 		}
 		if strings.HasPrefix(d.Name(), ".") && p != s.MediaDir {
@@ -187,12 +197,16 @@ func (s *Scanner) Scan(ctx context.Context) (Result, error) {
 		}
 		if d.IsDir() {
 			if s.watcher != nil {
-				_ = s.watcher.Add(p)
+				if err := s.watcher.Add(p); err != nil {
+					// Usually the inotify watch limit; periodic scans still work.
+					s.Log.Debug("not watching folder for changes", "path", p, "err", err)
+				}
 			}
 			return nil
 		}
 		rel, err := filepath.Rel(s.MediaDir, p)
 		if err != nil {
+			markUnreadable(p, err)
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
@@ -200,9 +214,11 @@ func (s *Scanner) Scan(ctx context.Context) (Result, error) {
 		switch {
 		case SupportedExtensions[ext]:
 			info, err := d.Info()
-			if err == nil {
-				videos = append(videos, found{rel: rel, abs: p, info: info})
+			if err != nil {
+				markUnreadable(p, err)
+				return nil
 			}
+			videos = append(videos, found{rel: rel, abs: p, info: info})
 		case ext == ".srt" || ext == ".vtt":
 			subsByDir[path.Dir(rel)] = append(subsByDir[path.Dir(rel)], rel)
 		}
@@ -241,16 +257,37 @@ func (s *Scanner) Scan(ctx context.Context) (Result, error) {
 		s.Log.Warn("media folder has no videos; skipping removals in case it is unmounted", "dir", s.MediaDir)
 		return res, nil
 	}
-	for p, id := range known {
-		if onDisk[p] {
-			continue
-		}
+	for _, id := range missingMedia(known, onDisk, unreadable) {
 		if err := s.Store.DeleteMedia(ctx, id); err != nil {
 			return res, err
 		}
 		res.Removed++
 	}
 	return res, nil
+}
+
+// missingMedia returns the IDs of known media whose files are gone: not seen
+// on disk, and not inside a path that could not be read (whose files may well
+// still exist).
+func missingMedia(known map[string]int64, onDisk map[string]bool, unreadable []string) []int64 {
+	var ids []int64
+	for p, id := range known {
+		if onDisk[p] || underAny(p, unreadable) {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// underAny reports whether p is one of roots or inside one of them.
+func underAny(p string, roots []string) bool {
+	for _, r := range roots {
+		if p == r || strings.HasPrefix(p, r+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Scanner) addMedia(ctx context.Context, v found) (int64, error) {

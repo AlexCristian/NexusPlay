@@ -94,3 +94,44 @@ func TestScan(t *testing.T) {
 		t.Errorf("empty media folder removed %d items", res.Removed)
 	}
 }
+
+// A folder that cannot be read (a flaky network share, wrong permissions)
+// must not make its videos disappear from the library.
+func TestScanKeepsMediaInUnreadableFolders(t *testing.T) {
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		t.Skip("ffmpeg/ffprobe not installed")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
+	}
+	ctx := context.Background()
+	dir := t.TempDir()
+	media := filepath.Join(dir, "media")
+	st, err := store.Open(ctx, filepath.Join(dir, "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	makeVideo(t, filepath.Join(media, "Movies", "Alien (1979).mp4"))
+	makeVideo(t, filepath.Join(media, "Share", "Cosmos.S01E01.mp4"))
+	sc := &Scanner{Store: st, Prober: Prober{Path: "ffprobe"}, MediaDir: media, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	if res, err := sc.Scan(ctx); err != nil || res.Added != 2 {
+		t.Fatalf("first scan = %+v, %v", res, err)
+	}
+
+	share := filepath.Join(media, "Share")
+	if err := os.Chmod(share, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(share, 0o755) })
+	res, err := sc.Scan(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Removed != 0 {
+		t.Errorf("an unreadable folder removed %d items", res.Removed)
+	}
+	if paths, _ := st.MediaPaths(ctx); len(paths) != 2 {
+		t.Errorf("library = %v, want both items kept", paths)
+	}
+}
