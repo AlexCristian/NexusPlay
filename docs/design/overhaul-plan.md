@@ -264,7 +264,7 @@ Every production function over 40 lines, and its split:
    - goroutines and locks; shutdown order
    - the data model: why media IDs survive conversion, why emails, nicknames and collection names use `COLLATE NOCASE`, what each `ON DELETE CASCADE` removes, how vote thresholds replace a line
    - the HTTP layer: routes, guards, middleware order, error mapping, CSRF
-   - playback policy, HLS event playlists, and why H.264 video is copied (`-c:v copy`) while audio is always re-encoded
+   - playback policy, HLS event playlists, and why H.264 video is copied (`-c:v copy`) (AAC audio is copied too; other audio becomes stereo AAC)
    - safety invariants; error conventions; testing; how to add a feature
 2. Package docs rewritten to say what each owns and what it must not do.
 3. Full "why" comments on: the converter commit, the CSRF model (done in the D8 change), HLS event playlists, the scan lock, the two "finished" rules (the player on `ended`, the server at 95%), and the `hx-headers` ↔ `player.js` CSRF coupling.
@@ -329,7 +329,7 @@ Each step compiles, keeps `go vet`, `go test -race ./...` and the integration su
 
 **Phase 6: documentation.**
 
-31. `ARCHITECTURE.md`, package docs, why-comments, error contracts and handler lines (section 6). Written last, so it describes the final code. Each earlier step still documents what it adds.
+31. **(done)** `ARCHITECTURE.md`, package docs, why-comments, error contracts and handler lines (section 6). Written last, so it describes the final code. Each earlier step still documents what it adds.
 
 **Phase 7 (optional):** move the web feature groups into subpackages once their boundaries have held for a while.
 

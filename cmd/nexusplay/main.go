@@ -1,4 +1,9 @@
-// Command nexusplay runs the NexusPlay media server.
+// Command nexusplay runs the NexusPlay media server. It reads the
+// configuration from NEXUSPLAY_* environment variables (see package config),
+// then hands everything else to package app.
+//
+// "nexusplay healthcheck" asks a running server's /healthz and exits 0 if it
+// answers; the container image uses it because it has no curl.
 package main
 
 import (

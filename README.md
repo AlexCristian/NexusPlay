@@ -190,6 +190,9 @@ media/
 Development
 -----------
 
+[ARCHITECTURE.md](ARCHITECTURE.md) maps the code: the packages, the life of a file from
+scan to playback, locking and shutdown, and the safety rules the converter follows.
+
 The UI is server-rendered with [templ](https://templ.guide) and [htmx](https://htmx.org).
 After editing a `.templ` file, regenerate the Go code:
 
