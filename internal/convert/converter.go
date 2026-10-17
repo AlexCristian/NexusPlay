@@ -213,6 +213,9 @@ func (c *Converter) runJob(ctx context.Context, j *job) {
 	switch {
 	case ctx.Err() != nil:
 		c.Log.Info("conversion stopped by shutdown; it will restart", "path", m.Path)
+	case errors.Is(err, ErrSourceChanged):
+		// Not a failure: the next scan decides what the row is now.
+		c.Log.Info("conversion discarded; the file changed while converting", "path", m.Path)
 	case errors.Is(err, errNoSpace):
 		c.mu.Lock()
 		c.waitUntil[m.ID] = c.now().Add(noSpaceRetry)
@@ -263,7 +266,7 @@ func (c *Converter) convert(ctx context.Context, j *job) (string, error) {
 	target := filepath.Join(dir, base+".mp4")
 	if target != src {
 		if _, err := os.Lstat(target); err == nil {
-			return "", fmt.Errorf("%s already exists next to the original; rename one of them", filepath.Base(target))
+			return "", fmt.Errorf("%s: %w; rename one of them", filepath.Base(target), ErrTargetExists)
 		}
 	}
 
@@ -302,33 +305,90 @@ func (c *Converter) exclusive(fn func() error) error {
 	return c.Scanner.Exclusive(fn)
 }
 
-// swap puts the converted file in place, updates the database and deletes
-// the original. Until the database update succeeds, the original is untouched
-// (or, for a same-name MP4, replaced only by an already verified file).
+// Errors swap returns for situations that are not conversion failures.
+var (
+	// ErrTargetExists means a file already sits at the MP4's name, for
+	// example one the user added while the conversion ran. It is never
+	// overwritten.
+	ErrTargetExists = errors.New("a file with the converted file's name already exists")
+	// ErrSourceChanged means the media row no longer points at the file that
+	// was converted (a rescan replaced or removed it).
+	ErrSourceChanged = errors.New("the file changed in the library while it was being converted")
+)
+
+// swap makes the verified MP4 the library's copy of the media. The order of
+// the steps is what keeps a file from ever being lost:
+//
+//  1. Put tmp at target. For a same-name MP4 (wrong codecs inside) this is a
+//     rename, which atomically replaces the original, so the file is never
+//     missing. For a different name (Movie.mkv -> Movie.mp4) it is a
+//     no-overwrite move: if anything appeared at target meanwhile, swap stops
+//     with ErrTargetExists and touches nothing.
+//  2. Point the media row at target. If this fails and the names differ, the
+//     file placed in step 1 (which this job created) is removed and the
+//     original is untouched. If the names are the same, the converted file
+//     stays; the row keeps the old codecs, the job is recorded as failed, and
+//     Retry in the control panel simply remuxes it.
+//  3. Delete the original. Failing here only leaves a stray file behind; the
+//     library is already correct.
+//
+// swap runs under Scanner.Exclusive, so no scan sees the state between steps
+// 1 and 2, and ignores cancellation: a half-finished swap is worse than a slow
+// shutdown.
 func (c *Converter) swap(ctx context.Context, m store.Media, src, tmp, target string, result store.ReplacedFile) error {
-	ctx = context.WithoutCancel(ctx) // a half-finished swap is worse than a slow shutdown
+	ctx = context.WithoutCancel(ctx)
 	cur, err := c.Store.MediaByID(ctx, m.ID)
-	if err != nil || cur.Path != m.Path {
-		return fmt.Errorf("the file changed in the library while it was being converted")
+	if err != nil {
+		return fmt.Errorf("re-reading media %d: %w", m.ID, err)
 	}
-	// rename replaces an existing file atomically, so a same-name MP4 is
-	// never missing, even for a moment.
-	if err := os.Rename(tmp, target); err != nil {
-		return fmt.Errorf("putting the converted file in place: %w", err)
+	if cur.Path != m.Path {
+		return ErrSourceChanged
+	}
+	sameName := target == src
+	if sameName {
+		if err := os.Rename(tmp, target); err != nil {
+			return fmt.Errorf("putting the converted file in place: %w", err)
+		}
+	} else if err := moveNoReplace(tmp, target); err != nil {
+		return err
 	}
 	if err := c.Store.ReplaceMediaFile(ctx, m.ID, result); err != nil {
-		if target != src {
-			os.Remove(target) // the original is still there; try again later
+		if !sameName {
+			if rmErr := os.Remove(target); rmErr != nil {
+				c.Log.Error("could not remove the converted file after a failed update", "path", target, "err", rmErr)
+			}
 		}
-		// For a same-name file the converted MP4 stays; the row keeps the old
-		// codecs, so the file is checked again and simply remuxed.
 		return fmt.Errorf("updating the library: %w", err)
 	}
-	if target != src {
+	if !sameName {
 		if err := os.Remove(src); err != nil {
-			// The MP4 is in place and in the library; only the original lingers.
 			c.Log.Error("could not delete the original; delete it by hand", "path", src, "err", err)
 		}
+	}
+	return nil
+}
+
+// moveNoReplace moves tmp to target only if nothing exists at target. A hard
+// link fails atomically when target exists, unlike rename, which would
+// replace it. On file systems without hard links (FAT, some network shares)
+// it falls back to checking first, which is safe here because the caller
+// holds the scan lock and the scanner never creates files.
+func moveNoReplace(tmp, target string) error {
+	err := os.Link(tmp, target)
+	switch {
+	case err == nil:
+		if err := os.Remove(tmp); err != nil {
+			return fmt.Errorf("removing the temporary file: %w", err)
+		}
+		return nil
+	case errors.Is(err, fs.ErrExist):
+		return fmt.Errorf("%s: %w; rename one of them", filepath.Base(target), ErrTargetExists)
+	}
+	if _, statErr := os.Lstat(target); statErr == nil {
+		return fmt.Errorf("%s: %w; rename one of them", filepath.Base(target), ErrTargetExists)
+	}
+	if err := os.Rename(tmp, target); err != nil {
+		return fmt.Errorf("putting the converted file in place: %w", err)
 	}
 	return nil
 }
@@ -369,6 +429,10 @@ func (c *Converter) runFFmpeg(ctx context.Context, j *job, args []string) error 
 
 func (c *Converter) extractSubtitle(ctx context.Context, src, dir string, sp SubtitlePlan) error {
 	out := filepath.Join(dir, sp.File)
+	// Defence in depth on top of safeLanguage: sidecars live next to the video.
+	if filepath.Dir(out) != filepath.Clean(dir) {
+		return fmt.Errorf("refusing to write subtitle %q outside the video's folder", sp.File)
+	}
 	if _, err := os.Lstat(out); err == nil {
 		return nil // keep an existing file of the same name
 	}
