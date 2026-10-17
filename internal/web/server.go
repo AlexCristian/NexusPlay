@@ -127,12 +127,16 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { s.notFound(w, r) })
 
-	var h http.Handler = mux
-	h = s.csrf(h)
-	h = s.session(h)
-	h = securityHeaders(h)
-	h = s.recoverer(h)
-	h = s.logRequests(h)
+	// Outermost first: each request is logged, recovered from panics, given
+	// security headers, then its session, then checked for CSRF.
+	return chain(mux, s.logRequests, s.recoverer, securityHeaders, s.session, s.csrf)
+}
+
+// chain wraps h in middleware, the first outermost.
+func chain(h http.Handler, middleware ...func(http.Handler) http.Handler) http.Handler {
+	for i := len(middleware) - 1; i >= 0; i-- {
+		h = middleware[i](h)
+	}
 	return h
 }
 

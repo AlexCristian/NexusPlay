@@ -166,7 +166,7 @@ All settings are environment variables.
 | `NEXUSPLAY_REQUIRE_LOGIN` | `false` | Hide the library from visitors who are not signed in |
 | `NEXUSPLAY_SECURE_COOKIES` | `false` | Set to `true` when serving over HTTPS |
 | `NEXUSPLAY_FFMPEG`, `NEXUSPLAY_FFPROBE` | `ffmpeg`, `ffprobe` | Paths to the ffmpeg tools |
-| `NEXUSPLAY_DEBUG` | (empty) | Set to anything to log every request |
+| `NEXUSPLAY_DEBUG` | `false` | `true` logs every request |
 
 If you expose Nexus Play to the internet, put it behind a reverse proxy that terminates HTTPS
 (Caddy, nginx, Traefik), and set `NEXUSPLAY_SECURE_COOKIES=true`. Consider

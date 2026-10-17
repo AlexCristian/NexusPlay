@@ -32,59 +32,70 @@ func Parse(data []byte) ([]Cue, error) {
 	text := strings.ReplaceAll(string(data), "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 
-	var cues []Cue
 	sc := bufio.NewScanner(strings.NewReader(text))
 	sc.Buffer(make([]byte, 64*1024), 1024*1024)
-	var cur *Cue
-	var lines []string
-	inNote := false
-	flush := func() {
-		if cur != nil {
-			cur.Text = strings.TrimSpace(strings.Join(lines, "\n"))
-			if cur.Text != "" {
-				cues = append(cues, *cur)
-			}
-		}
-		cur, lines = nil, nil
-	}
+	var p parser
 	for sc.Scan() {
-		line := sc.Text()
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			flush()
-			inNote = false
-			continue
+		if err := p.line(sc.Text()); err != nil {
+			return nil, err
 		}
-		if inNote {
-			continue
-		}
-		if cur == nil {
-			if strings.HasPrefix(trimmed, "WEBVTT") || strings.HasPrefix(trimmed, "STYLE") || strings.HasPrefix(trimmed, "REGION") || strings.HasPrefix(trimmed, "NOTE") {
-				inNote = true
-				continue
-			}
-			if strings.Contains(trimmed, "-->") {
-				start, end, err := parseTiming(trimmed)
-				if err != nil {
-					return nil, err
-				}
-				cur = &Cue{StartMS: start, EndMS: end}
-			}
-			// Otherwise it is a cue identifier (an SRT index or VTT id): skip it.
-			continue
-		}
-		lines = append(lines, line)
 	}
-	flush()
+	p.flush()
 	if err := sc.Err(); err != nil {
 		return nil, err
 	}
-	if len(cues) == 0 {
+	if len(p.cues) == 0 {
 		return nil, ErrNoCues
 	}
-	return cues, nil
+	return p.cues, nil
 }
 
+// parser reads SRT and WebVTT a line at a time. Both formats are blocks
+// separated by blank lines; a cue block is an optional identifier, a timing
+// line and the text.
+type parser struct {
+	cues   []Cue
+	cur    *Cue     // the cue being read, once its timing line is seen
+	text   []string // its text lines so far
+	inNote bool     // inside a WebVTT header, NOTE, STYLE or REGION block
+}
+
+func (p *parser) line(line string) error {
+	trimmed := strings.TrimSpace(line)
+	switch {
+	case trimmed == "":
+		p.flush()
+		p.inNote = false
+	case p.inNote:
+	case p.cur != nil:
+		p.text = append(p.text, line)
+	case strings.HasPrefix(trimmed, "WEBVTT"), strings.HasPrefix(trimmed, "STYLE"),
+		strings.HasPrefix(trimmed, "REGION"), strings.HasPrefix(trimmed, "NOTE"):
+		p.inNote = true
+	case strings.Contains(trimmed, "-->"):
+		start, end, err := parseTiming(trimmed)
+		if err != nil {
+			return err
+		}
+		p.cur = &Cue{StartMS: start, EndMS: end}
+	default:
+		// A cue identifier (an SRT index or VTT id): skip it.
+	}
+	return nil
+}
+
+// flush ends the current block, keeping its cue if it has text.
+func (p *parser) flush() {
+	if p.cur != nil {
+		p.cur.Text = strings.TrimSpace(strings.Join(p.text, "\n"))
+		if p.cur.Text != "" {
+			p.cues = append(p.cues, *p.cur)
+		}
+	}
+	p.cur, p.text = nil, nil
+}
+
+// parseTiming reads a "start --> end [settings]" line.
 func parseTiming(line string) (int64, int64, error) {
 	parts := strings.SplitN(line, "-->", 2)
 	start, err := parseTimestamp(strings.TrimSpace(parts[0]))

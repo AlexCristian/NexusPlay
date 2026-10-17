@@ -151,24 +151,40 @@ func (s *Scanner) Run(ctx context.Context) error {
 		case ev, ok := <-events:
 			if !ok {
 				events = nil
-			} else if !ev.Has(fsnotify.Chmod) || ev.Has(fsnotify.Write) {
-				soon.Reset(5 * time.Second)
+			} else {
+				s.onEvent(ev, soon)
 			}
 			continue
 		case err, ok := <-errs:
 			if !ok {
 				errs = nil
-			} else if errors.Is(err, fsnotify.ErrEventOverflow) {
-				// Changes were lost: only a full scan can catch up.
-				s.deps.Log.Info("too many filesystem changes at once; rescanning")
-				soon.Reset(time.Second)
 			} else {
-				s.deps.Log.Warn("filesystem watcher", "err", err)
+				s.onWatchError(err, soon)
 			}
 			continue
 		}
 		s.scanOnce(ctx, watcher, soon)
 	}
+}
+
+// onEvent schedules a scan a few seconds after a change in the media
+// folder, so a burst of changes (a file being copied in) causes one scan.
+// Permission changes alone are ignored.
+func (s *Scanner) onEvent(ev fsnotify.Event, soon *time.Timer) {
+	if !ev.Has(fsnotify.Chmod) || ev.Has(fsnotify.Write) {
+		soon.Reset(5 * time.Second)
+	}
+}
+
+// onWatchError handles a watcher error. An overflow means changes were
+// lost, and only a full scan can catch up.
+func (s *Scanner) onWatchError(err error, soon *time.Timer) {
+	if errors.Is(err, fsnotify.ErrEventOverflow) {
+		s.deps.Log.Info("too many filesystem changes at once; rescanning")
+		soon.Reset(time.Second)
+		return
+	}
+	s.deps.Log.Warn("filesystem watcher", "err", err)
 }
 
 // scanOnce runs one scan for Run and acts on its result.

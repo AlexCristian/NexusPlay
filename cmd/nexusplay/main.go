@@ -20,22 +20,23 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		os.Exit(healthcheck())
 	}
-	level := slog.LevelInfo
-	if os.Getenv("NEXUSPLAY_DEBUG") != "" {
-		level = slog.LevelDebug
-	}
-	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
-	if err := run(log); err != nil {
-		log.Error("fatal", "err", err)
+	if err := run(); err != nil {
+		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run(log *slog.Logger) error {
+func run() error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
+	level := slog.LevelInfo
+	if cfg.Debug {
+		level = slog.LevelDebug
+	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+	slog.SetDefault(log)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

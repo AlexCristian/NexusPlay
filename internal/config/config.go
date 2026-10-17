@@ -25,6 +25,7 @@ type Config struct {
 	SecureCookies bool          // NEXUSPLAY_SECURE_COOKIES
 	FFmpegPath    string        // NEXUSPLAY_FFMPEG
 	FFprobePath   string        // NEXUSPLAY_FFPROBE
+	Debug         bool          // NEXUSPLAY_DEBUG: log every request
 
 	// Convert turns every file that is not a browser-ready MP4 into one in
 	// the background, then deletes the original.
@@ -57,56 +58,13 @@ func Load() (Config, error) { return LoadFrom(os.Getenv) }
 func LoadFrom(getenv func(string) string) (Config, error) {
 	c := Defaults()
 	var errs []error
-	str := func(key string, dst *string) {
-		if v := getenv(key); v != "" {
-			*dst = v
-		}
-	}
-	num := func(key string, dst *int) {
-		if v := getenv(key); v != "" {
-			n, err := strconv.Atoi(v)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %q is not a whole number", key, v))
-				return
+	for _, v := range c.variables() {
+		if s := getenv(v.name); s != "" {
+			if err := v.set(s); err != nil {
+				errs = append(errs, fmt.Errorf("%s: %q %v", v.name, s, err))
 			}
-			*dst = n
 		}
 	}
-	flag := func(key string, dst *bool) {
-		if v := getenv(key); v != "" {
-			b, err := strconv.ParseBool(v)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %q is not true or false", key, v))
-				return
-			}
-			*dst = b
-		}
-	}
-	duration := func(key string, dst *time.Duration) {
-		if v := getenv(key); v != "" {
-			d, err := time.ParseDuration(v)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %q is not a duration such as 5m or 1h", key, v))
-				return
-			}
-			*dst = d
-		}
-	}
-
-	str("NEXUSPLAY_ADDR", &c.Addr)
-	str("NEXUSPLAY_MEDIA_DIR", &c.MediaDir)
-	str("NEXUSPLAY_DATA_DIR", &c.DataDir)
-	str("NEXUSPLAY_TMDB_API_KEY", &c.TMDBAPIKey)
-	str("NEXUSPLAY_FFMPEG", &c.FFmpegPath)
-	str("NEXUSPLAY_FFPROBE", &c.FFprobePath)
-	duration("NEXUSPLAY_SCAN_INTERVAL", &c.ScanInterval)
-	num("NEXUSPLAY_VOTES_REQUIRED", &c.VotesRequired)
-	num("NEXUSPLAY_MAX_TRANSCODES", &c.MaxTranscodes)
-	num("NEXUSPLAY_MAX_CONVERSIONS", &c.MaxConversions)
-	flag("NEXUSPLAY_CONVERT", &c.Convert)
-	flag("NEXUSPLAY_REQUIRE_LOGIN", &c.RequireLogin)
-	flag("NEXUSPLAY_SECURE_COOKIES", &c.SecureCookies)
-
 	errs = append(errs, c.Validate())
 	if err := errors.Join(errs...); err != nil {
 		return c, err
@@ -119,6 +77,70 @@ func LoadFrom(getenv func(string) string) (Config, error) {
 		return c, err
 	}
 	return c, nil
+}
+
+// variable is one NEXUSPLAY_* setting: its name, and how to parse a value
+// into its field.
+type variable struct {
+	name string
+	set  func(string) error
+}
+
+// variables lists every setting read from the environment.
+func (c *Config) variables() []variable {
+	return []variable{
+		{"NEXUSPLAY_ADDR", text(&c.Addr)},
+		{"NEXUSPLAY_MEDIA_DIR", text(&c.MediaDir)},
+		{"NEXUSPLAY_DATA_DIR", text(&c.DataDir)},
+		{"NEXUSPLAY_TMDB_API_KEY", text(&c.TMDBAPIKey)},
+		{"NEXUSPLAY_FFMPEG", text(&c.FFmpegPath)},
+		{"NEXUSPLAY_FFPROBE", text(&c.FFprobePath)},
+		{"NEXUSPLAY_SCAN_INTERVAL", duration(&c.ScanInterval)},
+		{"NEXUSPLAY_VOTES_REQUIRED", number(&c.VotesRequired)},
+		{"NEXUSPLAY_MAX_TRANSCODES", number(&c.MaxTranscodes)},
+		{"NEXUSPLAY_MAX_CONVERSIONS", number(&c.MaxConversions)},
+		{"NEXUSPLAY_CONVERT", flag(&c.Convert)},
+		{"NEXUSPLAY_REQUIRE_LOGIN", flag(&c.RequireLogin)},
+		{"NEXUSPLAY_SECURE_COOKIES", flag(&c.SecureCookies)},
+		{"NEXUSPLAY_DEBUG", flag(&c.Debug)},
+	}
+}
+
+func text(dst *string) func(string) error {
+	return func(v string) error { *dst = v; return nil }
+}
+
+func number(dst *int) func(string) error {
+	return func(v string) error {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return errors.New("is not a whole number")
+		}
+		*dst = n
+		return nil
+	}
+}
+
+func flag(dst *bool) func(string) error {
+	return func(v string) error {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return errors.New("is not true or false")
+		}
+		*dst = b
+		return nil
+	}
+}
+
+func duration(dst *time.Duration) func(string) error {
+	return func(v string) error {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return errors.New("is not a duration such as 5m or 1h")
+		}
+		*dst = d
+		return nil
+	}
 }
 
 // Validate reports every setting that is out of range.
