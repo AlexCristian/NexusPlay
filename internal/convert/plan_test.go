@@ -103,3 +103,30 @@ func TestMakePlanReencodes(t *testing.T) {
 		t.Error("a file without video should be refused")
 	}
 }
+
+// Language tags come from the media file and are untrusted: they must never
+// steer the sidecar file outside the video's folder.
+func TestSubtitleNamesIgnoreHostileLanguageTags(t *testing.T) {
+	src := Source{Streams: []Stream{
+		{Index: 0, Type: "video", Codec: "h264", PixFmt: "yuv420p"},
+		{Index: 1, Type: "subtitle", Codec: "subrip", Language: "../../../../tmp/pwned"},
+		{Index: 2, Type: "subtitle", Codec: "subrip", Language: "EN"},
+		{Index: 3, Type: "subtitle", Codec: "subrip", Language: "pt-BR"},
+		{Index: 4, Type: "subtitle", Codec: "subrip", Language: "en/../x"},
+	}}
+	p, err := MakePlan(src, "Movie")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, s := range p.Subtitles {
+		if strings.ContainsAny(s.File, "/\\") {
+			t.Errorf("subtitle file name %q contains a path separator", s.File)
+		}
+		got = append(got, s.File)
+	}
+	want := []string{"Movie.und.srt", "Movie.en.srt", "Movie.pt-br.srt", "Movie.track2.und.srt"}
+	if !slices.Equal(got, want) {
+		t.Errorf("subtitle files = %v, want %v", got, want)
+	}
+}

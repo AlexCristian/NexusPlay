@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -154,10 +155,7 @@ func planAudio(s Stream) AudioPlan {
 func nameSubtitles(subs []SubtitlePlan, base string) {
 	seen := map[string]int{}
 	for i := range subs {
-		lang := subs[i].Stream.Language
-		if lang == "" {
-			lang = "und"
-		}
+		lang := safeLanguage(subs[i].Stream.Language)
 		seen[lang]++
 		name := base + "." + lang + ".srt"
 		if n := seen[lang]; n > 1 {
@@ -165,6 +163,22 @@ func nameSubtitles(subs []SubtitlePlan, base string) {
 		}
 		subs[i].File = name
 	}
+}
+
+// languageTag matches the language codes that go into sidecar file names:
+// ISO 639 codes such as "en", "eng" or "pt-br".
+var languageTag = regexp.MustCompile(`^[a-z]{2,3}(-[a-z0-9]{2,8})?$`)
+
+// safeLanguage returns the stream's language tag if it is a plain language
+// code, and "und" otherwise. The tag comes from the media file itself, so it
+// is untrusted: without this check a tag like "../../etc/x" would make the
+// sidecar path escape the video's folder.
+func safeLanguage(tag string) string {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if languageTag.MatchString(tag) {
+		return tag
+	}
+	return "und"
 }
 
 // ConvertArgs builds the ffmpeg command that writes the MP4.
