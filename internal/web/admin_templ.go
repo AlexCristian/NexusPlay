@@ -834,7 +834,7 @@ func editMediaPage(p Page, f MediaForm) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = posterField(f.Media.Poster, "Episodes use their collection's poster when they have none.").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = posterField(ownPoster(f.Media), "Episodes use their collection's poster when they have none.").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -425,3 +425,22 @@ func TestRecentTiles(t *testing.T) {
 		t.Errorf("limit 2 gave %d tiles", len(got))
 	}
 }
+
+// An episode without a poster shows its collection's, and says so.
+func TestMediaPosterFallsBackToCollection(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	show, _ := s.CreateCollection(ctx, Collection{Name: "Cosmos", Category: "TV Shows", Poster: "show.jpg"})
+	ep := mustMedia(t, s, "e1.mp4")
+	if err := s.UpdateMedia(ctx, ep, MediaUpdate{Title: "E1", CollectionID: show}, false); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := s.MediaByID(ctx, ep)
+	if m.Poster != "show.jpg" || m.OwnPoster {
+		t.Errorf("poster = %q, own = %v; want the collection's", m.Poster, m.OwnPoster)
+	}
+	s.UpdateMedia(ctx, ep, MediaUpdate{Title: "E1", CollectionID: show, Poster: "ep.jpg"}, false)
+	if m, _ = s.MediaByID(ctx, ep); m.Poster != "ep.jpg" || !m.OwnPoster {
+		t.Errorf("poster = %q, own = %v; want its own", m.Poster, m.OwnPoster)
+	}
+}

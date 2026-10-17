@@ -19,7 +19,8 @@ type Media struct {
 	CollectionID int64 // 0 when standalone
 	Season       int
 	Episode      int
-	Poster       string // file name inside the poster directory
+	Poster       string // file name in the poster directory: its own, else its collection's
+	OwnPoster    bool   // Poster is the media's own, not its collection's
 	Duration     float64
 	Container    string
 	VideoCodec   string
@@ -53,7 +54,7 @@ type ScannedMedia struct {
 const mediaCols = `m.id, m.path, m.title, m.year, m.overview, m.category, COALESCE(m.collection_id, 0),
 	m.season, m.episode, CASE WHEN m.poster <> '' THEN m.poster ELSE COALESCE(c.poster, '') END,
 	m.duration, m.container, m.video_codec, m.audio_codec, m.size, m.published, m.views,
-	m.added_at, m.published_at, COALESCE(c.name, ''), m.pix_fmt`
+	m.added_at, m.published_at, COALESCE(c.name, ''), m.pix_fmt, m.poster <> ''`
 
 const mediaFrom = ` FROM media m LEFT JOIN collections c ON c.id = m.collection_id `
 

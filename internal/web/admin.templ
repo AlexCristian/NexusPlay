@@ -212,7 +212,7 @@ templ editMediaPage(p Page, f MediaForm) {
 						Description
 						<textarea name="overview" rows="3">{ f.Media.Overview }</textarea>
 					</label>
-					@posterField(f.Media.Poster, "Episodes use their collection's poster when they have none.")
+					@posterField(ownPoster(f.Media), "Episodes use their collection's poster when they have none.")
 					<div class="form-actions">
 						if f.Media.Published {
 							<button type="submit" class="button">Save</button>

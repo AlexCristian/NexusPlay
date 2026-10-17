@@ -128,6 +128,15 @@ type MediaForm struct {
 	Saved          bool
 }
 
+// ownPoster is m's own poster, or "" when it shows its collection's. Only
+// its own can be removed on its edit page.
+func ownPoster(m store.Media) string {
+	if !m.OwnPoster {
+		return ""
+	}
+	return m.Poster
+}
+
 // detectedAs is what the scanner made of a pending file's name.
 func detectedAs(m store.Media) string {
 	g := guessFor(m)

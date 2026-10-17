@@ -1,4 +1,16 @@
-// Package web serves NexusPlay's pages, API and media streams.
+// Package web serves NexusPlay's pages, htmx fragments and media streams.
+//
+// Server holds the route table and the middleware (logging, panic recovery,
+// security headers, sessions, CSRF). The handlers are in five groups, each
+// given only what it uses: library, playback, subtitles, accounts and admin
+// (handlers_*.go). Handlers return an error, and respondError turns it into
+// the response (respond.go), so every handler reports "not found" or "try
+// later" the same way. Templates are templ components (*.templ); the data
+// they show is in views.go.
+//
+// The package holds no business rules of its own beyond who may see what
+// (access.go): accounts are auth's, data is store's, playback policy is
+// media's.
 package web
 
 import (
@@ -80,7 +92,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
 	static, _ := fs.Sub(staticFiles, "static") // cannot fail: "static" is a valid, embedded path
-	mux.Handle("GET /static/", cacheForever(http.StripPrefix("/static/", http.FileServerFS(static))))
+	mux.Handle("GET /static/", cacheForADay(http.StripPrefix("/static/", http.FileServerFS(static))))
 	mux.HandleFunc("GET /healthz", s.healthz)
 
 	// Pages anyone may see unless NEXUSPLAY_REQUIRE_LOGIN is set.
@@ -333,7 +345,10 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-func cacheForever(next http.Handler) http.Handler {
+// cacheForADay lets browsers keep static files for a day. The files are
+// embedded in the binary, so they change only with an upgrade; a day bounds
+// how long a browser can show old CSS or scripts after one.
+func cacheForADay(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		next.ServeHTTP(w, r)
