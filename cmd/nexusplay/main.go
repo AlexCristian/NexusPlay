@@ -74,7 +74,7 @@ func run(log *slog.Logger) error {
 func healthcheck() int {
 	addr := os.Getenv("NEXUSPLAY_ADDR")
 	if addr == "" {
-		addr = ":8080"
+		addr = config.Defaults().Addr
 	}
 	if addr[0] == ':' {
 		addr = "127.0.0.1" + addr

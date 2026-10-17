@@ -1,7 +1,9 @@
-// Package config loads NexusPlay's settings from environment variables.
+// Package config loads NexusPlay's settings from environment variables. It
+// owns the variable names and defaults; nothing else reads the environment.
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,8 +15,8 @@ import (
 // a default and can be overridden with the NEXUSPLAY_* variable named beside it.
 type Config struct {
 	Addr          string        // NEXUSPLAY_ADDR
-	MediaDir      string        // NEXUSPLAY_MEDIA_DIR
-	DataDir       string        // NEXUSPLAY_DATA_DIR
+	MediaDir      string        // NEXUSPLAY_MEDIA_DIR (made absolute)
+	DataDir       string        // NEXUSPLAY_DATA_DIR (made absolute)
 	ScanInterval  time.Duration // NEXUSPLAY_SCAN_INTERVAL
 	TMDBAPIKey    string        // NEXUSPLAY_TMDB_API_KEY
 	VotesRequired int           // NEXUSPLAY_VOTES_REQUIRED
@@ -30,53 +32,86 @@ type Config struct {
 	MaxConversions int  // NEXUSPLAY_MAX_CONVERSIONS
 }
 
-// Load reads the configuration from the environment.
-func Load() (Config, error) {
-	c := Config{
-		Addr:           env("NEXUSPLAY_ADDR", ":8080"),
-		MediaDir:       env("NEXUSPLAY_MEDIA_DIR", "./media"),
-		DataDir:        env("NEXUSPLAY_DATA_DIR", "./data"),
-		TMDBAPIKey:     env("NEXUSPLAY_TMDB_API_KEY", ""),
-		FFmpegPath:     env("NEXUSPLAY_FFMPEG", "ffmpeg"),
-		FFprobePath:    env("NEXUSPLAY_FFPROBE", "ffprobe"),
+// Defaults returns the configuration used when no variable is set.
+func Defaults() Config {
+	return Config{
+		Addr:           ":8080",
+		MediaDir:       "./media",
+		DataDir:        "./data",
 		ScanInterval:   5 * time.Minute,
 		VotesRequired:  4,
 		MaxTranscodes:  2,
+		FFmpegPath:     "ffmpeg",
+		FFprobePath:    "ffprobe",
+		Convert:        true,
 		MaxConversions: 1,
 	}
-	var err error
-	if v := os.Getenv("NEXUSPLAY_SCAN_INTERVAL"); v != "" {
-		if c.ScanInterval, err = time.ParseDuration(v); err != nil {
-			return c, fmt.Errorf("NEXUSPLAY_SCAN_INTERVAL: %w", err)
+}
+
+// Load reads the configuration from the process environment.
+func Load() (Config, error) { return LoadFrom(os.Getenv) }
+
+// LoadFrom reads the configuration from getenv (os.Getenv, or a map in
+// tests), applies defaults, and validates it. It reports every bad variable
+// at once rather than stopping at the first.
+func LoadFrom(getenv func(string) string) (Config, error) {
+	c := Defaults()
+	var errs []error
+	str := func(key string, dst *string) {
+		if v := getenv(key); v != "" {
+			*dst = v
 		}
 	}
-	if c.VotesRequired, err = envInt("NEXUSPLAY_VOTES_REQUIRED", c.VotesRequired); err != nil {
+	num := func(key string, dst *int) {
+		if v := getenv(key); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %q is not a whole number", key, v))
+				return
+			}
+			*dst = n
+		}
+	}
+	flag := func(key string, dst *bool) {
+		if v := getenv(key); v != "" {
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %q is not true or false", key, v))
+				return
+			}
+			*dst = b
+		}
+	}
+	duration := func(key string, dst *time.Duration) {
+		if v := getenv(key); v != "" {
+			d, err := time.ParseDuration(v)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %q is not a duration such as 5m or 1h", key, v))
+				return
+			}
+			*dst = d
+		}
+	}
+
+	str("NEXUSPLAY_ADDR", &c.Addr)
+	str("NEXUSPLAY_MEDIA_DIR", &c.MediaDir)
+	str("NEXUSPLAY_DATA_DIR", &c.DataDir)
+	str("NEXUSPLAY_TMDB_API_KEY", &c.TMDBAPIKey)
+	str("NEXUSPLAY_FFMPEG", &c.FFmpegPath)
+	str("NEXUSPLAY_FFPROBE", &c.FFprobePath)
+	duration("NEXUSPLAY_SCAN_INTERVAL", &c.ScanInterval)
+	num("NEXUSPLAY_VOTES_REQUIRED", &c.VotesRequired)
+	num("NEXUSPLAY_MAX_TRANSCODES", &c.MaxTranscodes)
+	num("NEXUSPLAY_MAX_CONVERSIONS", &c.MaxConversions)
+	flag("NEXUSPLAY_CONVERT", &c.Convert)
+	flag("NEXUSPLAY_REQUIRE_LOGIN", &c.RequireLogin)
+	flag("NEXUSPLAY_SECURE_COOKIES", &c.SecureCookies)
+
+	errs = append(errs, c.Validate())
+	if err := errors.Join(errs...); err != nil {
 		return c, err
 	}
-	if c.MaxTranscodes, err = envInt("NEXUSPLAY_MAX_TRANSCODES", c.MaxTranscodes); err != nil {
-		return c, err
-	}
-	if c.MaxConversions, err = envInt("NEXUSPLAY_MAX_CONVERSIONS", c.MaxConversions); err != nil {
-		return c, err
-	}
-	if c.Convert, err = envBool("NEXUSPLAY_CONVERT", true); err != nil {
-		return c, err
-	}
-	if c.RequireLogin, err = envBool("NEXUSPLAY_REQUIRE_LOGIN", false); err != nil {
-		return c, err
-	}
-	if c.SecureCookies, err = envBool("NEXUSPLAY_SECURE_COOKIES", false); err != nil {
-		return c, err
-	}
-	if c.VotesRequired < 1 {
-		return c, fmt.Errorf("NEXUSPLAY_VOTES_REQUIRED must be at least 1")
-	}
-	if c.MaxTranscodes < 1 {
-		return c, fmt.Errorf("NEXUSPLAY_MAX_TRANSCODES must be at least 1")
-	}
-	if c.MaxConversions < 1 {
-		return c, fmt.Errorf("NEXUSPLAY_MAX_CONVERSIONS must be at least 1")
-	}
+	var err error
 	if c.MediaDir, err = filepath.Abs(c.MediaDir); err != nil {
 		return c, err
 	}
@@ -84,6 +119,28 @@ func Load() (Config, error) {
 		return c, err
 	}
 	return c, nil
+}
+
+// Validate reports every setting that is out of range.
+func (c Config) Validate() error {
+	var errs []error
+	atLeastOne := func(key string, n int) {
+		if n < 1 {
+			errs = append(errs, fmt.Errorf("%s must be at least 1, not %d", key, n))
+		}
+	}
+	atLeastOne("NEXUSPLAY_VOTES_REQUIRED", c.VotesRequired)
+	atLeastOne("NEXUSPLAY_MAX_TRANSCODES", c.MaxTranscodes)
+	atLeastOne("NEXUSPLAY_MAX_CONVERSIONS", c.MaxConversions)
+	// Changes are picked up within seconds by the file watcher; the interval
+	// is only the safety net, and walking a big library too often wastes disk I/O.
+	if c.ScanInterval < 10*time.Second {
+		errs = append(errs, fmt.Errorf("NEXUSPLAY_SCAN_INTERVAL must be at least 10s, not %s", c.ScanInterval))
+	}
+	if c.Addr == "" {
+		errs = append(errs, errors.New("NEXUSPLAY_ADDR must not be empty"))
+	}
+	return errors.Join(errs...)
 }
 
 // PosterDir is where downloaded and uploaded posters are stored.
@@ -94,34 +151,3 @@ func (c Config) TranscodeDir() string { return filepath.Join(c.DataDir, "transco
 
 // DBPath is the SQLite database file.
 func (c Config) DBPath() string { return filepath.Join(c.DataDir, "nexusplay.db") }
-
-func env(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
-
-func envInt(key string, def int) (int, error) {
-	v := os.Getenv(key)
-	if v == "" {
-		return def, nil
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return 0, fmt.Errorf("%s: %w", key, err)
-	}
-	return n, nil
-}
-
-func envBool(key string, def bool) (bool, error) {
-	v := os.Getenv(key)
-	if v == "" {
-		return def, nil
-	}
-	b, err := strconv.ParseBool(v)
-	if err != nil {
-		return false, fmt.Errorf("%s: %w", key, err)
-	}
-	return b, nil
-}
