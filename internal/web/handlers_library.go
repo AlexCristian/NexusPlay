@@ -6,7 +6,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
@@ -37,8 +36,6 @@ const (
 	maxQuery    = 100 // characters of a search query that are used
 )
 
-func guessFor(m store.Media) library.Guess { return library.ParsePath(m.Path) }
-
 // home handles GET /: "Just added" and a tab per category.
 func (h *libraryHandlers) home(w http.ResponseWriter, r *http.Request) error {
 	recent, cats, err := h.libraryData(r)
@@ -49,6 +46,8 @@ func (h *libraryHandlers) home(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// libraryData is what the home page and an emptied search show: the
+// recent row and every category, with the viewer's watched marks.
 func (h *libraryHandlers) libraryData(r *http.Request) ([]store.Tile, []store.Category, error) {
 	uid := viewer(r).ID()
 	recent, err := h.store.RecentTiles(r.Context(), uid, recentLimit)

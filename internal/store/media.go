@@ -160,7 +160,7 @@ func (s *Store) DeleteMedia(ctx context.Context, id int64) error {
 	return err
 }
 
-// MediaByID returns one media item.
+// MediaByID returns one media item, published or not, or ErrNotFound.
 func (s *Store) MediaByID(ctx context.Context, id int64) (Media, error) {
 	m, err := scanMedia(s.db.QueryRowContext(ctx, `SELECT `+mediaCols+mediaFrom+`WHERE m.id = ?`, id))
 	return m, notFound(err)

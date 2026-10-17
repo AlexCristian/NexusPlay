@@ -57,7 +57,8 @@ var textSubtitleCodecs = map[string]bool{
 }
 
 // MakePlan decides what to copy, what to re-encode and what to extract.
-// videoBase is the video's file name without its extension.
+// videoBase is the video's file name without its extension. It returns
+// ffmpeg.ErrNoVideo if src has no video stream.
 func MakePlan(src ffmpeg.Probe, videoBase string) (Plan, error) {
 	var p Plan
 	video, ok := src.Video()

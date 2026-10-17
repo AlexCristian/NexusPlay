@@ -25,7 +25,9 @@ var ErrNoCues = errors.New("no subtitle cues found")
 
 // Parse reads SRT or WebVTT. The format is detected from the content, not the
 // file name. Input that is not valid UTF-8 is decoded as Latin-1, a best
-// effort for the legacy encodings older subtitle files often use.
+// effort for the legacy encodings older subtitle files often use. It returns
+// ErrNoCues if nothing in data is a cue, and an error quoting the bad text
+// for a malformed timestamp.
 func Parse(data []byte) ([]Cue, error) {
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	if !utf8.Valid(data) {

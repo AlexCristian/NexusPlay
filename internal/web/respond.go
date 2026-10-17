@@ -101,11 +101,13 @@ func (rs responder) render(w http.ResponseWriter, r *http.Request, status int, c
 	}
 }
 
+// serverError logs err with the request and shows a generic 500.
 func (rs responder) serverError(w http.ResponseWriter, r *http.Request, err error) {
 	rs.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
 	rs.errorPage(w, r, http.StatusInternalServerError, "Something went wrong", "The server hit an error. Please try again.")
 }
 
+// notFound shows a 404.
 func (rs responder) notFound(w http.ResponseWriter, r *http.Request) {
 	rs.errorPage(w, r, http.StatusNotFound, "Not found", "That page or item does not exist.")
 }

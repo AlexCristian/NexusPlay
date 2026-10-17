@@ -38,7 +38,9 @@ func scanUser(row rowScanner) (User, error) {
 }
 
 // CreateUser inserts a user. The first account ever created becomes the
-// administrator, so a fresh install needs no separate setup step.
+// administrator, so a fresh install needs no separate setup step. It
+// returns ErrDuplicate if the email or nickname is taken (compared without
+// regard to letter case).
 func (s *Store) CreateUser(ctx context.Context, email, nickname, passwordHash string) (User, error) {
 	var u User
 	err := s.tx(ctx, func(tx *sql.Tx) error {
@@ -72,13 +74,14 @@ func (s *Store) HasUsers(ctx context.Context) (bool, error) {
 	return n > 0, err
 }
 
-// UserByEmail looks a user up by email, case-insensitively.
+// UserByEmail looks a user up by email, case-insensitively, or returns
+// ErrNotFound.
 func (s *Store) UserByEmail(ctx context.Context, email string) (User, error) {
 	u, err := scanUser(s.db.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE email = ?`, email))
 	return u, notFound(err)
 }
 
-// UserByID looks a user up by ID.
+// UserByID looks a user up by ID, or returns ErrNotFound.
 func (s *Store) UserByID(ctx context.Context, id int64) (User, error) {
 	u, err := scanUser(s.db.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE id = ?`, id))
 	return u, notFound(err)
@@ -98,7 +101,8 @@ func (s *Store) CreateSession(ctx context.Context, tokenHash string, userID int6
 	return err
 }
 
-// SessionUser returns the session and its user, if the session is still valid.
+// SessionUser returns the session and its user. It returns ErrNotFound when
+// there is no such session or it has expired.
 func (s *Store) SessionUser(ctx context.Context, tokenHash string) (Session, User, error) {
 	var sess Session
 	var exp int64

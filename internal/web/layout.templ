@@ -25,6 +25,7 @@ templ layout(p Page) {
 // shell is the body every page shares: top bar, content, modal and footer.
 templ shell(p Page) {
 	@layout(p) {
+		<!-- hx-headers carries the CSRF token for htmx; player.js reads it too. -->
 		<body hx-headers={ csrfHeaders(p.V) }>
 			@topBar(p)
 			<main class="page">

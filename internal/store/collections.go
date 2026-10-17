@@ -88,13 +88,14 @@ func (s *Store) DeleteCollection(ctx context.Context, id int64) error {
 	return err
 }
 
-// CollectionByID returns one collection.
+// CollectionByID returns one collection, or ErrNotFound.
 func (s *Store) CollectionByID(ctx context.Context, id int64) (Collection, error) {
 	c, err := scanCollection(s.db.QueryRowContext(ctx, `SELECT `+collectionCols+` FROM collections WHERE id = ?`, id))
 	return c, notFound(err)
 }
 
-// CollectionByName returns one collection by name, case-insensitively.
+// CollectionByName returns one collection by name, case-insensitively, or
+// ErrNotFound.
 func (s *Store) CollectionByName(ctx context.Context, name string) (Collection, error) {
 	c, err := scanCollection(s.db.QueryRowContext(ctx, `SELECT `+collectionCols+` FROM collections WHERE name = ?`, name))
 	return c, notFound(err)

@@ -20,6 +20,10 @@
     status.hidden = !text;
   }
 
+  // The session's CSRF token. The server puts it in <body hx-headers> so htmx
+  // sends it on every request (see csrfHeaders in views.go); player.js posts
+  // with sendBeacon, which cannot set headers, so it reads the token from
+  // there and sends it as the csrf_token form field instead.
   function csrfToken() {
     try {
       return JSON.parse(document.body.getAttribute("hx-headers") || "{}")["X-CSRF-Token"] || "";
@@ -119,6 +123,12 @@
   video.addEventListener("ended", function () { topBar.classList.remove("playing"); });
 
   // Progress ----------------------------------------------------------------
+  //
+  // The position is saved every 15 s while playing, on pause, when the page
+  // is hidden or closed, and at the end.
+  // "ended" sends finished=1. The server also counts 95% as finished,
+  // because a viewer who closes the tab during the credits never reaches
+  // "ended" (see saveProgress in handlers_playback.go).
 
   if (signedIn) {
     var lastSaved = -1;

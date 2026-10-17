@@ -112,6 +112,8 @@ type reportNote struct {
 	kind string // "success" or "error"
 }
 
+// renderReport shows the report dialog for cue, with the open proposals
+// for it and note at the top.
 func (h *subtitleHandlers) renderReport(w http.ResponseWriter, r *http.Request, track store.Subtitle, cue store.Cue, note reportNote) error {
 	changes, err := h.store.Changes(r.Context(), cue.ID, viewer(r).ID())
 	if err != nil {

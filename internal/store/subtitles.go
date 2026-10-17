@@ -124,7 +124,7 @@ func (s *Store) Subtitles(ctx context.Context, mediaID int64) ([]Subtitle, error
 	}, `SELECT id, media_id, language, label, source FROM subtitles WHERE media_id = ? ORDER BY label`, mediaID)
 }
 
-// SubtitleByID returns one track.
+// SubtitleByID returns one track, or ErrNotFound.
 func (s *Store) SubtitleByID(ctx context.Context, id int64) (Subtitle, error) {
 	var t Subtitle
 	err := s.db.QueryRowContext(ctx,
@@ -142,7 +142,8 @@ func (s *Store) Cues(ctx context.Context, subtitleID int64) ([]Cue, error) {
 	}, `SELECT id, start_ms, end_ms, text FROM subtitle_cues WHERE subtitle_id = ? ORDER BY idx`, subtitleID)
 }
 
-// CueAt returns the cue showing at a playback time, or the closest one before it.
+// CueAt returns the cue showing at a playback time, or the closest one
+// before it. It returns ErrNotFound when no cue starts at or before ms.
 func (s *Store) CueAt(ctx context.Context, subtitleID, ms int64) (Cue, error) {
 	var c Cue
 	err := s.db.QueryRowContext(ctx, `
@@ -152,7 +153,7 @@ func (s *Store) CueAt(ctx context.Context, subtitleID, ms int64) (Cue, error) {
 	return c, notFound(err)
 }
 
-// CueByID returns one cue and the track it belongs to.
+// CueByID returns one cue and the ID of its track, or ErrNotFound.
 func (s *Store) CueByID(ctx context.Context, id int64) (Cue, int64, error) {
 	var c Cue
 	var subID int64
@@ -162,7 +163,9 @@ func (s *Store) CueByID(ctx context.Context, id int64) (Cue, int64, error) {
 	return c, subID, notFound(err)
 }
 
-// CueForChange returns the cue a proposal targets.
+// CueForChange returns the ID of the cue a proposal targets, or ErrNotFound
+// when the proposal no longer exists (applying a correction deletes every
+// proposal for its line).
 func (s *Store) CueForChange(ctx context.Context, changeID int64) (int64, error) {
 	var cueID int64
 	err := s.db.QueryRowContext(ctx, `SELECT cue_id FROM subtitle_changes WHERE id = ?`, changeID).Scan(&cueID)
@@ -184,7 +187,11 @@ func (s *Store) Changes(ctx context.Context, cueID, userID int64) ([]Change, err
 }
 
 // ProposeChange records a correction to a cue; the proposer's vote counts.
-// It reports whether the change was applied straight away (when one vote is enough).
+// It reports whether the change was applied straight away (when one vote is
+// enough). An identical proposal from someone else becomes a vote for it.
+//
+// Errors: ErrNotFound if the cue does not exist, ErrUnchanged if text is the
+// line's current text, ErrAlreadyVoted if the user already voted on this line.
 func (s *Store) ProposeChange(ctx context.Context, cueID, userID int64, text string, votesRequired int) (bool, error) {
 	text = strings.TrimSpace(text)
 	var applied bool
@@ -218,7 +225,11 @@ func (s *Store) ProposeChange(ctx context.Context, cueID, userID int64, text str
 
 // VoteChange adds a user's vote to a proposal. Each user gets one vote per
 // line. When a proposal reaches votesRequired it replaces the line and every
-// competing proposal for that line is discarded.
+// competing proposal for that line is discarded; the result reports whether
+// that happened.
+//
+// Errors: ErrNotFound if the proposal no longer exists, ErrAlreadyVoted if
+// the user already voted on this line.
 func (s *Store) VoteChange(ctx context.Context, changeID, userID int64, votesRequired int) (bool, error) {
 	var applied bool
 	err := s.tx(ctx, func(tx *sql.Tx) error {

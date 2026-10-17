@@ -34,6 +34,7 @@ type mediaInput struct {
 	publish    bool
 }
 
+// decodeMediaForm reads POST /admin/media/{id}.
 func decodeMediaForm(r *http.Request) (mediaInput, error) {
 	if err := parseForm(r, maxUpload); err != nil {
 		return mediaInput{}, formErr("The upload is too large or malformed.")
@@ -70,6 +71,7 @@ type collectionInput struct {
 	lookup bool                   // fill empty fields from TMDB
 }
 
+// decodeCollectionForm reads the new-collection and edit-collection forms.
 func decodeCollectionForm(r *http.Request) (collectionInput, error) {
 	if err := parseForm(r, maxUpload); err != nil {
 		return collectionInput{}, formErr("The upload is too large or malformed.")

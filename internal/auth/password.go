@@ -42,8 +42,10 @@ func HashPassword(password string) (string, error) {
 		argon2.Version, argonMemory, argonTime, argonThreads, b64.EncodeToString(salt), b64.EncodeToString(key)), nil
 }
 
-// VerifyPassword checks a password against an encoded hash. needsRehash is
-// true when the hash was made with weaker parameters than the current ones.
+// VerifyPassword checks a password against an encoded hash. It returns
+// ErrMismatch for a wrong password, and another error if the hash cannot be
+// read. needsRehash is true when the hash was made with weaker parameters
+// than the current ones.
 func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {

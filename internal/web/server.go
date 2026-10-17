@@ -72,6 +72,8 @@ const viewerKey ctxKey = 0
 // Viewer is who is making a request (see auth.Viewer).
 type Viewer = auth.Viewer
 
+// viewer is who made the request; the zero Viewer for a visitor who is not
+// logged in. The session middleware sets it.
 func viewer(r *http.Request) Viewer {
 	v, _ := r.Context().Value(viewerKey).(Viewer)
 	return v
@@ -190,6 +192,10 @@ func (s *Server) admin(h http.HandlerFunc) http.Handler {
 	})
 }
 
+// needLogin answers a request that needs an account. htmx gets 401 with
+// HX-Redirect to the login page; a page load is redirected there and comes
+// back afterwards; media, subtitle and other requests get a plain 401,
+// since a redirect to an HTML page would only confuse the player.
 func (s *Server) needLogin(w http.ResponseWriter, r *http.Request) {
 	if isHTMX(r) {
 		w.Header().Set("HX-Redirect", "/login?next="+url.QueryEscape(currentURL(r)))
@@ -203,6 +209,8 @@ func (s *Server) needLogin(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "login required", http.StatusUnauthorized)
 }
 
+// currentURL is the page the user is on: for htmx, the page that made the
+// request (HX-Current-URL), not the fragment's URL.
 func currentURL(r *http.Request) string {
 	if isHTMX(r) {
 		if u, err := url.Parse(r.Header.Get("HX-Current-URL")); err == nil && u.Path != "" {
@@ -313,6 +321,7 @@ func writeFormError(w http.ResponseWriter, err error) {
 	http.Error(w, "The form could not be read.", http.StatusBadRequest)
 }
 
+// sameOrigin is the Origin check described on csrf.
 func sameOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -333,6 +342,10 @@ func sameOrigin(r *http.Request) bool {
 	return strings.EqualFold(u.Host, host)
 }
 
+// securityHeaders sets headers for every response. The Content-Security-
+// Policy allows only this site's own scripts and styles; blob: media and
+// workers are for hls.js, which feeds the video element through
+// MediaSource.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -355,6 +368,9 @@ func cacheForADay(next http.Handler) http.Handler {
 	})
 }
 
+// recoverer turns a panic in a handler into a logged 500 instead of a
+// dropped connection. http.ErrAbortHandler is re-raised: it is how a
+// handler deliberately aborts a response.
 func (s *Server) recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -370,6 +386,7 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 	})
 }
 
+// statusWriter records the status code for the request log.
 type statusWriter struct {
 	http.ResponseWriter
 	status int
@@ -384,6 +401,8 @@ func (w *statusWriter) WriteHeader(code int) {
 
 func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
+// logRequests logs each request at debug level (NEXUSPLAY_DEBUG), leaving
+// out static files and HLS segments, which would drown the rest.
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -400,6 +419,8 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 	})
 }
 
+// healthz handles GET /healthz for the container health check: 200 while
+// the database answers, else 503.
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()

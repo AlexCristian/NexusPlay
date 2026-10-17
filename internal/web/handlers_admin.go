@@ -102,6 +102,7 @@ var doneMessages = map[string]string{
 	"retry":     "Queued for another conversion attempt.",
 }
 
+// conversionView is the converter's status and the recorded failures.
 func (h *adminHandlers) conversionView(ctx context.Context) (ConversionView, error) {
 	var v ConversionView
 	var err error
@@ -144,6 +145,8 @@ func (h *adminHandlers) scanNow(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// mediaForm fills the edit form for m. For media not yet published it
+// pre-fills the collection and category from the file name.
 func (h *adminHandlers) mediaForm(ctx context.Context, m store.Media) (MediaForm, error) {
 	f := MediaForm{Media: m, CollectionName: m.CollectionName, MetaEnabled: h.meta.Enabled()}
 	var err error

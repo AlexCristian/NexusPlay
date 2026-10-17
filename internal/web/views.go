@@ -12,6 +12,7 @@ import (
 	"github.com/a-h/templ"
 
 	"github.com/AlexCristian/NexusPlay/internal/convert"
+	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
@@ -136,6 +137,9 @@ func ownPoster(m store.Media) string {
 	}
 	return m.Poster
 }
+
+// guessFor is what the scanner makes of a file's path.
+func guessFor(m store.Media) library.Guess { return library.ParsePath(m.Path) }
 
 // detectedAs is what the scanner made of a pending file's name.
 func detectedAs(m store.Media) string {
