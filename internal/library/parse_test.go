@@ -32,3 +32,39 @@ func TestParsePath(t *testing.T) {
 		})
 	}
 }
+
+func TestMatchEpisode(t *testing.T) {
+	for name, want := range map[string]episodeMatch{
+		"Doctor.Who.S02E03.School.Reunion.720p": {show: "Doctor Who", title: "School Reunion", season: 2, episode: 3},
+		"House of Cards - 2x05":                 {show: "House of Cards", season: 2, episode: 5},
+		"s01e04":                                {season: 1, episode: 4},
+		"Cosmos S01E01E02 Standing Up":          {show: "Cosmos", title: "Standing Up", season: 1, episode: 1},
+	} {
+		got, ok := matchEpisode(name)
+		if !ok || got != want {
+			t.Errorf("matchEpisode(%q) = %+v, %v; want %+v", name, got, ok, want)
+		}
+	}
+	if _, ok := matchEpisode("The Matrix (1999)"); ok {
+		t.Error("a film matched as an episode")
+	}
+}
+
+func TestShowFromDirs(t *testing.T) {
+	for dir, want := range map[string]struct {
+		show   string
+		season int
+	}{
+		"Doctor Who/Season 2/":         {"Doctor Who", 2},
+		"Shows/Cosmos (2014)/S01/":     {"Cosmos (2014)", 1},
+		"Series 3/":                    {"", 3},
+		"":                             {"", 0},
+		"TV/The.Expanse/Specials/":     {"Specials", 0}, // not a season folder
+		"Shows/House of Cards (2013)/": {"House of Cards (2013)", 0},
+	} {
+		show, season := showFromDirs(dir)
+		if show != want.show || season != want.season {
+			t.Errorf("showFromDirs(%q) = %q, %d; want %q, %d", dir, show, season, want.show, want.season)
+		}
+	}
+}
