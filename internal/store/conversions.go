@@ -26,34 +26,19 @@ type ConversionFailure struct {
 
 // ConversionFailures lists failed conversions for the control panel.
 func (s *Store) ConversionFailures(ctx context.Context) ([]ConversionFailure, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+mediaCols+`, m.convert_error`+mediaFrom+`
-		WHERE m.convert_status = 'failed' ORDER BY m.path`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []ConversionFailure
-	for rows.Next() {
+	return queryAll(ctx, s.db, func(r rowScanner) (ConversionFailure, error) {
 		var f ConversionFailure
-		var added, published int64
-		m := &f.Media
-		if err := rows.Scan(&m.ID, &m.Path, &m.Title, &m.Year, &m.Overview, &m.Category, &m.CollectionID,
-			&m.Season, &m.Episode, &m.Poster, &m.Duration, &m.Container, &m.VideoCodec, &m.AudioCodec,
-			&m.Size, &m.Published, &m.Views, &added, &published, &m.CollectionName, &f.Error); err != nil {
-			return nil, err
-		}
-		out = append(out, f)
-	}
-	return out, rows.Err()
+		var err error
+		f.Media, err = scanMediaWith(r, &f.Error)
+		return f, err
+	}, `SELECT `+mediaCols+`, m.convert_error`+mediaFrom+`
+		WHERE m.convert_status = 'failed' ORDER BY m.path`)
 }
 
 // SetConvertFailed records that converting a file failed.
 func (s *Store) SetConvertFailed(ctx context.Context, id int64, reason string) error {
-	if len(reason) > 2000 {
-		reason = reason[:2000]
-	}
 	_, err := s.db.ExecContext(ctx, `UPDATE media SET convert_status = 'failed', convert_error = ? WHERE id = ?`,
-		strings.TrimSpace(reason), id)
+		truncateRunes(strings.TrimSpace(reason), 2000), id)
 	return err
 }
 

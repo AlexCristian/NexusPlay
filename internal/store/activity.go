@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"database/sql"
 )
 
@@ -37,7 +38,7 @@ func (s *Store) Progress(ctx context.Context, userID, mediaID int64) (float64, e
 	var pos float64
 	err := s.db.QueryRowContext(ctx,
 		`SELECT position FROM watch_progress WHERE user_id = ? AND media_id = ?`, userID, mediaID).Scan(&pos)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
 	return pos, err
@@ -45,26 +46,14 @@ func (s *Store) Progress(ctx context.Context, userID, mediaID int64) (float64, e
 
 // InProgress lists what a user paused, most recent first.
 func (s *Store) InProgress(ctx context.Context, userID int64, limit int) ([]Resume, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+mediaCols+`, p.position`+mediaFrom+`
+	return queryAll(ctx, s.db, func(r rowScanner) (Resume, error) {
+		var res Resume
+		var err error
+		res.Media, err = scanMediaWith(r, &res.Position)
+		return res, err
+	}, `SELECT `+mediaCols+`, p.position`+mediaFrom+`
 		JOIN watch_progress p ON p.media_id = m.id
 		WHERE p.user_id = ? AND m.published = 1 ORDER BY p.updated_at DESC LIMIT ?`, userID, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Resume
-	for rows.Next() {
-		var r Resume
-		var added, published int64
-		m := &r.Media
-		if err := rows.Scan(&m.ID, &m.Path, &m.Title, &m.Year, &m.Overview, &m.Category, &m.CollectionID,
-			&m.Season, &m.Episode, &m.Poster, &m.Duration, &m.Container, &m.VideoCodec, &m.AudioCodec,
-			&m.Size, &m.Published, &m.Views, &added, &published, &m.CollectionName, &r.Position); err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
 }
 
 // IsWatched reports whether a user finished a media item.
@@ -112,8 +101,9 @@ func (s *Store) ToggleSubscription(ctx context.Context, userID, collectionID int
 		if err != nil {
 			return err
 		}
-		if n, _ := res.RowsAffected(); n > 0 {
-			return nil
+		n, err := res.RowsAffected()
+		if err != nil || n > 0 {
+			return err // unsubscribed
 		}
 		subscribed = true
 		_, err = tx.ExecContext(ctx, `INSERT INTO subscriptions (user_id, collection_id) VALUES (?, ?)`, userID, collectionID)

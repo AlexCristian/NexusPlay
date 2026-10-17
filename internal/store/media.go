@@ -54,34 +54,10 @@ const mediaCols = `m.id, m.path, m.title, m.year, m.overview, m.category, COALES
 
 const mediaFrom = ` FROM media m LEFT JOIN collections c ON c.id = m.collection_id `
 
-func scanMedia(row interface{ Scan(...any) error }) (Media, error) {
-	var m Media
-	var added, published int64
-	err := row.Scan(&m.ID, &m.Path, &m.Title, &m.Year, &m.Overview, &m.Category, &m.CollectionID,
-		&m.Season, &m.Episode, &m.Poster, &m.Duration, &m.Container, &m.VideoCodec, &m.AudioCodec,
-		&m.Size, &m.Published, &m.Views, &added, &published, &m.CollectionName)
-	m.AddedAt = time.Unix(added, 0)
-	if published > 0 {
-		m.PublishedAt = time.Unix(published, 0)
-	}
-	return m, err
-}
-
+// queryMedia lists media rows. where is the SQL after the FROM clause
+// (filters, ordering, limit).
 func (s *Store) queryMedia(ctx context.Context, where string, args ...any) ([]Media, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+mediaCols+mediaFrom+where, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Media
-	for rows.Next() {
-		m, err := scanMedia(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, m)
-	}
-	return out, rows.Err()
+	return queryAll(ctx, s.db, scanMedia, `SELECT `+mediaCols+mediaFrom+where, args...)
 }
 
 // InsertScannedMedia adds a newly discovered file as unpublished media.
@@ -96,8 +72,9 @@ func (s *Store) InsertScannedMedia(ctx context.Context, sm ScannedMedia) (int64,
 	if err != nil {
 		return 0, err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return 0, nil
+	n, err := res.RowsAffected()
+	if err != nil || n == 0 {
+		return 0, err
 	}
 	return res.LastInsertId()
 }
@@ -197,8 +174,9 @@ func (s *Store) UpdateMedia(ctx context.Context, id int64, u MediaUpdate, publis
 		if err != nil {
 			return err
 		}
-		if n, _ := res.RowsAffected(); n == 0 || u.CollectionID == 0 {
-			return nil
+		n, err := res.RowsAffected()
+		if err != nil || n == 0 || u.CollectionID == 0 {
+			return err // nil when already published or not in a collection: nobody to notify
 		}
 		_, err = tx.ExecContext(ctx, `
 			INSERT OR IGNORE INTO notifications (user_id, media_id, created_at)
@@ -232,7 +210,16 @@ type Category struct {
 // Categories groups everything published into categories. Media in a
 // collection appears once, as the collection's tile, under the collection's category.
 func (s *Store) Categories(ctx context.Context, userID int64) ([]Category, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	type row struct {
+		category string
+		tile     Tile
+	}
+	rows, err := queryAll(ctx, s.db, func(r rowScanner) (row, error) {
+		var x row
+		t := &x.tile
+		err := r.Scan(&x.category, &t.IsCollection, &t.ID, &t.Title, &t.Year, &t.Poster, &t.Watched)
+		return x, err
+	}, `
 		SELECT category, 0, id, title, year, poster,
 		       EXISTS (SELECT 1 FROM watched w WHERE w.media_id = m.id AND w.user_id = ?)
 		FROM media m WHERE published = 1 AND collection_id IS NULL
@@ -243,23 +230,18 @@ func (s *Store) Categories(ctx context.Context, userID int64) ([]Category, error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []Category
-	for rows.Next() {
-		var cat string
-		var t Tile
-		if err := rows.Scan(&cat, &t.IsCollection, &t.ID, &t.Title, &t.Year, &t.Poster, &t.Watched); err != nil {
-			return nil, err
-		}
+	for _, x := range rows {
+		cat := x.category
 		if cat == "" {
 			cat = "Other"
 		}
 		if len(out) == 0 || out[len(out)-1].Name != cat {
 			out = append(out, Category{Name: cat})
 		}
-		out[len(out)-1].Tiles = append(out[len(out)-1].Tiles, t)
+		out[len(out)-1].Tiles = append(out[len(out)-1].Tiles, x.tile)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // RecentTiles returns tiles for the newest published media, collapsing
@@ -299,7 +281,11 @@ func (s *Store) RecentTiles(ctx context.Context, userID int64, limit int) ([]Til
 // Search finds published standalone media and collections whose name contains q.
 func (s *Store) Search(ctx context.Context, userID int64, q string, limit int) ([]Tile, error) {
 	pattern := "%" + likeEscape(q) + "%"
-	rows, err := s.db.QueryContext(ctx, `
+	return queryAll(ctx, s.db, func(r rowScanner) (Tile, error) {
+		var t Tile
+		err := r.Scan(&t.IsCollection, &t.ID, &t.Title, &t.Year, &t.Poster, &t.Watched)
+		return t, err
+	}, `
 		SELECT 0, id, title, year, poster,
 		       EXISTS (SELECT 1 FROM watched w WHERE w.media_id = m.id AND w.user_id = ?)
 		FROM media m WHERE published = 1 AND collection_id IS NULL AND title LIKE ? ESCAPE '\'
@@ -308,40 +294,20 @@ func (s *Store) Search(ctx context.Context, userID int64, q string, limit int) (
 		FROM collections c WHERE c.name LIKE ? ESCAPE '\'
 		  AND EXISTS (SELECT 1 FROM media m WHERE m.collection_id = c.id AND m.published = 1)
 		ORDER BY 3 COLLATE NOCASE LIMIT ?`, userID, pattern, pattern, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Tile
-	for rows.Next() {
-		var t Tile
-		if err := rows.Scan(&t.IsCollection, &t.ID, &t.Title, &t.Year, &t.Poster, &t.Watched); err != nil {
-			return nil, err
-		}
-		out = append(out, t)
-	}
-	return out, rows.Err()
 }
 
 // CategoryNames lists the categories in use, for the admin form.
 func (s *Store) CategoryNames(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	return queryAll(ctx, s.db, scanString, `
 		SELECT category FROM media WHERE category <> ''
 		UNION SELECT category FROM collections WHERE category <> ''
 		ORDER BY 1 COLLATE NOCASE`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var c string
-		if err := rows.Scan(&c); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
+}
+
+func scanString(r rowScanner) (string, error) {
+	var v string
+	err := r.Scan(&v)
+	return v, err
 }
 
 func likeEscape(s string) string {

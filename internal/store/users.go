@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 	"time"
 )
 
@@ -30,7 +29,7 @@ var ErrDuplicate = errors.New("already exists")
 
 const userCols = `id, email, nickname, password_hash, is_admin, created_at`
 
-func scanUser(row interface{ Scan(...any) error }) (User, error) {
+func scanUser(row rowScanner) (User, error) {
 	var u User
 	var created int64
 	err := row.Scan(&u.ID, &u.Email, &u.Nickname, &u.PasswordHash, &u.IsAdmin, &created)
@@ -51,12 +50,15 @@ func (s *Store) CreateUser(ctx context.Context, email, nickname, passwordHash st
 			`INSERT INTO users (email, nickname, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?)`,
 			email, nickname, passwordHash, count == 0, s.unix())
 		if err != nil {
-			if strings.Contains(err.Error(), "UNIQUE") {
+			if isUniqueViolation(err) {
 				return ErrDuplicate
 			}
 			return err
 		}
-		id, _ := res.LastInsertId()
+		id, err := res.LastInsertId()
+		if err != nil {
+			return err
+		}
 		u, err = scanUser(tx.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE id = ?`, id))
 		return err
 	})

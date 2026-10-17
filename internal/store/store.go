@@ -32,7 +32,14 @@ type Store struct {
 // Open opens (creating if needed) the SQLite database at path and applies
 // any pending migrations.
 func Open(ctx context.Context, path string) (*Store, error) {
-	dsn := "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
+	// Every pooled connection gets these settings. _txlock=immediate makes
+	// transactions take the write lock when they begin. Without it, a
+	// transaction that reads and then writes (creating the first user,
+	// voting) can fail with SQLITE_BUSY when another connection wrote in
+	// between; with it, a second writer waits up to busy_timeout instead.
+	// Every transaction in this package writes, so nothing is lost.
+	dsn := "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)" +
+		"&_pragma=synchronous(NORMAL)&_txlock=immediate"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err

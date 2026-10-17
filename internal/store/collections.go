@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"strings"
 	"time"
 )
 
@@ -19,7 +18,7 @@ type Collection struct {
 
 const collectionCols = `id, name, category, year, overview, poster, created_at`
 
-func scanCollection(row interface{ Scan(...any) error }) (Collection, error) {
+func scanCollection(row rowScanner) (Collection, error) {
 	var c Collection
 	var created int64
 	err := row.Scan(&c.ID, &c.Name, &c.Category, &c.Year, &c.Overview, &c.Poster, &created)
@@ -33,7 +32,7 @@ func (s *Store) CreateCollection(ctx context.Context, c Collection) (int64, erro
 		`INSERT INTO collections (name, category, year, overview, poster, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		c.Name, c.Category, c.Year, c.Overview, c.Poster, s.unix())
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
+		if isUniqueViolation(err) {
 			return 0, ErrDuplicate
 		}
 		return 0, err
@@ -47,7 +46,7 @@ func (s *Store) UpdateCollection(ctx context.Context, c Collection) error {
 		UPDATE collections SET name = ?, category = ?, year = ?, overview = ?,
 			poster = CASE WHEN ? <> '' THEN ? ELSE poster END
 		WHERE id = ?`, c.Name, c.Category, c.Year, c.Overview, c.Poster, c.Poster, c.ID)
-	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
+	if isUniqueViolation(err) {
 		return ErrDuplicate
 	}
 	return err
@@ -73,18 +72,5 @@ func (s *Store) CollectionByName(ctx context.Context, name string) (Collection, 
 
 // Collections lists every collection by name.
 func (s *Store) Collections(ctx context.Context) ([]Collection, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+collectionCols+` FROM collections ORDER BY name COLLATE NOCASE`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Collection
-	for rows.Next() {
-		c, err := scanCollection(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
+	return queryAll(ctx, s.db, scanCollection, `SELECT `+collectionCols+` FROM collections ORDER BY name COLLATE NOCASE`)
 }

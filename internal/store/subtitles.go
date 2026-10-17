@@ -54,10 +54,13 @@ func (s *Store) AddSubtitle(ctx context.Context, mediaID int64, language, label,
 		if err != nil {
 			return err
 		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return nil
+		n, err := res.RowsAffected()
+		if err != nil || n == 0 {
+			return err // already imported from this source
 		}
-		id, _ = res.LastInsertId()
+		if id, err = res.LastInsertId(); err != nil {
+			return err
+		}
 		stmt, err := tx.PrepareContext(ctx,
 			`INSERT INTO subtitle_cues (subtitle_id, idx, start_ms, end_ms, text) VALUES (?, ?, ?, ?, ?)`)
 		if err != nil {
@@ -76,20 +79,15 @@ func (s *Store) AddSubtitle(ctx context.Context, mediaID int64, language, label,
 
 // SubtitleSources returns the sidecar files that have already been imported.
 func (s *Store) SubtitleSources(ctx context.Context) (map[string]bool, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT source FROM subtitles WHERE source <> ''`)
+	sources, err := queryAll(ctx, s.db, scanString, `SELECT source FROM subtitles WHERE source <> ''`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := map[string]bool{}
-	for rows.Next() {
-		var src string
-		if err := rows.Scan(&src); err != nil {
-			return nil, err
-		}
+	out := make(map[string]bool, len(sources))
+	for _, src := range sources {
 		out[src] = true
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // UpdateSubtitleLabel renames a track.
@@ -106,21 +104,11 @@ func (s *Store) DeleteSubtitle(ctx context.Context, id int64) error {
 
 // Subtitles lists the tracks for a media item.
 func (s *Store) Subtitles(ctx context.Context, mediaID int64) ([]Subtitle, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, media_id, language, label, source FROM subtitles WHERE media_id = ? ORDER BY label`, mediaID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Subtitle
-	for rows.Next() {
+	return queryAll(ctx, s.db, func(r rowScanner) (Subtitle, error) {
 		var t Subtitle
-		if err := rows.Scan(&t.ID, &t.MediaID, &t.Language, &t.Label, &t.Source); err != nil {
-			return nil, err
-		}
-		out = append(out, t)
-	}
-	return out, rows.Err()
+		err := r.Scan(&t.ID, &t.MediaID, &t.Language, &t.Label, &t.Source)
+		return t, err
+	}, `SELECT id, media_id, language, label, source FROM subtitles WHERE media_id = ? ORDER BY label`, mediaID)
 }
 
 // SubtitleByID returns one track.
@@ -134,21 +122,11 @@ func (s *Store) SubtitleByID(ctx context.Context, id int64) (Subtitle, error) {
 
 // Cues returns a track's cues in order.
 func (s *Store) Cues(ctx context.Context, subtitleID int64) ([]Cue, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, start_ms, end_ms, text FROM subtitle_cues WHERE subtitle_id = ? ORDER BY idx`, subtitleID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Cue
-	for rows.Next() {
+	return queryAll(ctx, s.db, func(r rowScanner) (Cue, error) {
 		var c Cue
-		if err := rows.Scan(&c.ID, &c.StartMS, &c.EndMS, &c.Text); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
+		err := r.Scan(&c.ID, &c.StartMS, &c.EndMS, &c.Text)
+		return c, err
+	}, `SELECT id, start_ms, end_ms, text FROM subtitle_cues WHERE subtitle_id = ? ORDER BY idx`, subtitleID)
 }
 
 // CueAt returns the cue showing at a playback time, or the closest one before it.
@@ -180,25 +158,16 @@ func (s *Store) CueForChange(ctx context.Context, changeID int64) (int64, error)
 
 // Changes lists the open proposals for a cue, most votes first.
 func (s *Store) Changes(ctx context.Context, cueID, userID int64) ([]Change, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	return queryAll(ctx, s.db, func(r rowScanner) (Change, error) {
+		var c Change
+		err := r.Scan(&c.ID, &c.CueID, &c.OriginalText, &c.ProposedText, &c.Votes, &c.VotedByMe)
+		return c, err
+	}, `
 		SELECT ch.id, ch.cue_id, cu.text, ch.proposed_text,
 		       (SELECT COUNT(*) FROM subtitle_votes v WHERE v.change_id = ch.id),
 		       EXISTS (SELECT 1 FROM subtitle_votes v WHERE v.change_id = ch.id AND v.user_id = ?)
 		FROM subtitle_changes ch JOIN subtitle_cues cu ON cu.id = ch.cue_id
 		WHERE ch.cue_id = ? ORDER BY 5 DESC, ch.id`, userID, cueID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Change
-	for rows.Next() {
-		var c Change
-		if err := rows.Scan(&c.ID, &c.CueID, &c.OriginalText, &c.ProposedText, &c.Votes, &c.VotedByMe); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
 }
 
 // ProposeChange records a correction to a cue; the proposer's vote counts.
