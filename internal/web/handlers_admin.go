@@ -75,7 +75,7 @@ func (s *Server) conversionsPanel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) retryConversion(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(r)
+	id, ok := pathIDOK(r)
 	if !ok {
 		s.notFound(w, r)
 		return
@@ -343,7 +343,7 @@ func (s *Server) uploadSubtitle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) saveSubtitle(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(r)
+	id, ok := pathIDOK(r)
 	if !ok {
 		s.notFound(w, r)
 		return
@@ -367,7 +367,7 @@ func (s *Server) saveSubtitle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteSubtitle(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(r)
+	id, ok := pathIDOK(r)
 	if !ok {
 		s.notFound(w, r)
 		return
@@ -423,7 +423,7 @@ func (s *Server) createCollection(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) editCollectionPage(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(r)
+	id, ok := pathIDOK(r)
 	if !ok {
 		s.notFound(w, r)
 		return
@@ -442,7 +442,7 @@ func (s *Server) editCollectionPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) saveCollection(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(r)
+	id, ok := pathIDOK(r)
 	if !ok {
 		s.notFound(w, r)
 		return
@@ -484,7 +484,7 @@ func (s *Server) saveCollection(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteCollection(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(r)
+	id, ok := pathIDOK(r)
 	if !ok {
 		s.notFound(w, r)
 		return

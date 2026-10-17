@@ -12,11 +12,8 @@ import (
 	"net/http"
 	"net/url"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/a-h/templ"
 
 	"github.com/AlexCristian/NexusPlay/internal/auth"
 	"github.com/AlexCristian/NexusPlay/internal/config"
@@ -73,9 +70,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.healthz)
 
 	// Pages anyone may see unless NEXUSPLAY_REQUIRE_LOGIN is set.
-	mux.Handle("GET /{$}", s.browse(s.home))
-	mux.Handle("GET /search", s.browse(s.search))
-	mux.Handle("GET /collections/{id}", s.browse(s.collection))
+	mux.Handle("GET /{$}", s.browse(s.handle(s.home)))
+	mux.Handle("GET /search", s.browse(s.handle(s.search)))
+	mux.Handle("GET /collections/{id}", s.browse(s.handle(s.collection)))
 	mux.Handle("GET /watch/{id}", s.browse(s.watch))
 	mux.Handle("GET /media/{id}/file", s.browse(s.mediaFile))
 	mux.Handle("GET /media/{id}/hls/{file}", s.browse(s.hls))
@@ -90,10 +87,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /logout", s.logout)
 
 	// Signed-in features.
-	mux.Handle("GET /me/resume", s.member(s.resumeList))
-	mux.Handle("GET /me/notifications", s.member(s.notificationList))
+	mux.Handle("GET /me/resume", s.member(s.handle(s.resumeList)))
+	mux.Handle("GET /me/notifications", s.member(s.handle(s.notificationList)))
 	mux.Handle("POST /me/progress", s.member(s.saveProgress))
-	mux.Handle("POST /collections/{id}/subscribe", s.member(s.toggleSubscription))
+	mux.Handle("POST /collections/{id}/subscribe", s.member(s.handle(s.toggleSubscription)))
 	mux.Handle("GET /media/{id}/subtitle-report", s.member(s.subtitleReport))
 	mux.Handle("POST /cues/{id}/changes", s.member(s.proposeChange))
 	mux.Handle("POST /changes/{id}/vote", s.member(s.voteChange))
@@ -377,40 +374,4 @@ func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write([]byte("ok\n"))
-}
-
-// render writes a component, or the whole page around it for a normal request.
-func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, c templ.Component) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Vary", "HX-Request")
-	w.WriteHeader(status)
-	if err := c.Render(r.Context(), w); err != nil {
-		s.Log.Error("render", "err", err, "path", r.URL.Path)
-	}
-}
-
-func (s *Server) serverError(w http.ResponseWriter, r *http.Request, err error) {
-	s.Log.Error("request failed", "path", r.URL.Path, "err", err)
-	s.errorPage(w, r, http.StatusInternalServerError, "Something went wrong", "The server hit an error. Please try again.")
-}
-
-func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
-	s.errorPage(w, r, http.StatusNotFound, "Not found", "That page or item does not exist.")
-}
-
-func (s *Server) errorPage(w http.ResponseWriter, r *http.Request, status int, title, msg string) {
-	if isHTMX(r) {
-		s.render(w, r, status, alert("error", msg))
-		return
-	}
-	s.render(w, r, status, messagePage(s.page(r, title), title, msg))
-}
-
-func isHTMX(r *http.Request) bool {
-	return r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true"
-}
-
-func pathID(r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	return id, err == nil && id > 0
 }

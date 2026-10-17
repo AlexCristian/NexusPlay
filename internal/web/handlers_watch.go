@@ -47,7 +47,7 @@ func (s *Server) cueVisible(w http.ResponseWriter, r *http.Request, cueID int64)
 // loadMedia fetches the media named in the path. Unpublished media is only
 // visible to administrators, who preview it before publishing.
 func (s *Server) loadMedia(w http.ResponseWriter, r *http.Request) (store.Media, bool) {
-	id, ok := pathID(r)
+	id, ok := pathIDOK(r)
 	if !ok {
 		s.notFound(w, r)
 		return store.Media{}, false
@@ -200,7 +200,7 @@ func (s *Server) hls(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(r)
+	id, ok := pathIDOK(r)
 	if !ok {
 		s.notFound(w, r)
 		return
@@ -304,7 +304,7 @@ func (s *Server) renderReport(w http.ResponseWriter, r *http.Request, track stor
 }
 
 func (s *Server) proposeChange(w http.ResponseWriter, r *http.Request) {
-	cueID, ok := pathID(r)
+	cueID, ok := pathIDOK(r)
 	if !ok {
 		s.notFound(w, r)
 		return
@@ -322,7 +322,7 @@ func (s *Server) proposeChange(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) voteChange(w http.ResponseWriter, r *http.Request) {
-	changeID, ok := pathID(r)
+	changeID, ok := pathIDOK(r)
 	if !ok {
 		s.notFound(w, r)
 		return
