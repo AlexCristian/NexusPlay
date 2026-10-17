@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/store"
@@ -191,4 +192,35 @@ func TestDisabledStatus(t *testing.T) {
 		t.Errorf("Disabled status = %+v, %v", st, err)
 	}
 	Disabled{}.Wake() // must not panic or block
+}
+
+// Status counts files that need converting: queued, postponed for disk
+// space, and not counting browser-ready files or failed ones.
+func TestConversionCounts(t *testing.T) {
+	ctx := context.Background()
+	f := newJobFixture(t, &fakeTools{}, 1<<40) // Movie.mkv: H.264 + AC-3, needs converting
+	add := func(m store.ScannedMedia) int64 {
+		t.Helper()
+		id, _, err := f.st.InsertScannedMedia(ctx, m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	add(store.ScannedMedia{Path: "ready.mp4", Title: "Ready", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p"})
+	add(store.ScannedMedia{Path: "tenbit.mp4", Title: "10-bit", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p10le"})
+	waiting := add(store.ScannedMedia{Path: "big.avi", Title: "Big", VideoCodec: "mpeg4", AudioCodec: "mp3"})
+	failed := add(store.ScannedMedia{Path: "broken.avi", Title: "Broken", VideoCodec: "mpeg4", AudioCodec: "mp3"})
+	if err := f.st.SetConvertFailed(ctx, failed, "bad file"); err != nil {
+		t.Fatal(err)
+	}
+	f.c.waitUntil[waiting] = f.c.now().Add(time.Hour)
+
+	st, err := f.c.Status(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Queued != 2 || st.Postponed != 1 || len(st.Active) != 0 {
+		t.Errorf("status = %+v, want 2 queued (Movie.mkv, tenbit.mp4) and 1 postponed", st)
+	}
 }

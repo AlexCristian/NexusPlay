@@ -12,10 +12,24 @@ const (
 	ConvertFailed = "failed" // gave up; an administrator can retry
 )
 
+// ConversionCandidate is what the converter needs to decide whether a file
+// needs converting.
+type ConversionCandidate struct {
+	ID                                   int64
+	Path, VideoCodec, AudioCodec, PixFmt string
+}
+
 // ConversionCandidates lists media that have not failed conversion, newest
-// first. The caller decides which of them actually need converting.
-func (s *Store) ConversionCandidates(ctx context.Context) ([]Media, error) {
-	return s.queryMedia(ctx, `WHERE m.convert_status = '' ORDER BY m.added_at DESC, m.id DESC`)
+// first. The caller decides which of them actually need converting. The
+// control panel polls this while conversions run, so it reads only the
+// columns the decision needs.
+func (s *Store) ConversionCandidates(ctx context.Context) ([]ConversionCandidate, error) {
+	return queryAll(ctx, s.db, func(r rowScanner) (ConversionCandidate, error) {
+		var c ConversionCandidate
+		err := r.Scan(&c.ID, &c.Path, &c.VideoCodec, &c.AudioCodec, &c.PixFmt)
+		return c, err
+	}, `SELECT id, path, video_codec, audio_codec, pix_fmt FROM media
+		WHERE convert_status = '' ORDER BY added_at DESC, id DESC`)
 }
 
 // ConversionFailure is a file the converter gave up on.

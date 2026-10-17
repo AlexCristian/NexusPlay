@@ -17,7 +17,7 @@ import (
 
 // Store is the database as the converter uses it; *store.Store implements it.
 type Store interface {
-	ConversionCandidates(ctx context.Context) ([]store.Media, error)
+	ConversionCandidates(ctx context.Context) ([]store.ConversionCandidate, error)
 	MediaByID(ctx context.Context, id int64) (store.Media, error)
 	ReplaceMediaFile(ctx context.Context, id int64, f store.ReplacedFile) error
 	SetConvertFailed(ctx context.Context, id int64, reason string) error
@@ -155,7 +155,17 @@ func (c *Converter) fill(ctx context.Context, wg *sync.WaitGroup) {
 		}
 		return
 	}
-	for _, m := range queue[:min(free, len(queue))] {
+	for _, id := range queue[:min(free, len(queue))] {
+		m, err := c.deps.Store.MediaByID(ctx, id)
+		if errors.Is(err, store.ErrNotFound) {
+			continue // removed by a scan since the queue was read
+		}
+		if err != nil {
+			if ctx.Err() == nil {
+				c.deps.Log.Error("reading the conversion queue", "err", err)
+			}
+			return
+		}
 		j := &job{media: m, duration: m.Duration}
 		c.mu.Lock()
 		c.active[m.ID] = j
@@ -170,9 +180,9 @@ func (c *Converter) fill(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-// queue lists files waiting for conversion, newest first, leaving out
-// running ones. It also counts postponed ones.
-func (c *Converter) queue(ctx context.Context) (queued []store.Media, postponed int, err error) {
+// queue lists the IDs of files waiting for conversion, newest first,
+// leaving out running ones. It also counts postponed ones.
+func (c *Converter) queue(ctx context.Context) (queued []int64, postponed int, err error) {
 	cands, err := c.deps.Store.ConversionCandidates(ctx)
 	if err != nil {
 		return nil, 0, err
@@ -187,7 +197,7 @@ func (c *Converter) queue(ctx context.Context) (queued []store.Media, postponed 
 		case now.Before(c.waitUntil[m.ID]):
 			postponed++
 		default:
-			queued = append(queued, m)
+			queued = append(queued, m.ID)
 		}
 	}
 	return queued, postponed, nil
