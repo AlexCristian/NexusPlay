@@ -3,9 +3,9 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -43,31 +43,13 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	defer a.Close()
-	a.Start(ctx)
-
-	httpServer := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           a.Handler,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       2 * time.Minute,
+	ln, err := net.Listen("tcp", cfg.Addr)
+	if err != nil {
+		a.Close()
+		return err
 	}
-	errc := make(chan error, 1)
-	go func() {
-		log.Info("NexusPlay listening", "addr", cfg.Addr, "media", cfg.MediaDir, "data", cfg.DataDir, "tmdb", cfg.TMDBAPIKey != "")
-		errc <- httpServer.ListenAndServe()
-	}()
-	select {
-	case err := <-errc:
-		if !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-	case <-ctx.Done():
-		log.Info("shutting down")
-	}
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	return httpServer.Shutdown(shutdownCtx)
+	log.Info("NexusPlay listening", "addr", ln.Addr().String(), "media", cfg.MediaDir, "data", cfg.DataDir, "tmdb", cfg.TMDBAPIKey != "")
+	return a.Serve(ctx, ln)
 }
 
 // healthcheck lets a minimal container check itself without curl.

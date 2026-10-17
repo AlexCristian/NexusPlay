@@ -16,9 +16,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
@@ -201,15 +201,23 @@ func startServer(t *testing.T, o serverOpts) *server {
 		cancel()
 		t.Fatal(err)
 	}
-	a.Start(ctx)
-	ts := httptest.NewServer(a.Handler)
-	t.Cleanup(func() {
-		ts.Close()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
 		cancel()
-		time.Sleep(50 * time.Millisecond) // let ffmpeg children exit before the temp dir is removed
 		a.Close()
+		t.Fatal(err)
+	}
+	served := make(chan error, 1)
+	go func() { served <- a.Serve(ctx, ln) }()
+	t.Cleanup(func() {
+		// Serve returns once every worker (and every ffmpeg) has stopped and
+		// the database is closed, so the temp folder can then be removed.
+		cancel()
+		if err := <-served; err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
 	})
-	s := &server{t: t, URL: ts.URL, App: a, Media: media}
+	s := &server{t: t, URL: "http://" + ln.Addr().String(), App: a, Media: media}
 	return s
 }
 
