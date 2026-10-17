@@ -3,7 +3,9 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
@@ -286,5 +288,34 @@ func TestDeletingMediaCascades(t *testing.T) {
 	}
 	if list, _ := s.InProgress(ctx, u.ID, 10); len(list) != 0 {
 		t.Error("progress survived media deletion")
+	}
+}
+
+// "movies" and "Movies" are one home-page tab, whichever spelling came first.
+func TestCategoriesIgnoreLetterCase(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	for i, cat := range []string{"Movies", "movies", " MOVIES ", "", "Documentaries"} {
+		id := mustMedia(t, s, fmt.Sprintf("m%d.mp4", i))
+		if err := s.UpdateMedia(ctx, id, MediaUpdate{Title: fmt.Sprintf("Film %d", i), Category: cat}, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.CreateCollection(ctx, Collection{Name: "Cosmos", Category: "documentaries"}); err != nil {
+		t.Fatal(err)
+	}
+	if names, _ := s.CategoryNames(ctx); strings.Join(names, ",") != "Documentaries,Movies" {
+		t.Errorf("stored categories = %v, want one spelling each", names)
+	}
+	cats, err := s.Categories(ctx, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, c := range cats {
+		got = append(got, fmt.Sprintf("%s:%d", c.Name, len(c.Tiles)))
+	}
+	if want := "Documentaries:1,Movies:3,Other:1"; strings.Join(got, ",") != want {
+		t.Errorf("categories = %v, want %s", got, want)
 	}
 }

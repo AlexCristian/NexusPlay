@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 )
@@ -159,7 +160,12 @@ func (s *Store) UpdateMedia(ctx context.Context, id int64, u MediaUpdate, publis
 		if u.CollectionID != 0 {
 			coll = u.CollectionID
 		}
-		_, err := tx.ExecContext(ctx, `
+		category, err := canonicalCategory(ctx, tx, u.Category)
+		if err != nil {
+			return err
+		}
+		u.Category = category
+		_, err = tx.ExecContext(ctx, `
 			UPDATE media SET title = ?, year = ?, overview = ?, category = ?, collection_id = ?,
 				season = ?, episode = ?, poster = CASE WHEN ? <> '' THEN ? ELSE poster END
 			WHERE id = ?`,
@@ -214,17 +220,20 @@ func (s *Store) Categories(ctx context.Context, userID int64) ([]Category, error
 		category string
 		tile     Tile
 	}
+	// Category names are compared without regard to letter case. Writes
+	// already reuse an existing spelling (canonicalCategory); grouping here
+	// also merges rows saved before that rule existed.
 	rows, err := queryAll(ctx, s.db, func(r rowScanner) (row, error) {
 		var x row
 		t := &x.tile
 		err := r.Scan(&x.category, &t.IsCollection, &t.ID, &t.Title, &t.Year, &t.Poster, &t.Watched)
 		return x, err
 	}, `
-		SELECT category, 0, id, title, year, poster,
+		SELECT COALESCE(NULLIF(TRIM(category), ''), 'Other'), 0, id, title, year, poster,
 		       EXISTS (SELECT 1 FROM watched w WHERE w.media_id = m.id AND w.user_id = ?)
 		FROM media m WHERE published = 1 AND collection_id IS NULL
 		UNION ALL
-		SELECT c.category, 1, c.id, c.name, c.year, c.poster, 0
+		SELECT COALESCE(NULLIF(TRIM(c.category), ''), 'Other'), 1, c.id, c.name, c.year, c.poster, 0
 		FROM collections c WHERE EXISTS (SELECT 1 FROM media m WHERE m.collection_id = c.id AND m.published = 1)
 		ORDER BY 1 COLLATE NOCASE, 4 COLLATE NOCASE`, userID)
 	if err != nil {
@@ -232,12 +241,8 @@ func (s *Store) Categories(ctx context.Context, userID int64) ([]Category, error
 	}
 	var out []Category
 	for _, x := range rows {
-		cat := x.category
-		if cat == "" {
-			cat = "Other"
-		}
-		if len(out) == 0 || out[len(out)-1].Name != cat {
-			out = append(out, Category{Name: cat})
+		if len(out) == 0 || !strings.EqualFold(out[len(out)-1].Name, x.category) {
+			out = append(out, Category{Name: x.category})
 		}
 		out[len(out)-1].Tiles = append(out[len(out)-1].Tiles, x.tile)
 	}
@@ -302,6 +307,27 @@ func (s *Store) CategoryNames(ctx context.Context) ([]string, error) {
 		SELECT category FROM media WHERE category <> ''
 		UNION SELECT category FROM collections WHERE category <> ''
 		ORDER BY 1 COLLATE NOCASE`)
+}
+
+// canonicalCategory trims a category name and, if a category with the same
+// name in different letter case already exists, returns that spelling, so
+// "movies" joins "Movies" instead of starting a second home-page tab.
+func canonicalCategory(ctx context.Context, tx *sql.Tx, name string) (string, error) {
+	name = strings.Join(strings.Fields(name), " ")
+	if name == "" {
+		return "", nil
+	}
+	var existing string
+	err := tx.QueryRowContext(ctx, `
+		SELECT category FROM (
+			SELECT category, MIN(id) AS first FROM media WHERE category = ? COLLATE NOCASE GROUP BY category
+			UNION ALL
+			SELECT category, MIN(id) FROM collections WHERE category = ? COLLATE NOCASE GROUP BY category
+		) ORDER BY first LIMIT 1`, name, name).Scan(&existing)
+	if errors.Is(err, sql.ErrNoRows) {
+		return name, nil
+	}
+	return existing, err
 }
 
 func scanString(r rowScanner) (string, error) {

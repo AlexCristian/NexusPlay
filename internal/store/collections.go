@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -26,30 +27,45 @@ func scanCollection(row rowScanner) (Collection, error) {
 	return c, err
 }
 
-// CreateCollection adds a collection.
-func (s *Store) CreateCollection(ctx context.Context, c Collection) (int64, error) {
-	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO collections (name, category, year, overview, poster, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		c.Name, c.Category, c.Year, c.Overview, c.Poster, s.unix())
-	if err != nil {
-		if isUniqueViolation(err) {
-			return 0, ErrDuplicate
+// CreateCollection adds a collection. It returns ErrDuplicate if the name
+// is taken, ignoring letter case.
+func (s *Store) CreateCollection(ctx context.Context, c Collection) (id int64, err error) {
+	err = s.tx(ctx, func(tx *sql.Tx) error {
+		if c.Category, err = canonicalCategory(ctx, tx, c.Category); err != nil {
+			return err
 		}
-		return 0, err
-	}
-	return res.LastInsertId()
+		res, err := tx.ExecContext(ctx,
+			`INSERT INTO collections (name, category, year, overview, poster, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			c.Name, c.Category, c.Year, c.Overview, c.Poster, s.unix())
+		if isUniqueViolation(err) {
+			return ErrDuplicate
+		}
+		if err != nil {
+			return err
+		}
+		id, err = res.LastInsertId()
+		return err
+	})
+	return id, err
 }
 
-// UpdateCollection saves a collection's fields. An empty poster keeps the current one.
+// UpdateCollection saves a collection's fields. An empty poster keeps the
+// current one. It returns ErrDuplicate if another collection has the name.
 func (s *Store) UpdateCollection(ctx context.Context, c Collection) error {
-	_, err := s.db.ExecContext(ctx, `
-		UPDATE collections SET name = ?, category = ?, year = ?, overview = ?,
-			poster = CASE WHEN ? <> '' THEN ? ELSE poster END
-		WHERE id = ?`, c.Name, c.Category, c.Year, c.Overview, c.Poster, c.Poster, c.ID)
-	if isUniqueViolation(err) {
-		return ErrDuplicate
-	}
-	return err
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		var err error
+		if c.Category, err = canonicalCategory(ctx, tx, c.Category); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `
+			UPDATE collections SET name = ?, category = ?, year = ?, overview = ?,
+				poster = CASE WHEN ? <> '' THEN ? ELSE poster END
+			WHERE id = ?`, c.Name, c.Category, c.Year, c.Overview, c.Poster, c.Poster, c.ID)
+		if isUniqueViolation(err) {
+			return ErrDuplicate
+		}
+		return err
+	})
 }
 
 // DeleteCollection removes a collection; its media become standalone.

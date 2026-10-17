@@ -2,8 +2,8 @@ package store
 
 import (
 	"context"
-	"errors"
 	"database/sql"
+	"errors"
 )
 
 // Resume is a partly watched item for the "Previously watching" list.
