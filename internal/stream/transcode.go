@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 )
 
 // DirectPlayable reports whether every mainstream browser can play the file
@@ -50,10 +51,10 @@ const keepFinished = 6 * time.Hour
 // Manager runs at most Max ffmpeg processes and reuses their output while it
 // is being watched.
 type Manager struct {
-	FFmpeg string
-	Dir    string
-	Max    int
-	Log    *slog.Logger
+	Tools ffmpeg.Tools
+	Dir   string
+	Max   int
+	Log   *slog.Logger
 
 	mu   sync.Mutex
 	jobs map[int64]*job
@@ -70,14 +71,14 @@ type job struct {
 
 // NewManager prepares the transcode directory, clearing leftovers from a
 // previous run.
-func NewManager(ffmpeg, dir string, max int, log *slog.Logger) (*Manager, error) {
+func NewManager(tools ffmpeg.Tools, dir string, max int, log *slog.Logger) (*Manager, error) {
 	if err := os.RemoveAll(dir); err != nil {
 		return nil, err
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	return &Manager{FFmpeg: ffmpeg, Dir: dir, Max: max, Log: log, jobs: map[int64]*job{}}, nil
+	return &Manager{Tools: tools, Dir: dir, Max: max, Log: log, jobs: map[int64]*job{}}, nil
 }
 
 // Playlist starts (or reuses) a transcode for mediaID and waits until its
@@ -165,23 +166,21 @@ func (m *Manager) start(mediaID int64, src, videoCodec, audioCodec string) (*job
 	j := &job{dir: dir, cancel: cancel, done: make(chan struct{}), lastAccess: time.Now()}
 	m.jobs[mediaID] = j
 
-	args := ffmpegArgs(src, dir, videoCodec, audioCodec)
-	cmd := exec.CommandContext(ctx, m.FFmpeg, args...)
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
+	proc, err := m.Tools.Start(ctx, ffmpegArgs(src, dir, videoCodec, audioCodec))
+	if err != nil {
 		cancel()
 		delete(m.jobs, mediaID)
-		return nil, fmt.Errorf("start ffmpeg: %w", err)
+		return nil, err
 	}
 	m.Log.Info("transcode started", "media", mediaID, "video", videoCodec, "audio", audioCodec)
 	go func() {
-		err := cmd.Wait()
+		err := proc.Wait()
 		m.mu.Lock()
 		j.finished = true
 		if err != nil && ctx.Err() == nil {
-			j.err = fmt.Errorf("ffmpeg: %v: %s", err, lastLine(stderr.String()))
-			m.Log.Error("transcode failed", "media", mediaID, "err", j.err)
+			// Not logged here: Playlist returns it to the request that waits
+			// for the playlist, and the handler reports it there.
+			j.err = err
 		}
 		m.mu.Unlock()
 		close(j.done)
@@ -210,14 +209,6 @@ func ffmpegArgs(src, dir, videoCodec, audioCodec string) []string {
 		"-f", "hls", "-hls_time", "6", "-hls_playlist_type", "event",
 		"-hls_segment_filename", filepath.Join(dir, "seg%05d.ts"),
 		filepath.Join(dir, "index.m3u8"))
-}
-
-func lastLine(s string) string {
-	s = strings.TrimSpace(s)
-	if i := strings.LastIndexByte(s, '\n'); i >= 0 {
-		return s[i+1:]
-	}
-	return s
 }
 
 // Janitor stops abandoned transcodes and removes stale output until ctx ends.

@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/AlexCristian/NexusPlay/internal/config"
+	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
 	"github.com/AlexCristian/NexusPlay/internal/store"
@@ -51,7 +52,7 @@ func newEnv(t *testing.T, mutate func(*config.Config)) *env {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	tm, err := stream.NewManager("ffmpeg", cfg.TranscodeDir(), 1, log)
+	tm, err := stream.NewManager(ffmpeg.Tools{FFmpeg: "ffmpeg", FFprobe: "ffprobe"}, cfg.TranscodeDir(), 1, log)
 	if err != nil {
 		t.Fatal(err)
 	}

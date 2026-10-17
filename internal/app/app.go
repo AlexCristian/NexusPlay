@@ -13,6 +13,7 @@ import (
 
 	"github.com/AlexCristian/NexusPlay/internal/config"
 	"github.com/AlexCristian/NexusPlay/internal/convert"
+	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
 	"github.com/AlexCristian/NexusPlay/internal/store"
@@ -51,12 +52,13 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
+	tools := ffmpeg.Tools{FFmpeg: cfg.FFmpegPath, FFprobe: cfg.FFprobePath}
 	meta := metadata.New(cfg.TMDBAPIKey, cfg.PosterDir())
 	scanner := &library.Scanner{
-		Store: st, Prober: library.Prober{Path: cfg.FFprobePath}, Meta: meta,
+		Store: st, Prober: tools, Meta: meta,
 		MediaDir: cfg.MediaDir, Interval: cfg.ScanInterval, Log: log.With("component", "scanner"),
 	}
-	transcodes, err := stream.NewManager(cfg.FFmpegPath, cfg.TranscodeDir(), cfg.MaxTranscodes, log.With("component", "transcode"))
+	transcodes, err := stream.NewManager(tools, cfg.TranscodeDir(), cfg.MaxTranscodes, log.With("component", "transcode"))
 	if err != nil {
 		st.Close()
 		return nil, fmt.Errorf("transcode folder: %w", err)
@@ -64,7 +66,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	var conv *convert.Converter
 	if cfg.Convert {
 		conv = &convert.Converter{
-			Store: st, Scanner: scanner, FFmpeg: cfg.FFmpegPath, FFprobe: cfg.FFprobePath,
+			Store: st, Scanner: scanner, Tools: tools,
 			MediaDir: cfg.MediaDir, Max: cfg.MaxConversions, Log: log.With("component", "convert"),
 		}
 		scanner.OnAdded = conv.Wake

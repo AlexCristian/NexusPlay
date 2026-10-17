@@ -1,7 +1,6 @@
 package convert
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -9,13 +8,12 @@ import (
 	"log/slog"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
@@ -35,8 +33,7 @@ const (
 type Converter struct {
 	Store    *store.Store
 	Scanner  *library.Scanner
-	FFmpeg   string
-	FFprobe  string
+	Tools    ffmpeg.Tools
 	MediaDir string
 	Max      int
 	Log      *slog.Logger
@@ -250,7 +247,7 @@ func (c *Converter) convert(ctx context.Context, j *job) (string, error) {
 	}
 
 	pctx, cancel := context.WithTimeout(ctx, time.Minute)
-	source, err := ProbeSource(pctx, c.FFprobe, src)
+	source, err := c.Tools.Probe(pctx, src)
 	cancel()
 	if err != nil {
 		return "", err
@@ -283,7 +280,15 @@ func (c *Converter) convert(ctx context.Context, j *job) (string, error) {
 
 	tmp := filepath.Join(dir, "."+base+tmpSuffix)
 	defer os.Remove(tmp) // only matters if we stop before the rename
-	if err := c.runFFmpeg(ctx, j, plan.ConvertArgs(src, tmp)); err != nil {
+	err = c.Tools.Run(ctx, plan.ConvertArgs(src, tmp), ffmpeg.RunOptions{
+		LowPriority: true,
+		OnProgress: func(seconds float64) {
+			c.mu.Lock()
+			j.done = seconds
+			c.mu.Unlock()
+		},
+	})
+	if err != nil {
 		return "", err
 	}
 	result, err := c.verify(ctx, tmp, source, plan)
@@ -395,40 +400,6 @@ func moveNoReplace(tmp, target string) error {
 	return nil
 }
 
-func (c *Converter) runFFmpeg(ctx context.Context, j *job, args []string) error {
-	cmd := exec.CommandContext(ctx, c.FFmpeg, args...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("starting ffmpeg: %w", err)
-	}
-	lowerPriority(cmd.Process.Pid)
-	sc := bufio.NewScanner(stdout)
-	for sc.Scan() {
-		// -progress reports out_time_us (out_time_ms is also microseconds, despite its name).
-		key, val, ok := strings.Cut(sc.Text(), "=")
-		if !ok || (key != "out_time_us" && key != "out_time_ms") {
-			continue
-		}
-		if us, err := strconv.ParseInt(val, 10, 64); err == nil && us > 0 {
-			c.mu.Lock()
-			j.done = float64(us) / 1e6
-			c.mu.Unlock()
-		}
-	}
-	if err := cmd.Wait(); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return fmt.Errorf("ffmpeg: %v: %s", err, lastLine(stderr.String()))
-	}
-	return nil
-}
-
 func (c *Converter) extractSubtitle(ctx context.Context, src, dir string, sp SubtitlePlan) error {
 	out := filepath.Join(dir, sp.File)
 	// Defence in depth on top of safeLanguage: sidecars live next to the video.
@@ -440,50 +411,49 @@ func (c *Converter) extractSubtitle(ctx context.Context, src, dir string, sp Sub
 	}
 	tmp := filepath.Join(dir, "."+sp.File+".part")
 	defer os.Remove(tmp)
-	cmd := exec.CommandContext(ctx, c.FFmpeg, SubtitleArgs(src, sp, tmp)...)
-	if b, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("%v: %s", err, lastLine(string(b)))
+	if err := c.Tools.Run(ctx, SubtitleArgs(src, sp, tmp), ffmpeg.RunOptions{}); err != nil {
+		return err
 	}
 	return os.Rename(tmp, out)
 }
 
 // verify checks the converted file before anything is deleted: H.264 video,
-// every audio track present, and the same length as the original.
-func (c *Converter) verify(ctx context.Context, file string, source Source, plan Plan) (store.ReplacedFile, error) {
+// every planned audio track present, and the same length as the original.
+// It returns what the library should record about the new file.
+func (c *Converter) verify(ctx context.Context, file string, source ffmpeg.Probe, plan Plan) (store.ReplacedFile, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	got, err := library.Prober{Path: c.FFprobe}.Probe(ctx, file)
+	got, err := c.Tools.Probe(ctx, file)
 	if err != nil {
 		return store.ReplacedFile{}, err
 	}
-	if got.VideoCodec != "h264" {
-		return store.ReplacedFile{}, fmt.Errorf("video is %s, want h264", got.VideoCodec)
-	}
-	streams, err := ProbeSource(ctx, c.FFprobe, file)
-	if err != nil {
+	if err := CheckConverted(got, source, plan); err != nil {
 		return store.ReplacedFile{}, err
-	}
-	audio := 0
-	for _, s := range streams.Streams {
-		if s.Type == "audio" {
-			audio++
-		}
-	}
-	if audio != len(plan.Audio) {
-		return store.ReplacedFile{}, fmt.Errorf("%d audio tracks, want %d", audio, len(plan.Audio))
-	}
-	if source.Duration > 0 {
-		tolerance := math.Max(2, source.Duration*0.01)
-		if math.Abs(got.Duration-source.Duration) > tolerance {
-			return store.ReplacedFile{}, fmt.Errorf("lasts %.1fs, the original %.1fs", got.Duration, source.Duration)
-		}
 	}
 	info, err := os.Stat(file)
 	if err != nil {
 		return store.ReplacedFile{}, err
 	}
 	return store.ReplacedFile{Duration: got.Duration, Container: got.Container,
-		VideoCodec: got.VideoCodec, AudioCodec: got.AudioCodec, Size: info.Size()}, nil
+		VideoCodec: got.VideoCodec(), AudioCodec: got.AudioCodec(), Size: info.Size()}, nil
+}
+
+// CheckConverted compares a converted file with its source and plan. The
+// original is deleted only when this passes, so it is deliberately strict.
+func CheckConverted(got, source ffmpeg.Probe, plan Plan) error {
+	if v := got.VideoCodec(); v != "h264" {
+		return fmt.Errorf("video is %q, want h264", v)
+	}
+	if n := got.Count("audio"); n != len(plan.Audio) {
+		return fmt.Errorf("%d audio tracks, want %d", n, len(plan.Audio))
+	}
+	if source.Duration > 0 {
+		tolerance := math.Max(2, source.Duration*0.01)
+		if math.Abs(got.Duration-source.Duration) > tolerance {
+			return fmt.Errorf("lasts %.1fs, the original %.1fs", got.Duration, source.Duration)
+		}
+	}
+	return nil
 }
 
 // removeLeftovers deletes half-written files from a conversion that was
@@ -513,14 +483,6 @@ func checkWritable(dir string) error {
 	name := f.Name()
 	f.Close()
 	return os.Remove(name)
-}
-
-func lastLine(s string) string {
-	s = strings.TrimSpace(s)
-	if i := strings.LastIndexByte(s, '\n'); i >= 0 {
-		return s[i+1:]
-	}
-	return s
 }
 
 func stripExt(name string) string { return name[:len(name)-len(filepath.Ext(name))] }

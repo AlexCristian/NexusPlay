@@ -14,6 +14,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
@@ -22,6 +23,11 @@ import (
 // settleTime is how long a file must go unmodified before it is imported, so
 // a file still being copied into the library is not probed half-written.
 const settleTime = 30 * time.Second
+
+// Prober reads a media file's streams; ffmpeg.Tools is the real one.
+type Prober interface {
+	Probe(ctx context.Context, file string) (ffmpeg.Probe, error)
+}
 
 // Scanner keeps the database in step with the media folder. It rescans on a
 // timer and shortly after any filesystem change.
@@ -297,11 +303,14 @@ func (s *Scanner) addMedia(ctx context.Context, v found) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if _, ok := probe.Video(); !ok {
+		return 0, ffmpeg.ErrNoVideo
+	}
 	g := ParsePath(v.rel)
 	id, err := s.Store.InsertScannedMedia(ctx, store.ScannedMedia{
 		Path: v.rel, Title: g.Title, Year: g.Year, Season: g.Season, Episode: g.Episode,
 		Duration: probe.Duration, Container: probe.Container,
-		VideoCodec: probe.VideoCodec, AudioCodec: probe.AudioCodec, Size: v.info.Size(),
+		VideoCodec: probe.VideoCodec(), AudioCodec: probe.AudioCodec(), Size: v.info.Size(),
 	})
 	if err != nil || id == 0 {
 		return id, err

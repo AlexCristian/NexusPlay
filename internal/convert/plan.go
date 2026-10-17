@@ -3,77 +3,18 @@
 package convert
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 )
-
-// Stream is one stream of a source file, as ffprobe reports it.
-type Stream struct {
-	Index     int
-	Type      string // video, audio, subtitle, data, attachment
-	Codec     string
-	PixFmt    string
-	Channels  int
-	Language  string
-	Title     string
-	Default   bool
-	AttachPic bool // cover art stored as a video stream
-}
-
-// Source is what the converter needs to know about a file.
-type Source struct {
-	Duration float64
-	Streams  []Stream
-}
-
-// ProbeSource lists a file's streams.
-func ProbeSource(ctx context.Context, ffprobe, file string) (Source, error) {
-	out, err := exec.CommandContext(ctx, ffprobe, "-v", "error", "-print_format", "json",
-		"-show_format", "-show_streams", file).Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return Source{}, fmt.Errorf("ffprobe: %s", strings.TrimSpace(string(ee.Stderr)))
-		}
-		return Source{}, fmt.Errorf("ffprobe: %w", err)
-	}
-	var raw struct {
-		Format struct {
-			Duration string `json:"duration"`
-		} `json:"format"`
-		Streams []struct {
-			Index       int               `json:"index"`
-			CodecType   string            `json:"codec_type"`
-			CodecName   string            `json:"codec_name"`
-			PixFmt      string            `json:"pix_fmt"`
-			Channels    int               `json:"channels"`
-			Tags        map[string]string `json:"tags"`
-			Disposition map[string]int    `json:"disposition"`
-		} `json:"streams"`
-	}
-	if err := json.Unmarshal(out, &raw); err != nil {
-		return Source{}, fmt.Errorf("ffprobe output: %w", err)
-	}
-	var src Source
-	src.Duration, _ = strconv.ParseFloat(raw.Format.Duration, 64) // "N/A" for some files: 0 means unknown
-	for _, s := range raw.Streams {
-		src.Streams = append(src.Streams, Stream{
-			Index: s.Index, Type: s.CodecType, Codec: s.CodecName, PixFmt: s.PixFmt, Channels: s.Channels,
-			Language: strings.ToLower(s.Tags["language"]), Title: s.Tags["title"],
-			Default: s.Disposition["default"] == 1, AttachPic: s.Disposition["attached_pic"] == 1,
-		})
-	}
-	return src, nil
-}
 
 // Plan is how one file will be converted.
 type Plan struct {
-	Video        Stream
+	Video        ffmpeg.Stream
 	CopyVideo    bool
 	Audio        []AudioPlan
 	Subtitles    []SubtitlePlan // text subtitles extracted to .srt files next to the video
@@ -83,7 +24,7 @@ type Plan struct {
 
 // AudioPlan is one audio track in the output.
 type AudioPlan struct {
-	Stream   Stream
+	Stream   ffmpeg.Stream
 	Copy     bool
 	Channels int // output channels when encoding
 	Bitrate  int // kbit/s when encoding
@@ -91,7 +32,7 @@ type AudioPlan struct {
 
 // SubtitlePlan is one subtitle track saved as a sidecar file.
 type SubtitlePlan struct {
-	Stream Stream
+	Stream ffmpeg.Stream
 	File   string // file name, in the video's folder
 }
 
@@ -102,16 +43,18 @@ var textSubtitleCodecs = map[string]bool{
 
 // MakePlan decides what to copy, what to re-encode and what to extract.
 // videoBase is the video's file name without its extension.
-func MakePlan(src Source, videoBase string) (Plan, error) {
+func MakePlan(src ffmpeg.Probe, videoBase string) (Plan, error) {
 	var p Plan
-	found := false
+	video, ok := src.Video()
+	if !ok {
+		return p, ffmpeg.ErrNoVideo
+	}
+	p.Video = video
 	for _, s := range src.Streams {
 		switch s.Type {
 		case "video":
-			if s.AttachPic || found {
-				continue
-			}
-			p.Video, found = s, true
+			// The main video is chosen above; any other video stream (cover
+			// art, a second angle) is left out.
 		case "audio":
 			p.Audio = append(p.Audio, planAudio(s))
 		case "subtitle":
@@ -124,16 +67,13 @@ func MakePlan(src Source, videoBase string) (Plan, error) {
 			p.DroppedOther++
 		}
 	}
-	if !found {
-		return p, fmt.Errorf("no video stream")
-	}
 	// Browsers decode 8-bit 4:2:0 H.264; 10-bit or 4:4:4 H.264 must be re-encoded.
 	p.CopyVideo = p.Video.Codec == "h264" && (p.Video.PixFmt == "yuv420p" || p.Video.PixFmt == "yuvj420p")
 	nameSubtitles(p.Subtitles, videoBase)
 	return p, nil
 }
 
-func planAudio(s Stream) AudioPlan {
+func planAudio(s ffmpeg.Stream) AudioPlan {
 	a := AudioPlan{Stream: s, Copy: s.Codec == "aac" || s.Codec == "mp3"}
 	a.Channels = s.Channels
 	if a.Channels <= 0 {
@@ -183,7 +123,7 @@ func safeLanguage(tag string) string {
 
 // ConvertArgs builds the ffmpeg command that writes the MP4.
 func (p Plan) ConvertArgs(src, out string) []string {
-	args := []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-progress", "pipe:1", "-nostats",
+	args := []string{"-nostdin", "-hide_banner", "-loglevel", "error",
 		"-i", src, "-map", fmt.Sprintf("0:%d", p.Video.Index)}
 	for _, a := range p.Audio {
 		args = append(args, "-map", fmt.Sprintf("0:%d", a.Stream.Index))

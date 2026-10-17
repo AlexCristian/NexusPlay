@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
@@ -51,7 +52,7 @@ func TestScan(t *testing.T) {
 	makeVideo(t, fresh)
 	os.Chtimes(fresh, time.Now(), time.Now())
 
-	sc := &Scanner{Store: st, Prober: Prober{Path: "ffprobe"}, MediaDir: media, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	sc := &Scanner{Store: st, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, MediaDir: media, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	res, err := sc.Scan(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -114,7 +115,7 @@ func TestScanKeepsMediaInUnreadableFolders(t *testing.T) {
 	defer st.Close()
 	makeVideo(t, filepath.Join(media, "Movies", "Alien (1979).mp4"))
 	makeVideo(t, filepath.Join(media, "Share", "Cosmos.S01E01.mp4"))
-	sc := &Scanner{Store: st, Prober: Prober{Path: "ffprobe"}, MediaDir: media, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	sc := &Scanner{Store: st, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, MediaDir: media, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	if res, err := sc.Scan(ctx); err != nil || res.Added != 2 {
 		t.Fatalf("first scan = %+v, %v", res, err)
 	}

@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 )
 
 func TestNeedsConversion(t *testing.T) {
@@ -28,7 +30,7 @@ func TestNeedsConversion(t *testing.T) {
 }
 
 func TestMakePlan(t *testing.T) {
-	src := Source{Duration: 60, Streams: []Stream{
+	src := ffmpeg.Probe{Duration: 60, Streams: []ffmpeg.Stream{
 		{Index: 0, Type: "video", Codec: "h264", PixFmt: "yuv420p"},
 		{Index: 1, Type: "audio", Codec: "ac3", Channels: 6, Language: "fre"},
 		{Index: 2, Type: "audio", Codec: "aac", Channels: 2, Language: "eng", Default: true},
@@ -83,12 +85,12 @@ func TestMakePlan(t *testing.T) {
 }
 
 func TestMakePlanReencodes(t *testing.T) {
-	for _, v := range []Stream{
+	for _, v := range []ffmpeg.Stream{
 		{Type: "video", Codec: "hevc", PixFmt: "yuv420p"},
 		{Type: "video", Codec: "h264", PixFmt: "yuv420p10le"}, // 10-bit H.264 does not play in browsers
 		{Type: "video", Codec: "mpeg4", PixFmt: "yuv420p"},
 	} {
-		p, err := MakePlan(Source{Streams: []Stream{v}}, "x")
+		p, err := MakePlan(ffmpeg.Probe{Streams: []ffmpeg.Stream{v}}, "x")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -99,7 +101,7 @@ func TestMakePlanReencodes(t *testing.T) {
 			t.Errorf("args for %s: %s", v.Codec, args)
 		}
 	}
-	if _, err := MakePlan(Source{Streams: []Stream{{Type: "audio", Codec: "aac"}}}, "x"); err == nil {
+	if _, err := MakePlan(ffmpeg.Probe{Streams: []ffmpeg.Stream{{Type: "audio", Codec: "aac"}}}, "x"); err == nil {
 		t.Error("a file without video should be refused")
 	}
 }
@@ -107,7 +109,7 @@ func TestMakePlanReencodes(t *testing.T) {
 // Language tags come from the media file and are untrusted: they must never
 // steer the sidecar file outside the video's folder.
 func TestSubtitleNamesIgnoreHostileLanguageTags(t *testing.T) {
-	src := Source{Streams: []Stream{
+	src := ffmpeg.Probe{Streams: []ffmpeg.Stream{
 		{Index: 0, Type: "video", Codec: "h264", PixFmt: "yuv420p"},
 		{Index: 1, Type: "subtitle", Codec: "subrip", Language: "../../../../tmp/pwned"},
 		{Index: 2, Type: "subtitle", Codec: "subrip", Language: "EN"},
@@ -128,5 +130,31 @@ func TestSubtitleNamesIgnoreHostileLanguageTags(t *testing.T) {
 	want := []string{"Movie.und.srt", "Movie.en.srt", "Movie.pt-br.srt", "Movie.track2.und.srt"}
 	if !slices.Equal(got, want) {
 		t.Errorf("subtitle files = %v, want %v", got, want)
+	}
+}
+
+func TestCheckConverted(t *testing.T) {
+	plan := Plan{Audio: []AudioPlan{{}, {}}}
+	source := ffmpeg.Probe{Duration: 600}
+	good := ffmpeg.Probe{Duration: 599.5, Streams: []ffmpeg.Stream{
+		{Type: "video", Codec: "h264"}, {Type: "audio", Codec: "aac"}, {Type: "audio", Codec: "aac"},
+	}}
+	if err := CheckConverted(good, source, plan); err != nil {
+		t.Errorf("a good file was rejected: %v", err)
+	}
+	for name, got := range map[string]ffmpeg.Probe{
+		"wrong codec":    {Duration: 600, Streams: []ffmpeg.Stream{{Type: "video", Codec: "hevc"}, {Type: "audio"}, {Type: "audio"}}},
+		"lost a track":   {Duration: 600, Streams: []ffmpeg.Stream{{Type: "video", Codec: "h264"}, {Type: "audio"}}},
+		"cut short":      {Duration: 300, Streams: good.Streams},
+		"no video":       {Duration: 600, Streams: []ffmpeg.Stream{{Type: "audio"}, {Type: "audio"}}},
+		"only cover art": {Duration: 600, Streams: []ffmpeg.Stream{{Type: "video", Codec: "h264", AttachPic: true}, {Type: "audio"}, {Type: "audio"}}},
+	} {
+		if err := CheckConverted(got, source, plan); err == nil {
+			t.Errorf("%s: accepted, want an error (the original would be deleted)", name)
+		}
+	}
+	// Unknown source length: the duration check is skipped, the rest still applies.
+	if err := CheckConverted(good, ffmpeg.Probe{}, plan); err != nil {
+		t.Errorf("unknown source duration: %v", err)
 	}
 }
