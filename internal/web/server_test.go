@@ -283,7 +283,20 @@ func TestPosterPathTraversal(t *testing.T) {
 
 func TestSafeNext(t *testing.T) {
 	for in, want := range map[string]string{
-		"": "/", "/watch/3": "/watch/3", "//evil.example": "/", "https://evil.example": "/", `/\evil.example`: "/",
+		"":                     "/",
+		"/watch/3":             "/watch/3",
+		"/search?q=a+b":        "/search?q=a+b",
+		"/watch/3#t=10":        "/watch/3",
+		"//evil.example":       "/",
+		"///evil.example":      "/",
+		"https://evil.example": "/",
+		"javascript:alert(1)":  "/",
+		`/\evil.example`:       "/",
+		"/\t/evil.example":     "/", // browsers strip the tab: "//evil.example"
+		"/\n/evil.example":     "/",
+		"/\r\n/evil.example":   "/",
+		" /watch/3":            "/",
+		"watch/3":              "/",
 	} {
 		if got := safeNext(in); got != want {
 			t.Errorf("safeNext(%q) = %q, want %q", in, got, want)

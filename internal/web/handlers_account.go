@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -20,11 +21,34 @@ var dummyHash = sync.OnceValue(func() string {
 	return h
 })
 
+// safeNext returns next if it is a path on this site, and "/" otherwise. It
+// prevents open redirects after login: next comes from the query string, so
+// anything that a browser could read as another site is refused. That covers
+// schemes and hosts ("https://evil", "//evil"), backslashes ("/\evil", which
+// browsers treat like "/"), and control characters ("/\t/evil": browsers strip
+// tabs and newlines from URLs, turning it into "//evil"). The result is
+// rebuilt from the parsed path and query, so nothing else slips through.
 func safeNext(next string) string {
-	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") {
+	if next == "" {
 		return "/"
 	}
-	return next
+	for _, r := range next {
+		if r < 0x20 || r == 0x7f || r == '\\' {
+			return "/"
+		}
+	}
+	u, err := url.Parse(next)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || u.Opaque != "" {
+		return "/"
+	}
+	if !strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") {
+		return "/"
+	}
+	out := u.EscapedPath()
+	if u.RawQuery != "" {
+		out += "?" + u.RawQuery
+	}
+	return out
 }
 
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
