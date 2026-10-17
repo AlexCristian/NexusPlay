@@ -135,3 +135,14 @@ func pathIDOK(r *http.Request) (int64, bool) {
 	id, err := pathID(r)
 	return id, err == nil
 }
+
+// loadMedia is the old form of visibleMedia, used by handlers not yet
+// converted to return errors. It goes away with them.
+func (s *Server) loadMedia(w http.ResponseWriter, r *http.Request) (store.Media, bool) {
+	m, err := s.visibleMedia(r)
+	if err != nil {
+		s.respondError(w, r, err)
+		return m, false
+	}
+	return m, true
+}

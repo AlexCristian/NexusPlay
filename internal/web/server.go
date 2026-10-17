@@ -73,11 +73,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /{$}", s.browse(s.handle(s.home)))
 	mux.Handle("GET /search", s.browse(s.handle(s.search)))
 	mux.Handle("GET /collections/{id}", s.browse(s.handle(s.collection)))
-	mux.Handle("GET /watch/{id}", s.browse(s.watch))
-	mux.Handle("GET /media/{id}/file", s.browse(s.mediaFile))
-	mux.Handle("GET /media/{id}/hls/{file}", s.browse(s.hls))
-	mux.Handle("GET /subtitles/{id}", s.browse(s.subtitleVTT))
-	mux.Handle("GET /posters/{name}", s.browse(s.poster))
+	mux.Handle("GET /watch/{id}", s.browse(s.handle(s.watch)))
+	mux.Handle("GET /media/{id}/file", s.browse(s.handle(s.mediaFile)))
+	mux.Handle("GET /media/{id}/hls/{file}", s.browse(s.handle(s.hls)))
+	mux.Handle("GET /subtitles/{id}", s.browse(s.handle(s.subtitleVTT)))
+	mux.Handle("GET /posters/{name}", s.browse(s.handle(s.poster)))
 
 	// Accounts.
 	mux.HandleFunc("GET /login", s.loginPage)
@@ -89,11 +89,11 @@ func (s *Server) Handler() http.Handler {
 	// Signed-in features.
 	mux.Handle("GET /me/resume", s.member(s.handle(s.resumeList)))
 	mux.Handle("GET /me/notifications", s.member(s.handle(s.notificationList)))
-	mux.Handle("POST /me/progress", s.member(s.saveProgress))
+	mux.Handle("POST /me/progress", s.member(s.handle(s.saveProgress)))
 	mux.Handle("POST /collections/{id}/subscribe", s.member(s.handle(s.toggleSubscription)))
-	mux.Handle("GET /media/{id}/subtitle-report", s.member(s.subtitleReport))
-	mux.Handle("POST /cues/{id}/changes", s.member(s.proposeChange))
-	mux.Handle("POST /changes/{id}/vote", s.member(s.voteChange))
+	mux.Handle("GET /media/{id}/subtitle-report", s.member(s.handle(s.subtitleReport)))
+	mux.Handle("POST /cues/{id}/changes", s.member(s.handle(s.proposeChange)))
+	mux.Handle("POST /changes/{id}/vote", s.member(s.handle(s.voteChange)))
 
 	// Administration.
 	mux.Handle("GET /admin", s.admin(s.controlPanel))
