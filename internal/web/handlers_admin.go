@@ -18,40 +18,45 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
 )
 
-func (s *Server) controlPanel(w http.ResponseWriter, r *http.Request) {
+// formError is a problem with submitted input that the user can fix. The
+// handler shows the form again with the message instead of an error page.
+type formError struct{ msg string }
+
+func (e *formError) Error() string { return e.msg }
+
+func formErr(msg string) error { return &formError{msg: msg} }
+
+// controlPanel handles GET /admin: media waiting to be published, the
+// collections, and the conversion queue.
+func (s *Server) controlPanel(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	pending, err := s.Store.PendingMedia(ctx)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	colls, err := s.Store.Collections(ctx)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	cats, err := s.Store.CategoryNames(ctx)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	conv, err := s.conversionView(ctx)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
-	msg := ""
-	switch r.URL.Query().Get("done") {
-	case "scan":
-		msg = "Scan started. New files appear here within a minute."
-	case "published":
-		msg = "Published."
-	case "deleted":
-		msg = "Collection deleted."
-	case "retry":
-		msg = "Queued for another conversion attempt."
-	}
-	s.render(w, r, http.StatusOK, controlPanel(s.page(r, "Control panel"), pending, colls, cats, s.Meta.Enabled(), conv, msg))
+	s.render(w, r, http.StatusOK, controlPanel(s.page(r, "Control panel"), pending, colls, cats, s.Meta.Enabled(), conv,
+		doneMessages[r.URL.Query().Get("done")]))
+	return nil
+}
+
+// doneMessages confirm an action after the redirect back to /admin?done=.
+var doneMessages = map[string]string{
+	"scan":      "Scan started. New files appear here within a minute.",
+	"published": "Published.",
+	"deleted":   "Collection deleted.",
+	"retry":     "Queued for another conversion attempt.",
 }
 
 func (s *Server) conversionView(ctx context.Context) (ConversionView, error) {
@@ -64,33 +69,36 @@ func (s *Server) conversionView(ctx context.Context) (ConversionView, error) {
 	return v, err
 }
 
-// conversionsPanel is polled by the control panel while conversions run.
-func (s *Server) conversionsPanel(w http.ResponseWriter, r *http.Request) {
+// conversionsPanel handles GET /admin/conversions, polled by the control
+// panel while conversions run.
+func (s *Server) conversionsPanel(w http.ResponseWriter, r *http.Request) error {
 	v, err := s.conversionView(r.Context())
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	s.render(w, r, http.StatusOK, conversionsSection(viewer(r).CSRF, v))
+	return nil
 }
 
-func (s *Server) retryConversion(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathIDOK(r)
-	if !ok {
-		s.notFound(w, r)
-		return
+// retryConversion handles POST /admin/media/{id}/retry-conversion.
+func (s *Server) retryConversion(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
 	if err := s.Store.RetryConversion(r.Context(), id); err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	s.Converter.Wake()
 	http.Redirect(w, r, "/admin?done=retry", http.StatusSeeOther)
+	return nil
 }
 
-func (s *Server) scanNow(w http.ResponseWriter, r *http.Request) {
+// scanNow handles POST /admin/scan.
+func (s *Server) scanNow(w http.ResponseWriter, r *http.Request) error {
 	s.Scanner.Trigger()
 	http.Redirect(w, r, "/admin?done=scan", http.StatusSeeOther)
+	return nil
 }
 
 func (s *Server) mediaForm(ctx context.Context, m store.Media) (MediaForm, error) {
@@ -123,38 +131,59 @@ func (s *Server) mediaForm(ctx context.Context, m store.Media) (MediaForm, error
 	return f, nil
 }
 
-func (s *Server) editMediaPage(w http.ResponseWriter, r *http.Request) {
-	m, ok := s.loadMedia(w, r)
-	if !ok {
-		return
+// editMediaPage handles GET /admin/media/{id}.
+func (s *Server) editMediaPage(w http.ResponseWriter, r *http.Request) error {
+	m, err := s.visibleMedia(r)
+	if err != nil {
+		return err
 	}
 	f, err := s.mediaForm(r.Context(), m)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	f.Saved = r.URL.Query().Get("saved") == "1"
 	s.render(w, r, http.StatusOK, editMediaPage(s.page(r, "Edit "+m.Title), f))
+	return nil
 }
 
-func (s *Server) saveMedia(w http.ResponseWriter, r *http.Request) {
-	m, ok := s.loadMedia(w, r)
-	if !ok {
-		return
+// showMediaFormError shows the edit page again when err is a *formError,
+// and returns any other error unchanged.
+func (s *Server) showMediaFormError(w http.ResponseWriter, r *http.Request, m store.Media, err error) error {
+	var fe *formError
+	if !errors.As(err, &fe) {
+		return err
 	}
-	ctx := r.Context()
-	fail := func(status int, msg string) {
-		f, err := s.mediaForm(ctx, m)
-		if err != nil {
-			s.serverError(w, r, err)
-			return
-		}
-		f.Error = msg
-		s.render(w, r, status, editMediaPage(s.page(r, "Edit "+m.Title), f))
+	f, ferr := s.mediaForm(r.Context(), m)
+	if ferr != nil {
+		return ferr
 	}
+	f.Error = fe.msg
+	s.render(w, r, http.StatusBadRequest, editMediaPage(s.page(r, "Edit "+m.Title), f))
+	return nil
+}
+
+// saveMedia handles POST /admin/media/{id}: the edit form, whose second
+// button also publishes.
+func (s *Server) saveMedia(w http.ResponseWriter, r *http.Request) error {
+	m, err := s.visibleMedia(r)
+	if err != nil {
+		return err
+	}
+	publish := r.FormValue("publish") == "1"
+	if err := s.updateMediaFromForm(r, m.ID, publish); err != nil {
+		return s.showMediaFormError(w, r, m, err)
+	}
+	if publish {
+		http.Redirect(w, r, "/admin?done=published", http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, "/admin/media/"+itoa(m.ID)+"?saved=1", http.StatusSeeOther)
+	}
+	return nil
+}
+
+func (s *Server) updateMediaFromForm(r *http.Request, id int64, publish bool) error {
 	if err := parseForm(r, maxUpload); err != nil {
-		fail(http.StatusBadRequest, "The upload is too large or malformed.")
-		return
+		return formErr("The upload is too large or malformed.")
 	}
 	u := store.MediaUpdate{
 		Title:    strings.TrimSpace(r.FormValue("title")),
@@ -164,39 +193,26 @@ func (s *Server) saveMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	var err error
 	if u.Season, err = formInt(r, "season"); err != nil {
-		fail(http.StatusBadRequest, "Season must be a number.")
-		return
+		return formErr("Season must be a number.")
 	}
 	if u.Episode, err = formInt(r, "episode"); err != nil {
-		fail(http.StatusBadRequest, "Episode must be a number.")
-		return
+		return formErr("Episode must be a number.")
 	}
 	if u.Title == "" {
-		fail(http.StatusBadRequest, "The title cannot be empty.")
-		return
+		return formErr("The title cannot be empty.")
 	}
+	ctx := r.Context()
 	if name := strings.TrimSpace(r.FormValue("collection")); name != "" {
 		c, err := s.findOrCreateCollection(ctx, name, u.Category, u.Year)
 		if err != nil {
-			s.serverError(w, r, err)
-			return
+			return err
 		}
 		u.CollectionID = c.ID
 	}
 	if u.Poster, err = s.savePoster(r, "poster"); err != nil {
-		fail(http.StatusBadRequest, err.Error())
-		return
+		return err
 	}
-	publish := r.FormValue("publish") == "1"
-	if err := s.Store.UpdateMedia(ctx, m.ID, u, publish); err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	if publish {
-		http.Redirect(w, r, "/admin?done=published", http.StatusSeeOther)
-		return
-	}
-	http.Redirect(w, r, "/admin/media/"+itoa(m.ID)+"?saved=1", http.StatusSeeOther)
+	return s.Store.UpdateMedia(ctx, id, u, publish)
 }
 
 // findOrCreateCollection returns the named collection, creating it (with
@@ -263,7 +279,7 @@ func (s *Server) savePoster(r *http.Request, field string) (string, error) {
 	if errors.Is(err, http.ErrMissingFile) {
 		return "", nil
 	} else if err != nil {
-		return "", errors.New("could not read the uploaded poster")
+		return "", formErr("Could not read the uploaded poster.")
 	}
 	defer f.Close()
 	if hdr.Size == 0 {
@@ -273,7 +289,7 @@ func (s *Server) savePoster(r *http.Request, field string) (string, error) {
 	n, _ := io.ReadFull(f, head) // a file shorter than 512 bytes is fine: sniff what there is
 	ext, ok := posterTypes[http.DetectContentType(head[:n])]
 	if !ok {
-		return "", errors.New("posters must be JPEG, PNG or WebP images")
+		return "", formErr("Posters must be JPEG, PNG or WebP images.")
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return "", err
@@ -294,99 +310,91 @@ func (s *Server) savePoster(r *http.Request, field string) (string, error) {
 	return name, out.Close()
 }
 
-func (s *Server) uploadSubtitle(w http.ResponseWriter, r *http.Request) {
-	m, ok := s.loadMedia(w, r)
-	if !ok {
-		return
+// uploadSubtitle handles POST /admin/media/{id}/subtitles: an SRT or
+// WebVTT file for the video.
+func (s *Server) uploadSubtitle(w http.ResponseWriter, r *http.Request) error {
+	m, err := s.visibleMedia(r)
+	if err != nil {
+		return err
 	}
-	ctx := r.Context()
-	fail := func(msg string) {
-		f, err := s.mediaForm(ctx, m)
-		if err != nil {
-			s.serverError(w, r, err)
-			return
-		}
-		f.Error = msg
-		s.render(w, r, http.StatusBadRequest, editMediaPage(s.page(r, "Edit "+m.Title), f))
+	if err := s.addSubtitleFromForm(r, m.ID); err != nil {
+		return s.showMediaFormError(w, r, m, err)
 	}
+	http.Redirect(w, r, "/admin/media/"+itoa(m.ID)+"?saved=1", http.StatusSeeOther)
+	return nil
+}
+
+func (s *Server) addSubtitleFromForm(r *http.Request, mediaID int64) error {
 	if err := parseForm(r, maxUpload); err != nil {
-		fail("The upload is too large or malformed.")
-		return
+		return formErr("The upload is too large or malformed.")
 	}
 	lang := strings.ToLower(strings.TrimSpace(r.FormValue("language")))
 	if lang == "" || len(lang) > 12 {
-		fail("Enter a language code such as en or ro.")
-		return
+		return formErr("Enter a language code such as en or ro.")
 	}
 	file, _, err := r.FormFile("file")
 	if err != nil {
-		fail("Choose a subtitle file to upload.")
-		return
+		return formErr("Choose a subtitle file to upload.")
 	}
 	defer file.Close()
 	data, err := io.ReadAll(file)
 	if err != nil {
-		fail("Could not read the uploaded file.")
-		return
+		return formErr("Could not read the uploaded file.")
 	}
 	cues, err := subtitle.Parse(data)
 	if err != nil {
-		fail("That file is not a valid SRT or WebVTT subtitle: " + err.Error())
-		return
+		return formErr("That file is not a valid SRT or WebVTT subtitle: " + err.Error())
 	}
 	// An upload has no source, so it is always inserted.
-	if _, _, err := s.Store.AddSubtitle(ctx, store.NewSubtitle{MediaID: m.ID, Language: lang, Label: subtitle.LanguageName(lang), Cues: cues}); err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	http.Redirect(w, r, "/admin/media/"+itoa(m.ID)+"?saved=1", http.StatusSeeOther)
+	_, _, err = s.Store.AddSubtitle(r.Context(), store.NewSubtitle{MediaID: mediaID, Language: lang, Label: subtitle.LanguageName(lang), Cues: cues})
+	return err
 }
 
-func (s *Server) saveSubtitle(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathIDOK(r)
-	if !ok {
-		s.notFound(w, r)
-		return
+// saveSubtitle handles POST /admin/subtitles/{id}: a track's language and label.
+func (s *Server) saveSubtitle(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
 	t, err := s.Store.SubtitleByID(r.Context(), id)
 	if err != nil {
-		s.notFound(w, r)
-		return
+		return err
 	}
 	lang := strings.ToLower(strings.TrimSpace(r.FormValue("language")))
 	label := strings.TrimSpace(r.FormValue("label"))
 	if lang == "" || label == "" {
-		s.errorPage(w, r, http.StatusBadRequest, "Missing fields", "A subtitle track needs a language code and a label.")
-		return
+		return &statusError{status: http.StatusBadRequest, title: "Missing fields",
+			msg: "A subtitle track needs a language code and a label."}
 	}
 	if err := s.Store.UpdateSubtitleLabel(r.Context(), id, lang, label); err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	http.Redirect(w, r, "/admin/media/"+itoa(t.MediaID)+"?saved=1", http.StatusSeeOther)
+	return nil
 }
 
-func (s *Server) deleteSubtitle(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathIDOK(r)
-	if !ok {
-		s.notFound(w, r)
-		return
+// deleteSubtitle handles POST /admin/subtitles/{id}/delete.
+func (s *Server) deleteSubtitle(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
 	t, err := s.Store.SubtitleByID(r.Context(), id)
 	if err != nil {
-		s.notFound(w, r)
-		return
+		return err
 	}
 	if err := s.Store.DeleteSubtitle(r.Context(), id); err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	http.Redirect(w, r, "/admin/media/"+itoa(t.MediaID)+"?saved=1", http.StatusSeeOther)
+	return nil
 }
 
-func (s *Server) collectionFromForm(w http.ResponseWriter, r *http.Request) (store.Collection, error) {
+// collectionFromForm reads the collection form. Problems the user can fix
+// are *formError.
+func (s *Server) collectionFromForm(r *http.Request) (store.Collection, error) {
 	if err := parseForm(r, maxUpload); err != nil {
-		return store.Collection{}, errors.New("the upload is too large or malformed")
+		return store.Collection{}, formErr("The upload is too large or malformed.")
 	}
 	c := store.Collection{
 		Name:     strings.TrimSpace(r.FormValue("name")),
@@ -395,110 +403,108 @@ func (s *Server) collectionFromForm(w http.ResponseWriter, r *http.Request) (sto
 		Overview: strings.TrimSpace(r.FormValue("overview")),
 	}
 	if c.Name == "" || c.Category == "" {
-		return c, errors.New("a collection needs a name and a category")
+		return c, formErr("A collection needs a name and a category.")
 	}
 	var err error
 	c.Poster, err = s.savePoster(r, "poster")
 	return c, err
 }
 
-func (s *Server) createCollection(w http.ResponseWriter, r *http.Request) {
-	c, err := s.collectionFromForm(w, r)
+// createCollection handles POST /admin/collections.
+func (s *Server) createCollection(w http.ResponseWriter, r *http.Request) error {
+	const title = "Could not create the collection"
+	c, err := s.collectionFromForm(r)
+	var fe *formError
+	if errors.As(err, &fe) {
+		return &statusError{status: http.StatusBadRequest, title: title, msg: fe.msg}
+	}
 	if err != nil {
-		s.errorPage(w, r, http.StatusBadRequest, "Could not create the collection", capitalize(err.Error())+".")
-		return
+		return err
 	}
 	if r.FormValue("lookup") == "1" {
 		s.fillFromTMDB(r.Context(), &c)
 	}
 	id, err := s.Store.CreateCollection(r.Context(), c)
 	if errors.Is(err, store.ErrDuplicate) {
-		s.errorPage(w, r, http.StatusConflict, "Could not create the collection", "A collection with that name already exists.")
-		return
-	} else if err != nil {
-		s.serverError(w, r, err)
-		return
+		return &statusError{status: http.StatusConflict, title: title, msg: "A collection with that name already exists."}
+	}
+	if err != nil {
+		return err
 	}
 	http.Redirect(w, r, "/admin/collections/"+itoa(id), http.StatusSeeOther)
+	return nil
 }
 
-func (s *Server) editCollectionPage(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathIDOK(r)
-	if !ok {
-		s.notFound(w, r)
-		return
+// editCollectionPage handles GET /admin/collections/{id}.
+func (s *Server) editCollectionPage(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
 	c, err := s.Store.CollectionByID(r.Context(), id)
 	if err != nil {
-		s.notFound(w, r)
-		return
+		return err
 	}
 	cats, err := s.Store.CategoryNames(r.Context())
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	s.render(w, r, http.StatusOK, editCollectionPage(s.page(r, "Edit "+c.Name), c, cats, s.Meta.Enabled(), ""))
+	return nil
 }
 
-func (s *Server) saveCollection(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathIDOK(r)
-	if !ok {
-		s.notFound(w, r)
-		return
+// saveCollection handles POST /admin/collections/{id}.
+func (s *Server) saveCollection(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
 	existing, err := s.Store.CollectionByID(r.Context(), id)
 	if err != nil {
-		s.notFound(w, r)
-		return
+		return err
 	}
-	c, err := s.collectionFromForm(w, r)
-	c.ID = id
-	if err == nil && r.FormValue("lookup") == "1" {
-		// The lookup only fills empty fields, so an existing poster is kept.
-		if c.Poster == "" {
-			c.Poster = existing.Poster
-		}
-		s.fillFromTMDB(r.Context(), &c)
-	}
+	c, err := s.collectionFromForm(r)
 	if err == nil {
+		c.ID = id
+		if r.FormValue("lookup") == "1" {
+			// The lookup only fills empty fields, so an existing poster is kept.
+			if c.Poster == "" {
+				c.Poster = existing.Poster
+			}
+			s.fillFromTMDB(r.Context(), &c)
+		}
 		err = s.Store.UpdateCollection(r.Context(), c)
 		if errors.Is(err, store.ErrDuplicate) {
-			err = errors.New("another collection already has that name")
-		} else if err != nil {
-			s.serverError(w, r, err)
-			return
+			err = formErr("Another collection already has that name.")
 		}
 	}
-	if err != nil {
-		cats, catErr := s.Store.CategoryNames(r.Context())
-		if catErr != nil {
-			s.serverError(w, r, catErr)
-			return
+	var fe *formError
+	if errors.As(err, &fe) {
+		cats, err := s.Store.CategoryNames(r.Context())
+		if err != nil {
+			return err
 		}
 		existing.Name, existing.Category, existing.Year, existing.Overview = c.Name, c.Category, c.Year, c.Overview
-		s.render(w, r, http.StatusBadRequest, editCollectionPage(s.page(r, "Edit collection"), existing, cats, s.Meta.Enabled(), capitalize(err.Error())+"."))
-		return
+		s.render(w, r, http.StatusBadRequest, editCollectionPage(s.page(r, "Edit collection"), existing, cats, s.Meta.Enabled(), fe.msg))
+		return nil
+	}
+	if err != nil {
+		return err
 	}
 	http.Redirect(w, r, "/admin/collections/"+itoa(id), http.StatusSeeOther)
+	return nil
 }
 
-func (s *Server) deleteCollection(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathIDOK(r)
-	if !ok {
-		s.notFound(w, r)
-		return
+// deleteCollection handles POST /admin/collections/{id}/delete. Its media
+// stays in the library, outside any collection.
+func (s *Server) deleteCollection(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
 	if err := s.Store.DeleteCollection(r.Context(), id); err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	http.Redirect(w, r, "/admin?done=deleted", http.StatusSeeOther)
-}
-
-func capitalize(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
+	return nil
 }
