@@ -3,12 +3,10 @@ package web
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -17,14 +15,6 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
 )
-
-// formError is a problem with submitted input that the user can fix. The
-// handler shows the form again with the message instead of an error page.
-type formError struct{ msg string }
-
-func (e *formError) Error() string { return e.msg }
-
-func formErr(msg string) error { return &formError{msg: msg} }
 
 // controlPanel handles GET /admin: media waiting to be published, the
 // collections, and the conversion queue.
@@ -169,11 +159,14 @@ func (s *Server) saveMedia(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	publish := r.FormValue("publish") == "1"
-	if err := s.updateMediaFromForm(r, m.ID, publish); err != nil {
+	in, err := decodeMediaForm(r)
+	if err != nil {
 		return s.showMediaFormError(w, r, m, err)
 	}
-	if publish {
+	if err := s.applyMediaInput(r.Context(), m.ID, in); err != nil {
+		return err
+	}
+	if in.publish {
 		http.Redirect(w, r, "/admin?done=published", http.StatusSeeOther)
 	} else {
 		http.Redirect(w, r, "/admin/media/"+itoa(m.ID)+"?saved=1", http.StatusSeeOther)
@@ -181,38 +174,22 @@ func (s *Server) saveMedia(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (s *Server) updateMediaFromForm(r *http.Request, id int64, publish bool) error {
-	if err := parseForm(r, maxUpload); err != nil {
-		return formErr("The upload is too large or malformed.")
-	}
-	u := store.MediaUpdate{
-		Title:    strings.TrimSpace(r.FormValue("title")),
-		Year:     strings.TrimSpace(r.FormValue("year")),
-		Overview: strings.TrimSpace(r.FormValue("overview")),
-		Category: strings.TrimSpace(r.FormValue("category")),
-	}
-	var err error
-	if u.Season, err = formInt(r, "season"); err != nil {
-		return formErr("Season must be a number.")
-	}
-	if u.Episode, err = formInt(r, "episode"); err != nil {
-		return formErr("Episode must be a number.")
-	}
-	if u.Title == "" {
-		return formErr("The title cannot be empty.")
-	}
-	ctx := r.Context()
-	if name := strings.TrimSpace(r.FormValue("collection")); name != "" {
-		c, err := s.findOrCreateCollection(ctx, name, u.Category, u.Year)
+// applyMediaInput saves a decoded edit form: it finds or creates the
+// collection, stores the poster, then updates the media.
+func (s *Server) applyMediaInput(ctx context.Context, id int64, in mediaInput) error {
+	u := in.update
+	if in.collection != "" {
+		c, err := s.findOrCreateCollection(ctx, in.collection, u.Category, u.Year)
 		if err != nil {
 			return err
 		}
 		u.CollectionID = c.ID
 	}
-	if u.Poster, u.RemovePoster, err = s.posterFromForm(r); err != nil {
+	var err error
+	if u.Poster, err = s.savePoster(in.poster); err != nil {
 		return err
 	}
-	return s.Store.UpdateMedia(ctx, id, u, publish)
+	return s.Store.UpdateMedia(ctx, id, u, in.publish)
 }
 
 // findOrCreateCollection returns the named collection, creating it (with
@@ -276,71 +253,22 @@ func (s *Server) fillFromTMDB(ctx context.Context, c *store.Collection) {
 	}
 }
 
-func formInt(r *http.Request, key string) (int, error) {
-	v := strings.TrimSpace(r.FormValue(key))
-	if v == "" {
-		return 0, nil
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil || n < 0 {
-		return 0, fmt.Errorf("bad %s", key)
-	}
-	return n, nil
-}
-
-// posterFromForm reads the poster upload and the "Remove the current poster"
-// box, which cannot both be used at once.
-func (s *Server) posterFromForm(r *http.Request) (poster string, remove bool, err error) {
-	remove = r.FormValue("remove_poster") == "1"
-	if remove && hasUpload(r, "poster") {
-		return "", false, formErr("Upload a new poster or remove the current one, not both.")
-	}
-	poster, err = s.savePoster(r, "poster")
-	return poster, remove, err
-}
-
-// hasUpload reports whether a non-empty file was sent in field.
-func hasUpload(r *http.Request, field string) bool {
-	if r.MultipartForm == nil {
-		return false
-	}
-	for _, fh := range r.MultipartForm.File[field] {
-		if fh.Size > 0 {
-			return true
-		}
-	}
-	return false
-}
-
-var posterTypes = map[string]string{"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
-
-// savePoster stores an uploaded image and returns its file name, or "" when
-// none was uploaded. The type is checked from the content, not the name.
-func (s *Server) savePoster(r *http.Request, field string) (string, error) {
-	f, hdr, err := r.FormFile(field)
-	if errors.Is(err, http.ErrMissingFile) {
-		return "", nil
-	} else if err != nil {
-		return "", formErr("Could not read the uploaded poster.")
-	}
-	defer f.Close()
-	if hdr.Size == 0 {
+// savePoster stores an uploaded poster under a new random name and returns
+// the name, or "" when p is nil.
+func (s *Server) savePoster(p *posterUpload) (string, error) {
+	if p == nil {
 		return "", nil
 	}
-	head := make([]byte, 512)
-	n, _ := io.ReadFull(f, head) // a file shorter than 512 bytes is fine: sniff what there is
-	ext, ok := posterTypes[http.DetectContentType(head[:n])]
-	if !ok {
-		return "", formErr("Posters must be JPEG, PNG or WebP images.")
-	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
+	f, err := p.file.Open()
+	if err != nil {
 		return "", err
 	}
+	defer f.Close()
 	token, err := auth.NewToken()
 	if err != nil {
 		return "", err
 	}
-	name := "upload-" + token[:16] + ext
+	name := "upload-" + token[:16] + p.ext
 	out, err := os.OpenFile(filepath.Join(s.Cfg.PosterDir(), name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return "", err
@@ -359,37 +287,17 @@ func (s *Server) uploadSubtitle(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if err := s.addSubtitleFromForm(r, m.ID); err != nil {
+	lang, cues, err := decodeSubtitleUpload(r)
+	if err != nil {
 		return s.showMediaFormError(w, r, m, err)
+	}
+	// An upload has no source, so it is always inserted.
+	_, _, err = s.Store.AddSubtitle(r.Context(), store.NewSubtitle{MediaID: m.ID, Language: lang, Label: subtitle.LanguageName(lang), Cues: cues})
+	if err != nil {
+		return err
 	}
 	http.Redirect(w, r, "/admin/media/"+itoa(m.ID)+"?saved=1", http.StatusSeeOther)
 	return nil
-}
-
-func (s *Server) addSubtitleFromForm(r *http.Request, mediaID int64) error {
-	if err := parseForm(r, maxUpload); err != nil {
-		return formErr("The upload is too large or malformed.")
-	}
-	lang := strings.ToLower(strings.TrimSpace(r.FormValue("language")))
-	if lang == "" || len(lang) > 12 {
-		return formErr("Enter a language code such as en or ro.")
-	}
-	file, _, err := r.FormFile("file")
-	if err != nil {
-		return formErr("Choose a subtitle file to upload.")
-	}
-	defer file.Close()
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return formErr("Could not read the uploaded file.")
-	}
-	cues, err := subtitle.Parse(data)
-	if err != nil {
-		return formErr("That file is not a valid SRT or WebVTT subtitle: " + err.Error())
-	}
-	// An upload has no source, so it is always inserted.
-	_, _, err = s.Store.AddSubtitle(r.Context(), store.NewSubtitle{MediaID: mediaID, Language: lang, Label: subtitle.LanguageName(lang), Cues: cues})
-	return err
 }
 
 // saveSubtitle handles POST /admin/subtitles/{id}: a track's language and label.
@@ -432,30 +340,10 @@ func (s *Server) deleteSubtitle(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// collectionFromForm reads the collection form. Problems the user can fix
-// are *formError.
-func (s *Server) collectionFromForm(r *http.Request) (store.CollectionUpdate, error) {
-	if err := parseForm(r, maxUpload); err != nil {
-		return store.CollectionUpdate{}, formErr("The upload is too large or malformed.")
-	}
-	c := store.CollectionUpdate{
-		Name:     strings.TrimSpace(r.FormValue("name")),
-		Category: strings.TrimSpace(r.FormValue("category")),
-		Year:     strings.TrimSpace(r.FormValue("year")),
-		Overview: strings.TrimSpace(r.FormValue("overview")),
-	}
-	if c.Name == "" || c.Category == "" {
-		return c, formErr("A collection needs a name and a category.")
-	}
-	var err error
-	c.Poster, c.RemovePoster, err = s.posterFromForm(r)
-	return c, err
-}
-
-// createCollection handles POST /admin/collections.
+// createCollection handles POST /admin/collections, from the control panel.
 func (s *Server) createCollection(w http.ResponseWriter, r *http.Request) error {
 	const title = "Could not create the collection"
-	u, err := s.collectionFromForm(r)
+	in, err := decodeCollectionForm(r)
 	var fe *formError
 	if errors.As(err, &fe) {
 		return &statusError{status: http.StatusBadRequest, title: title, msg: fe.msg}
@@ -463,8 +351,12 @@ func (s *Server) createCollection(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return err
 	}
-	c := store.Collection{Name: u.Name, Category: u.Category, Year: u.Year, Overview: u.Overview, Poster: u.Poster}
-	if r.FormValue("lookup") == "1" {
+	u := in.update
+	c := store.Collection{Name: u.Name, Category: u.Category, Year: u.Year, Overview: u.Overview}
+	if c.Poster, err = s.savePoster(in.poster); err != nil {
+		return err
+	}
+	if in.lookup {
 		s.fillFromTMDB(r.Context(), &c)
 	}
 	id, err := s.Store.CreateCollection(r.Context(), c)
@@ -506,30 +398,41 @@ func (s *Server) saveCollection(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	u, err := s.collectionFromForm(r)
-	if err == nil {
-		if r.FormValue("lookup") == "1" {
-			s.fillCollectionUpdate(r.Context(), existing, &u)
-		}
-		err = s.Store.UpdateCollection(r.Context(), id, u)
-		if errors.Is(err, store.ErrDuplicate) {
-			err = formErr("Another collection already has that name.")
-		}
+	in, err := decodeCollectionForm(r)
+	if err != nil {
+		return s.showCollectionFormError(w, r, existing, in.update, err)
 	}
-	var fe *formError
-	if errors.As(err, &fe) {
-		cats, err := s.Store.CategoryNames(r.Context())
-		if err != nil {
-			return err
-		}
-		existing.Name, existing.Category, existing.Year, existing.Overview = u.Name, u.Category, u.Year, u.Overview
-		s.render(w, r, http.StatusBadRequest, editCollectionPage(newPage(r, "Edit collection"), existing, cats, s.Meta.Enabled(), fe.msg))
-		return nil
+	u := in.update
+	if u.Poster, err = s.savePoster(in.poster); err != nil {
+		return err
+	}
+	if in.lookup {
+		s.fillCollectionUpdate(r.Context(), existing, &u)
+	}
+	err = s.Store.UpdateCollection(r.Context(), id, u)
+	if errors.Is(err, store.ErrDuplicate) {
+		return s.showCollectionFormError(w, r, existing, u, formErr("Another collection already has that name."))
 	}
 	if err != nil {
 		return err
 	}
 	http.Redirect(w, r, "/admin/collections/"+itoa(id), http.StatusSeeOther)
+	return nil
+}
+
+// showCollectionFormError shows the edit page again, with what was typed,
+// when err is a *formError, and returns any other error unchanged.
+func (s *Server) showCollectionFormError(w http.ResponseWriter, r *http.Request, c store.Collection, typed store.CollectionUpdate, err error) error {
+	var fe *formError
+	if !errors.As(err, &fe) {
+		return err
+	}
+	cats, err := s.Store.CategoryNames(r.Context())
+	if err != nil {
+		return err
+	}
+	c.Name, c.Category, c.Year, c.Overview = typed.Name, typed.Category, typed.Year, typed.Overview
+	s.render(w, r, http.StatusBadRequest, editCollectionPage(newPage(r, "Edit collection"), c, cats, s.Meta.Enabled(), fe.msg))
 	return nil
 }
 
