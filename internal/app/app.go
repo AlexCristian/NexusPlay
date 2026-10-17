@@ -22,6 +22,7 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
+	"github.com/AlexCristian/NexusPlay/internal/posters"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 	"github.com/AlexCristian/NexusPlay/internal/stream"
 	"github.com/AlexCristian/NexusPlay/internal/web"
@@ -38,6 +39,7 @@ var (
 	_ convert.Library   = (*library.Scanner)(nil)
 	_ auth.UserStore    = (*store.Store)(nil)
 	_ auth.SessionStore = (*store.Store)(nil)
+	_ posters.Store     = (*store.Store)(nil)
 	_ web.Conversions   = (*convert.Converter)(nil)
 	_ web.Conversions   = convert.Disabled{}
 )
@@ -132,7 +134,8 @@ func build(cfg config.Config, st *store.Store, log *slog.Logger) (*App, error) {
 		return nil, err
 	}
 	sessions := auth.NewSessions(st, sessionLifetime, log.With("component", "auth"))
-	workers := []worker{scanner, transcodes, sessions}
+	sweeper := posters.NewSweeper(st, posters.Config{Dir: cfg.PosterDir()}, log.With("component", "posters"))
+	workers := []worker{scanner, transcodes, sessions, sweeper}
 
 	var conversions web.Conversions = convert.Disabled{}
 	if cfg.Convert {

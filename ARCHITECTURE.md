@@ -19,6 +19,7 @@ internal/library   the scanner and the file-name parser
 internal/convert   the background MP4 converter
 internal/stream    on-demand HLS transcodes for unconverted files
 internal/metadata  TMDB lookups (optional)
+internal/posters   deletes poster files nothing uses any more
 internal/store     SQLite: migrations and every query
 
 internal/media     the playback policy (pure functions)
@@ -71,7 +72,7 @@ no videos at all, which usually means an unmounted drive.
 
 ## Goroutines, locks and shutdown
 
-`App.Serve` runs the HTTP server and four workers:
+`App.Serve` runs the HTTP server and five workers:
 
 | Worker | Runs | Stops |
 |---|---|---|
@@ -79,6 +80,7 @@ no videos at all, which usually means an unmounted drive.
 | `convert.Converter` | up to `NEXUSPLAY_MAX_CONVERSIONS` jobs | cancels ffmpeg; a swap in progress finishes |
 | `stream.Manager` | evicts idle transcodes every 30 s | stops every transcode and removes its files |
 | `auth.Sessions` | deletes expired sessions hourly | at once |
+| `posters.Sweeper` | deletes unused poster files hourly | at once |
 
 The scanner has two mutexes. `scan` serialises whole scans. `reconcile` is
 held only while a scan changes the database, never while it probes files or
@@ -125,8 +127,9 @@ from the schema:
   correction shows the next time the video loads, without touching any
   file.
 - **Posters.** `Media.Poster` falls back to the collection's poster;
-  `OwnPoster` tells them apart. Replaced or removed poster files stay on
-  disk.
+  `OwnPoster` tells them apart. Several rows can share a file, so nothing
+  deletes a poster when it is replaced or removed. Instead, the poster
+  sweeper deletes files no row has used for an hour.
 
 ## HTTP layer
 

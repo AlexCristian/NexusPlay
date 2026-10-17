@@ -444,3 +444,16 @@ func TestMediaPosterFallsBackToCollection(t *testing.T) {
 		t.Errorf("poster = %q, own = %v; want its own", m.Poster, m.OwnPoster)
 	}
 }
+
+func TestPosterNames(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	s.CreateCollection(ctx, Collection{Name: "Show", Category: "TV Shows", Poster: "show.jpg"})
+	id := mustMedia(t, s, "m.mp4")
+	s.UpdateMedia(ctx, id, MediaUpdate{Title: "M", Poster: "film.jpg"}, false)
+	mustMedia(t, s, "none.mp4")
+	got, err := s.PosterNames(ctx)
+	if err != nil || len(got) != 2 || !got["show.jpg"] || !got["film.jpg"] {
+		t.Errorf("PosterNames = %v, %v", got, err)
+	}
+}

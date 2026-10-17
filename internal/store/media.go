@@ -234,6 +234,20 @@ func (s *Store) IncrementViews(ctx context.Context, id int64) error {
 	return err
 }
 
+// PosterNames returns the poster files any media or collection uses.
+func (s *Store) PosterNames(ctx context.Context) (map[string]bool, error) {
+	names, err := queryAll(ctx, s.db, scanString,
+		`SELECT poster FROM media WHERE poster <> '' UNION SELECT poster FROM collections WHERE poster <> ''`)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(names))
+	for _, n := range names {
+		out[n] = true
+	}
+	return out, nil
+}
+
 // Tile is one poster on the home page: a standalone item or a whole collection.
 type Tile struct {
 	IsCollection bool
