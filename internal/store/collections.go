@@ -49,18 +49,32 @@ func (s *Store) CreateCollection(ctx context.Context, c Collection) (id int64, e
 	return id, err
 }
 
-// UpdateCollection saves a collection's fields. An empty poster keeps the
-// current one. It returns ErrDuplicate if another collection has the name.
-func (s *Store) UpdateCollection(ctx context.Context, c Collection) error {
+// CollectionUpdate holds a collection's editable fields.
+type CollectionUpdate struct {
+	Name         string
+	Category     string
+	Year         string
+	Overview     string
+	Poster       string // a new poster file; empty keeps the current one
+	RemovePoster bool   // clear the poster (Poster must be empty)
+}
+
+// posterSQL is the new value of a poster column, with the parameters
+// (remove, poster, poster). The poster file itself stays on disk, as it does
+// when a poster is replaced.
+const posterSQL = `CASE WHEN ? THEN '' WHEN ? <> '' THEN ? ELSE poster END`
+
+// UpdateCollection saves a collection's fields. It returns ErrDuplicate if
+// another collection has the name.
+func (s *Store) UpdateCollection(ctx context.Context, id int64, u CollectionUpdate) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
-		var err error
-		if c.Category, err = canonicalCategory(ctx, tx, c.Category); err != nil {
+		category, err := canonicalCategory(ctx, tx, u.Category)
+		if err != nil {
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `
-			UPDATE collections SET name = ?, category = ?, year = ?, overview = ?,
-				poster = CASE WHEN ? <> '' THEN ? ELSE poster END
-			WHERE id = ?`, c.Name, c.Category, c.Year, c.Overview, c.Poster, c.Poster, c.ID)
+			UPDATE collections SET name = ?, category = ?, year = ?, overview = ?, poster = `+posterSQL+`
+			WHERE id = ?`, u.Name, category, u.Year, u.Overview, u.RemovePoster, u.Poster, u.Poster, id)
 		if isUniqueViolation(err) {
 			return ErrDuplicate
 		}

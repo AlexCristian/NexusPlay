@@ -89,14 +89,20 @@ func (e *env) client() *client {
 
 func (c *client) do(method, path string, form url.Values, headers map[string]string) (*http.Response, string) {
 	c.e.t.Helper()
-	var body io.Reader
-	if form != nil {
-		body = strings.NewReader(form.Encode())
+	if form == nil {
+		return c.send(method, path, nil, headers)
 	}
+	h := map[string]string{"Content-Type": "application/x-www-form-urlencoded"}
+	for k, v := range headers {
+		h[k] = v
+	}
+	return c.send(method, path, strings.NewReader(form.Encode()), h)
+}
+
+// send makes a request with any body, such as a multipart upload.
+func (c *client) send(method, path string, body io.Reader, headers map[string]string) (*http.Response, string) {
+	c.e.t.Helper()
 	req, _ := http.NewRequest(method, c.e.srv.URL+path, body)
-	if form != nil {
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	}
 	if method != http.MethodGet {
 		req.Header.Set("Origin", c.e.srv.URL)
 	}
@@ -416,5 +422,61 @@ func TestUnpublishedMediaRejectsProgressAndVotes(t *testing.T) {
 	}
 	if resp, _ := member.do("POST", "/me/progress", url.Values{"csrf_token": {member.csrf}, "media_id": {itoa(id)}, "position": {"5"}}, nil); resp.StatusCode != http.StatusNoContent {
 		t.Errorf("progress on published media: %d, want 204", resp.StatusCode)
+	}
+}
+
+// The edit form's "Remove the current poster" box clears the poster; sent
+// together with a new upload it is refused, and nothing changes.
+func TestRemovePoster(t *testing.T) {
+	e := newEnv(t, nil)
+	admin := e.client()
+	admin.register("alex")
+	ctx := context.Background()
+	id, _, _ := e.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "m.mp4", Title: "M", VideoCodec: "h264"})
+	if err := e.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "M", Poster: "old.jpg"}, false); err != nil {
+		t.Fatal(err)
+	}
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89")
+	save := func(upload bool) (int, string) {
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		mw.WriteField("csrf_token", admin.csrf)
+		mw.WriteField("title", "M")
+		mw.WriteField("remove_poster", "1")
+		if upload {
+			fw, _ := mw.CreateFormFile("poster", "new.png")
+			fw.Write(png)
+		}
+		mw.Close()
+		resp, body := admin.send("POST", "/admin/media/"+itoa(id), &buf, map[string]string{"Content-Type": mw.FormDataContentType()})
+		return resp.StatusCode, body
+	}
+	poster := func() string {
+		m, err := e.store.MediaByID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m.Poster
+	}
+
+	_, page := admin.do("GET", "/admin/media/"+itoa(id), nil, nil)
+	if !strings.Contains(page, `name="remove_poster"`) {
+		t.Error("the edit page has no remove box although the media has a poster")
+	}
+	if status, body := save(true); status != http.StatusBadRequest || !strings.Contains(body, "not both") {
+		t.Errorf("upload and remove: %d", status)
+	}
+	if got := poster(); got != "old.jpg" {
+		t.Errorf("after a refused save, poster = %q", got)
+	}
+	if status, _ := save(false); status != http.StatusSeeOther {
+		t.Errorf("remove: %d", status)
+	}
+	if got := poster(); got != "" {
+		t.Errorf("after remove, poster = %q", got)
+	}
+	_, page = admin.do("GET", "/admin/media/"+itoa(id), nil, nil)
+	if strings.Contains(page, `name="remove_poster"`) {
+		t.Error("the edit page offers to remove a poster that is not there")
 	}
 }

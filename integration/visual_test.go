@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+
+	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
 // Screenshot comparison. Each screen is rendered in the pinned Chrome and
@@ -109,6 +111,9 @@ func TestScreens(t *testing.T) {
 		{"control-panel", admin, func(tb *tab) { tb.navigate(s.URL + "/admin") }},
 		{"review-media", admin, func(tb *tab) {
 			tb.navigate(fmt.Sprintf("%s/admin/media/%d", s.URL, s.mediaID(movieAVI)))
+		}},
+		{"edit-collection", admin, func(tb *tab) {
+			tb.navigate(fmt.Sprintf("%s/admin/collections/%d", s.URL, s.collectionWithPoster(tb.t)))
 		}},
 		{"access-denied", viewer, func(tb *tab) { tb.navigate(s.URL + "/admin") }},
 	}
@@ -272,4 +277,41 @@ func saveFailure(t *testing.T, name string, actualPNG []byte, diff *image.RGBA) 
 		os.WriteFile(filepath.Join(dir, name+".diff.png"), buf.Bytes(), 0o644)
 	}
 	t.Logf("wrote %s (and the diff, if any) for inspection", actual)
+}
+
+// collectionWithPoster gives the first collection a plain poster image, so
+// its edit page shows the poster and the box to remove it. The poster is
+// removed when the test ends, so other screens stay as they are.
+func (s *server) collectionWithPoster(t *testing.T) int64 {
+	t.Helper()
+	ctx := context.Background()
+	colls, err := s.App.Store.Collections(ctx)
+	if err != nil || len(colls) == 0 {
+		t.Fatalf("no collection to edit: %v", err)
+	}
+	img := image.NewRGBA(image.Rect(0, 0, 140, 210))
+	for i := 0; i < len(img.Pix); i += 4 {
+		copy(img.Pix[i:], []byte{0x3a, 0x5f, 0x8a, 0xff})
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.App.Cfg.PosterDir(), "test-poster.png"), buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := colls[0]
+	err = s.App.Store.UpdateCollection(ctx, c.ID, store.CollectionUpdate{
+		Name: c.Name, Category: c.Category, Year: c.Year, Overview: c.Overview, Poster: "test-poster.png"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		err := s.App.Store.UpdateCollection(ctx, c.ID, store.CollectionUpdate{
+			Name: c.Name, Category: c.Category, Year: c.Year, Overview: c.Overview, RemovePoster: true})
+		if err != nil {
+			t.Error(err)
+		}
+	})
+	return c.ID
 }

@@ -118,14 +118,29 @@ templ collectionFields(c store.Collection, categories []string, metaEnabled bool
 		Description
 		<textarea name="overview" rows="3">{ c.Overview }</textarea>
 	</label>
-	<label>
-		Poster image
-		<input type="file" name="poster" accept="image/jpeg,image/png,image/webp"/>
-	</label>
+	@posterField(c.Poster, "")
 	if metaEnabled {
 		<label class="check">
 			<input type="checkbox" name="lookup" value="1"/>
 			Fill in missing details and poster from TMDB
+		</label>
+	}
+}
+
+// posterField is the poster upload, with a box to remove the current poster
+// when there is one.
+templ posterField(current, note string) {
+	<label>
+		Poster image
+		<input type="file" name="poster" accept="image/jpeg,image/png,image/webp"/>
+		if note != "" {
+			<small>{ note }</small>
+		}
+	</label>
+	if current != "" {
+		<label class="check">
+			<input type="checkbox" name="remove_poster" value="1"/>
+			Remove the current poster
 		</label>
 	}
 }
@@ -220,11 +235,7 @@ templ editMediaPage(p Page, f MediaForm) {
 						Description
 						<textarea name="overview" rows="3">{ f.Media.Overview }</textarea>
 					</label>
-					<label>
-						Poster image
-						<input type="file" name="poster" accept="image/jpeg,image/png,image/webp"/>
-						<small>Episodes use their collection's poster when they have none.</small>
-					</label>
+					@posterField(f.Media.Poster, "Episodes use their collection's poster when they have none.")
 					<div class="form-actions">
 						if f.Media.Published {
 							<button type="submit" class="button">Save</button>

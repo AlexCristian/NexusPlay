@@ -92,7 +92,8 @@ type ScannedMetadata struct {
 
 // SetScannedMetadata fills in details found by a metadata lookup. It only
 // touches unpublished media, so an administrator's edits are never
-// overwritten, and only fields the lookup found.
+// overwritten, and only fields the lookup found: here an empty string means
+// "the lookup found nothing", so it keeps the current value.
 func (s *Store) SetScannedMetadata(ctx context.Context, id int64, md ScannedMetadata) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE media SET
@@ -188,7 +189,8 @@ type MediaUpdate struct {
 	CollectionID int64
 	Season       int
 	Episode      int
-	Poster       string // empty keeps the current poster
+	Poster       string // a new poster file; empty keeps the current one
+	RemovePoster bool   // clear the poster (Poster must be empty)
 }
 
 // UpdateMedia saves metadata and, when publish is true, publishes the media and
@@ -206,9 +208,9 @@ func (s *Store) UpdateMedia(ctx context.Context, id int64, u MediaUpdate, publis
 		u.Category = category
 		_, err = tx.ExecContext(ctx, `
 			UPDATE media SET title = ?, year = ?, overview = ?, category = ?, collection_id = ?,
-				season = ?, episode = ?, poster = CASE WHEN ? <> '' THEN ? ELSE poster END
+				season = ?, episode = ?, poster = `+posterSQL+`
 			WHERE id = ?`,
-			u.Title, u.Year, u.Overview, u.Category, coll, u.Season, u.Episode, u.Poster, u.Poster, id)
+			u.Title, u.Year, u.Overview, u.Category, coll, u.Season, u.Episode, u.RemovePoster, u.Poster, u.Poster, id)
 		if err != nil {
 			return err
 		}

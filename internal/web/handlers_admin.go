@@ -209,7 +209,7 @@ func (s *Server) updateMediaFromForm(r *http.Request, id int64, publish bool) er
 		}
 		u.CollectionID = c.ID
 	}
-	if u.Poster, err = s.savePoster(r, "poster"); err != nil {
+	if u.Poster, u.RemovePoster, err = s.posterFromForm(r); err != nil {
 		return err
 	}
 	return s.Store.UpdateMedia(ctx, id, u, publish)
@@ -234,6 +234,24 @@ func (s *Server) findOrCreateCollection(ctx context.Context, name, category, yea
 	return c, err
 }
 
+// fillCollectionUpdate applies a TMDB lookup to an edit of existing. The
+// lookup only fills empty fields: an existing poster is kept unless the
+// administrator removed it, in which case the lookup may supply a new one.
+func (s *Server) fillCollectionUpdate(ctx context.Context, existing store.Collection, u *store.CollectionUpdate) {
+	c := store.Collection{Name: u.Name, Year: u.Year, Overview: u.Overview, Poster: u.Poster}
+	if c.Poster == "" && !u.RemovePoster {
+		c.Poster = existing.Poster
+	}
+	s.fillFromTMDB(ctx, &c)
+	u.Year, u.Overview = c.Year, c.Overview
+	if c.Poster != existing.Poster || u.RemovePoster {
+		u.Poster = c.Poster
+		u.RemovePoster = c.Poster == ""
+	}
+}
+
+// fillFromTMDB fills a collection's empty fields from TMDB, when lookups
+// are on. A failed lookup is logged and leaves c unchanged.
 func (s *Server) fillFromTMDB(ctx context.Context, c *store.Collection) {
 	if !s.Meta.Enabled() {
 		return
@@ -268,6 +286,30 @@ func formInt(r *http.Request, key string) (int, error) {
 		return 0, fmt.Errorf("bad %s", key)
 	}
 	return n, nil
+}
+
+// posterFromForm reads the poster upload and the "Remove the current poster"
+// box, which cannot both be used at once.
+func (s *Server) posterFromForm(r *http.Request) (poster string, remove bool, err error) {
+	remove = r.FormValue("remove_poster") == "1"
+	if remove && hasUpload(r, "poster") {
+		return "", false, formErr("Upload a new poster or remove the current one, not both.")
+	}
+	poster, err = s.savePoster(r, "poster")
+	return poster, remove, err
+}
+
+// hasUpload reports whether a non-empty file was sent in field.
+func hasUpload(r *http.Request, field string) bool {
+	if r.MultipartForm == nil {
+		return false
+	}
+	for _, fh := range r.MultipartForm.File[field] {
+		if fh.Size > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 var posterTypes = map[string]string{"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
@@ -392,11 +434,11 @@ func (s *Server) deleteSubtitle(w http.ResponseWriter, r *http.Request) error {
 
 // collectionFromForm reads the collection form. Problems the user can fix
 // are *formError.
-func (s *Server) collectionFromForm(r *http.Request) (store.Collection, error) {
+func (s *Server) collectionFromForm(r *http.Request) (store.CollectionUpdate, error) {
 	if err := parseForm(r, maxUpload); err != nil {
-		return store.Collection{}, formErr("The upload is too large or malformed.")
+		return store.CollectionUpdate{}, formErr("The upload is too large or malformed.")
 	}
-	c := store.Collection{
+	c := store.CollectionUpdate{
 		Name:     strings.TrimSpace(r.FormValue("name")),
 		Category: strings.TrimSpace(r.FormValue("category")),
 		Year:     strings.TrimSpace(r.FormValue("year")),
@@ -406,14 +448,14 @@ func (s *Server) collectionFromForm(r *http.Request) (store.Collection, error) {
 		return c, formErr("A collection needs a name and a category.")
 	}
 	var err error
-	c.Poster, err = s.savePoster(r, "poster")
+	c.Poster, c.RemovePoster, err = s.posterFromForm(r)
 	return c, err
 }
 
 // createCollection handles POST /admin/collections.
 func (s *Server) createCollection(w http.ResponseWriter, r *http.Request) error {
 	const title = "Could not create the collection"
-	c, err := s.collectionFromForm(r)
+	u, err := s.collectionFromForm(r)
 	var fe *formError
 	if errors.As(err, &fe) {
 		return &statusError{status: http.StatusBadRequest, title: title, msg: fe.msg}
@@ -421,6 +463,7 @@ func (s *Server) createCollection(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return err
 	}
+	c := store.Collection{Name: u.Name, Category: u.Category, Year: u.Year, Overview: u.Overview, Poster: u.Poster}
 	if r.FormValue("lookup") == "1" {
 		s.fillFromTMDB(r.Context(), &c)
 	}
@@ -463,17 +506,12 @@ func (s *Server) saveCollection(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	c, err := s.collectionFromForm(r)
+	u, err := s.collectionFromForm(r)
 	if err == nil {
-		c.ID = id
 		if r.FormValue("lookup") == "1" {
-			// The lookup only fills empty fields, so an existing poster is kept.
-			if c.Poster == "" {
-				c.Poster = existing.Poster
-			}
-			s.fillFromTMDB(r.Context(), &c)
+			s.fillCollectionUpdate(r.Context(), existing, &u)
 		}
-		err = s.Store.UpdateCollection(r.Context(), c)
+		err = s.Store.UpdateCollection(r.Context(), id, u)
 		if errors.Is(err, store.ErrDuplicate) {
 			err = formErr("Another collection already has that name.")
 		}
@@ -484,7 +522,7 @@ func (s *Server) saveCollection(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		existing.Name, existing.Category, existing.Year, existing.Overview = c.Name, c.Category, c.Year, c.Overview
+		existing.Name, existing.Category, existing.Year, existing.Overview = u.Name, u.Category, u.Year, u.Overview
 		s.render(w, r, http.StatusBadRequest, editCollectionPage(s.page(r, "Edit collection"), existing, cats, s.Meta.Enabled(), fe.msg))
 		return nil
 	}

@@ -318,3 +318,62 @@ func TestCategoriesIgnoreLetterCase(t *testing.T) {
 		t.Errorf("categories = %v, want %s", got, want)
 	}
 }
+
+// An empty poster keeps the current one; RemovePoster clears it.
+func TestUpdateMediaRemovesPoster(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	id := mustMedia(t, s, "m.mp4")
+	poster := func() string {
+		t.Helper()
+		m, err := s.MediaByID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m.Poster
+	}
+	for _, step := range []struct {
+		u    MediaUpdate
+		want string
+	}{
+		{MediaUpdate{Title: "M", Poster: "a.jpg"}, "a.jpg"},
+		{MediaUpdate{Title: "M"}, "a.jpg"},
+		{MediaUpdate{Title: "M", RemovePoster: true}, ""},
+		{MediaUpdate{Title: "M", Poster: "b.jpg"}, "b.jpg"},
+	} {
+		if err := s.UpdateMedia(ctx, id, step.u, false); err != nil {
+			t.Fatal(err)
+		}
+		if got := poster(); got != step.want {
+			t.Errorf("after %+v: poster = %q, want %q", step.u, got, step.want)
+		}
+	}
+}
+
+func TestUpdateCollectionRemovesPoster(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	id, err := s.CreateCollection(ctx, Collection{Name: "Show", Category: "TV Shows", Poster: "a.jpg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []struct {
+		u    CollectionUpdate
+		want string
+	}{
+		{CollectionUpdate{Name: "Show", Category: "TV Shows"}, "a.jpg"},
+		{CollectionUpdate{Name: "Show", Category: "TV Shows", RemovePoster: true}, ""},
+		{CollectionUpdate{Name: "Show", Category: "TV Shows", Poster: "b.jpg"}, "b.jpg"},
+	} {
+		if err := s.UpdateCollection(ctx, id, step.u); err != nil {
+			t.Fatal(err)
+		}
+		c, err := s.CollectionByID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Poster != step.want {
+			t.Errorf("after %+v: poster = %q, want %q", step.u, c.Poster, step.want)
+		}
+	}
+}
