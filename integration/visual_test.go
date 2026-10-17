@@ -94,11 +94,25 @@ func TestScreens(t *testing.T) {
 			tb.click("#tab-1 .tile")
 			tb.waitVisible("#modal[open] .episodes")
 		}},
+		{"collection-dialog-subscribed", viewer, func(tb *tab) {
+			tb.waitHTMX("#modal .ribbon")
+			tb.click("#modal .ribbon")
+			tb.waitVisible("#modal .ribbon-on")
+			// Move the mouse away so the screenshot shows the resting state, not
+			// the hover preview of unsubscribing.
+			tb.run(chromedp.MouseClickXY(5, 600))
+			tb.waitJS(`!document.getElementById('modal').open`, 5*time.Second)
+			tb.click("#tab-1 .tile")
+			tb.waitVisible("#modal[open] .ribbon-on")
+		}},
 		{"watch-movie", admin, func(tb *tab) {
 			tb.navigate(fmt.Sprintf("%s/watch/%d", s.URL, movie))
 			tb.waitJS(`document.getElementById('player').readyState >= 1`, 20*time.Second)
 			tb.eval(`document.getElementById('player').textTracks[0].mode = 'showing'`, nil)
 			tb.waitVisible("#report-subtitle")
+			// The buffered part of the seek bar depends on timing; wait until
+			// the whole (short) video is loaded so it is always full.
+			tb.waitJS(`document.getElementById('ctl-seek').style.getPropertyValue('--loaded') === '100%'`, 20*time.Second)
 		}},
 		{"subtitle-report", viewer, func(tb *tab) {
 			s.proposeCorrection(tb.t, movie, 2000, "alex", "Hello there!")

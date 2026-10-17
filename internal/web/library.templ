@@ -169,6 +169,9 @@ templ collectionDialog(v Viewer, c store.Collection, seasons []Season, subscribe
 	</div>
 }
 
+// subscribeRibbon is the diagonal ribbon in the corner of a collection's
+// poster, as in the original: blue with a star to subscribe, green with a
+// check mark once subscribed.
 templ subscribeRibbon(collectionID int64, subscribed bool) {
 	<button
 		type="button"
@@ -176,13 +179,23 @@ templ subscribeRibbon(collectionID int64, subscribed bool) {
 		hx-post={ collectionURL(collectionID) + "/subscribe" }
 		hx-swap="outerHTML"
 		aria-pressed={ strconv.FormatBool(subscribed) }
-		title="Get notified when new episodes are added"
-	>
 		if subscribed {
-			Subscribed
+			title="Subscribed: you are notified of new episodes. Click to unsubscribe."
 		} else {
-			Subscribe
+			title="Subscribe to be notified when new episodes are added"
 		}
+	>
+		<span class="ribbon-band" aria-hidden="true">
+			@icon("star")
+			@icon("check")
+		</span>
+		<span class="sr-only">
+			if subscribed {
+				Subscribed
+			} else {
+				Subscribe
+			}
+		</span>
 	</button>
 }
 

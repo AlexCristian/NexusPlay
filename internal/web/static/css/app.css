@@ -322,22 +322,46 @@ button { font: inherit; }
 .episodes tr:hover a { text-decoration: underline; }
 .episodes .watched { margin-left: 6px; }
 
+/* The subscribe ribbon: a band across the poster's top-right corner. Blue
+   with a star, green with a check mark when subscribed; hovering shows what
+   a click will do. */
 .ribbon {
   position: absolute;
-  left: 0;
+  top: 0;
   right: 0;
-  bottom: 0;
+  width: 85px;
+  height: 88px;
+  overflow: hidden;
   border: 0;
-  padding: 6px;
-  color: #fff;
-  background: rgba(0, 153, 204, .9);
-  font-weight: 700;
-  font-size: .85rem;
+  padding: 0;
+  background: none;
   cursor: pointer;
 }
-.ribbon::before { content: "+ "; }
-.ribbon-on { background: rgba(153, 204, 0, .9); }
-.ribbon-on::before { content: "✓ "; }
+.ribbon-band {
+  position: absolute;
+  top: 14px;
+  right: -26px;
+  width: 100px;
+  height: 24px;
+  rotate: 45deg;
+  display: grid;
+  place-items: center;
+  background: #0099cc;
+  color: #fff;
+  box-shadow: 0 0 3px rgba(0, 0, 0, .3);
+  transition: background-color .5s;
+}
+.ribbon-band .icon { width: 15px; height: 15px; rotate: -45deg; }
+.ribbon-band .icon-star { fill: currentColor; stroke: none; }
+.ribbon-band .icon-check { stroke-width: 3; display: none; }
+.ribbon-on .ribbon-band { background: #99cc00; }
+.ribbon-on .ribbon-band .icon-star { display: none; }
+.ribbon-on .ribbon-band .icon-check { display: block; }
+.ribbon:hover .ribbon-band { background: #99cc00; }
+.ribbon-on:hover .ribbon-band { background: #0099cc; }
+.ribbon:focus-visible { outline: none; }
+.ribbon:focus-visible .ribbon-band { outline: 2px solid #fff; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* Watch page: the player is as wide as the other panels, with the
    original skin: a dark gradient control bar, red striped progress and
