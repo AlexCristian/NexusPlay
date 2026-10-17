@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/AlexCristian/NexusPlay/internal/auth"
 	"github.com/AlexCristian/NexusPlay/internal/config"
 	"github.com/AlexCristian/NexusPlay/internal/convert"
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
@@ -21,6 +22,9 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/web"
 )
 
+// sessionLifetime is how long a login lasts.
+const sessionLifetime = 30 * 24 * time.Hour
+
 // App is a configured server with its background workers.
 type App struct {
 	Cfg        config.Config
@@ -30,6 +34,7 @@ type App struct {
 	Transcodes *stream.Manager
 	Converter  web.Conversions    // convert.Disabled when NEXUSPLAY_CONVERT is off
 	runner     *convert.Converter // nil when conversion is off
+	sessions   *auth.Sessions
 	Handler    http.Handler
 }
 
@@ -75,9 +80,16 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		scanner.OnAdded(runner.Wake)
 		conversions = runner
 	}
-	srv := &web.Server{Cfg: cfg, Store: st, Scanner: scanner, Meta: meta, Transcodes: transcodes, Converter: conversions, Log: log}
+	accounts, err := auth.NewAccounts(st, log.With("component", "auth"))
+	if err != nil {
+		st.Close()
+		return nil, err
+	}
+	sessions := auth.NewSessions(st, sessionLifetime, log.With("component", "auth"))
+	srv := &web.Server{Cfg: cfg, Store: st, Scanner: scanner, Meta: meta, Transcodes: transcodes,
+		Converter: conversions, Accounts: accounts, Sessions: sessions, Log: log}
 	return &App{Cfg: cfg, Log: log, Store: st, Scanner: scanner, Transcodes: transcodes,
-		Converter: conversions, runner: runner, Handler: srv.Handler()}, nil
+		Converter: conversions, runner: runner, sessions: sessions, Handler: srv.Handler()}, nil
 }
 
 // Start runs the scanner, the transcode janitor, the converter and session
@@ -88,20 +100,8 @@ func (a *App) Start(ctx context.Context) {
 	if a.runner != nil {
 		go a.runner.Run(ctx)
 	}
-	go func() {
-		t := time.NewTicker(time.Hour)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				if err := a.Store.DeleteExpiredSessions(ctx); err != nil {
-					a.Log.Warn("session cleanup", "err", err)
-				}
-			}
-		}
-	}()
+	go a.sessions.Run(ctx)
+
 }
 
 // Close releases the database.

@@ -15,7 +15,9 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/AlexCristian/NexusPlay/internal/auth"
 	"github.com/AlexCristian/NexusPlay/internal/config"
 	"github.com/AlexCristian/NexusPlay/internal/convert"
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
@@ -59,7 +61,12 @@ func newEnv(t *testing.T, mutate func(*config.Config)) *env {
 		t.Fatal(err)
 	}
 	meta := metadata.New(metadata.Config{PosterDir: cfg.PosterDir()}, log)
+	accounts, err := auth.NewAccounts(st, log)
+	if err != nil {
+		t.Fatal(err)
+	}
 	s := &Server{Cfg: cfg, Store: st, Meta: meta, Transcodes: tm, Converter: convert.Disabled{}, Log: log,
+		Accounts: accounts, Sessions: auth.NewSessions(st, time.Hour, log),
 		Scanner: library.NewScanner(library.Deps{Store: st, Meta: meta, Log: log}, library.Config{MediaDir: cfg.MediaDir})}
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(func() { ts.Close(); st.Close() })

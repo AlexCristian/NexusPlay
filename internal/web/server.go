@@ -32,8 +32,6 @@ var staticFiles embed.FS
 
 const sessionCookie = "nexusplay_session"
 
-const sessionLifetime = 30 * 24 * time.Hour
-
 // Server holds the dependencies of every handler.
 type Server struct {
 	Cfg        config.Config
@@ -41,6 +39,8 @@ type Server struct {
 	Scanner    *library.Scanner
 	Meta       *metadata.Client
 	Transcodes *stream.Manager
+	Accounts   *auth.Accounts
+	Sessions   *auth.Sessions
 	Converter  Conversions
 	Log        *slog.Logger
 }
@@ -56,22 +56,8 @@ type ctxKey int
 
 const viewerKey ctxKey = 0
 
-// Viewer is who is making a request. User is nil for anonymous visitors.
-type Viewer struct {
-	User *store.User
-	CSRF string
-}
-
-// ID returns the user's ID, or 0 for anonymous visitors.
-func (v Viewer) ID() int64 {
-	if v.User == nil {
-		return 0
-	}
-	return v.User.ID
-}
-
-// IsAdmin reports whether the viewer administers this install.
-func (v Viewer) IsAdmin() bool { return v.User != nil && v.User.IsAdmin }
+// Viewer is who is making a request (see auth.Viewer).
+type Viewer = auth.Viewer
 
 func viewer(r *http.Request) Viewer {
 	v, _ := r.Context().Value(viewerKey).(Viewer)
@@ -199,15 +185,13 @@ func currentURL(r *http.Request) string {
 	return r.URL.RequestURI()
 }
 
-// session loads the logged-in user, if any.
+// session loads the logged-in user, if any, into the request context.
 func (s *Server) session(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var v Viewer
-		if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
-			sess, u, err := s.Store.SessionUser(r.Context(), auth.HashToken(c.Value))
-			if err == nil {
-				v = Viewer{User: &u, CSRF: sess.CSRFToken}
-			} else if !errors.Is(err, store.ErrNotFound) {
+		if c, err := r.Cookie(sessionCookie); err == nil {
+			v, err = s.Sessions.Lookup(r.Context(), c.Value)
+			if err != nil && !errors.Is(err, auth.ErrNoSession) {
 				s.Log.Error("loading session", "err", err)
 			}
 		}
