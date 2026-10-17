@@ -58,7 +58,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		Store: st, Prober: tools, Meta: meta,
 		MediaDir: cfg.MediaDir, Interval: cfg.ScanInterval, Log: log.With("component", "scanner"),
 	}
-	transcodes, err := stream.NewManager(tools, cfg.TranscodeDir(), cfg.MaxTranscodes, log.With("component", "transcode"))
+	transcodes, err := stream.NewManager(stream.FFmpegStarter(tools),
+		stream.Config{Dir: cfg.TranscodeDir(), Max: cfg.MaxTranscodes}, log.With("component", "transcode"))
 	if err != nil {
 		st.Close()
 		return nil, fmt.Errorf("transcode folder: %w", err)
@@ -79,7 +80,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 // cleanup until ctx ends.
 func (a *App) Start(ctx context.Context) {
 	go a.Scanner.Run(ctx)
-	go a.Transcodes.Janitor(ctx)
+	go a.Transcodes.Run(ctx)
 	if a.Converter != nil {
 		go a.Converter.Run(ctx)
 	}

@@ -52,7 +52,8 @@ func newEnv(t *testing.T, mutate func(*config.Config)) *env {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	tm, err := stream.NewManager(ffmpeg.Tools{FFmpeg: "ffmpeg", FFprobe: "ffprobe"}, cfg.TranscodeDir(), 1, log)
+	tm, err := stream.NewManager(stream.FFmpegStarter(ffmpeg.Tools{FFmpeg: "ffmpeg", FFprobe: "ffprobe"}),
+		stream.Config{Dir: cfg.TranscodeDir(), Max: 1}, log)
 	if err != nil {
 		t.Fatal(err)
 	}

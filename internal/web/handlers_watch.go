@@ -6,10 +6,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/AlexCristian/NexusPlay/internal/media"
 	"github.com/AlexCristian/NexusPlay/internal/store"
@@ -149,12 +147,13 @@ func (s *Server) mediaFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", info.ModTime(), f)
 }
 
-var hlsFile = regexp.MustCompile(`^(index\.m3u8|seg\d{5}\.ts)$`)
-
-// hls serves an on-demand transcode for files browsers cannot play directly.
+// hls serves an on-demand transcode for files browsers cannot play
+// directly: GET /media/{id}/hls/index.m3u8 starts (or reuses) the transcode
+// and returns its playlist; GET /media/{id}/hls/segNNNNN.ts returns a segment.
+// A segment request for a transcode that was evicted restarts it.
 func (s *Server) hls(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("file")
-	if !hlsFile.MatchString(name) {
+	if name != "index.m3u8" && !stream.IsSegmentName(name) {
 		s.notFound(w, r)
 		return
 	}
@@ -162,14 +161,15 @@ func (s *Server) hls(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	dir := s.Transcodes.Touch(m.ID)
-	if dir == "" || name == "index.m3u8" {
+	_, running := s.Transcodes.Touch(m.ID)
+	var file string
+	if name == "index.m3u8" || !running {
 		src, err := s.mediaPath(m)
 		if err != nil {
 			s.serverError(w, r, err)
 			return
 		}
-		dir, err = s.Transcodes.Playlist(r.Context(), m.ID, src, formatOf(m))
+		playlist, err := s.Transcodes.Playlist(r.Context(), m.ID, src, formatOf(m))
 		if errors.Is(err, stream.ErrBusy) {
 			w.Header().Set("Retry-After", "30")
 			http.Error(w, "The server is busy converting other videos. Try again in a minute.", http.StatusServiceUnavailable)
@@ -182,37 +182,21 @@ func (s *Server) hls(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+		file = playlist
 	}
-	file := filepath.Join(dir, name)
 	if name == "index.m3u8" {
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		w.Header().Set("Cache-Control", "no-cache")
 	} else {
-		// After a restart the segment may be a few seconds away from existing.
-		if !waitForFile(r, file, 30*time.Second) {
+		segment, err := s.Transcodes.Segment(r.Context(), m.ID, name)
+		if err != nil {
 			s.notFound(w, r)
 			return
 		}
+		file = segment
 		w.Header().Set("Content-Type", "video/mp2t")
 	}
 	http.ServeFile(w, r, file)
-}
-
-func waitForFile(r *http.Request, file string, max time.Duration) bool {
-	deadline := time.Now().Add(max)
-	for {
-		if _, err := os.Stat(file); err == nil {
-			return true
-		}
-		if time.Now().After(deadline) {
-			return false
-		}
-		select {
-		case <-r.Context().Done():
-			return false
-		case <-time.After(250 * time.Millisecond):
-		}
-	}
 }
 
 func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
