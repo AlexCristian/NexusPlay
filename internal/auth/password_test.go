@@ -62,7 +62,11 @@ func TestTokens(t *testing.T) {
 	if a == b || len(a) < 40 {
 		t.Errorf("weak tokens %q %q", a, b)
 	}
-	if HashToken(a) == a || HashToken(a) != HashToken(a) {
-		t.Error("HashToken must be deterministic and differ from the token")
+	// HashToken is SHA-256 in hex; compare against the standard test vector.
+	if got, want := HashToken("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"; got != want {
+		t.Errorf("HashToken(%q) = %s, want %s", "abc", got, want)
+	}
+	if HashToken(a) == HashToken(b) {
+		t.Error("different tokens hashed to the same value")
 	}
 }

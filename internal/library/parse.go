@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // SupportedExtensions are the video files the scanner picks up.
@@ -57,13 +58,16 @@ func ParsePath(rel string) Guess {
 		g.Title = clean(junkRe.ReplaceAllString(name[m[1]:], ""))
 	} else {
 		name = junkRe.ReplaceAllString(name, "")
-		if m := yearRe.FindAllStringSubmatchIndex(name, -1); m != nil {
-			// The last year-like number is the release year; an earlier one may be
-			// part of the title ("2001 A Space Odyssey 1968").
-			last := m[len(m)-1]
-			if last[0] > 0 {
-				g.Year = name[last[2]:last[3]]
-				name = name[:last[0]]
+		// The last plausible year is the release year. An earlier one may be
+		// part of the title ("2001 A Space Odyssey 1968"), and so may a year
+		// that has not happened yet ("Blade Runner 2049").
+		ms := yearRe.FindAllStringSubmatchIndex(name, -1)
+		for i := len(ms) - 1; i >= 0; i-- {
+			m := ms[i]
+			if m[0] > 0 && plausibleYear(name[m[2]:m[3]]) {
+				g.Year = name[m[2]:m[3]]
+				name = name[:m[0]]
+				break
 			}
 		}
 		g.Title = clean(name)
@@ -110,9 +114,16 @@ func ParsePath(rel string) Guess {
 	return g
 }
 
+// plausibleYear reports whether a four-digit year could be a release year:
+// no later than next year (films are announced ahead of release).
+func plausibleYear(y string) bool {
+	n, err := strconv.Atoi(y)
+	return err == nil && n <= time.Now().Year()+1
+}
+
 // splitYear splits "Cosmos (2014)" into "Cosmos" and "2014".
 func splitYear(s string) (string, string) {
-	if y := yearRe.FindStringSubmatchIndex(s); y != nil && y[0] > 0 {
+	if y := yearRe.FindStringSubmatchIndex(s); y != nil && y[0] > 0 && plausibleYear(s[y[2]:y[3]]) {
 		return clean(s[:y[0]]), s[y[2]:y[3]]
 	}
 	return s, ""

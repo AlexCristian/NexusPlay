@@ -10,7 +10,8 @@ func TestParsePath(t *testing.T) {
 		{"Movies/The Matrix (1999).mp4", Guess{Title: "The Matrix", Year: "1999"}},
 		{"The.Matrix.1999.1080p.BluRay.x264.mkv", Guess{Title: "The Matrix", Year: "1999"}},
 		{"2001 A Space Odyssey (1968).mkv", Guess{Title: "2001 A Space Odyssey", Year: "1968"}},
-		{"Blade Runner 2049.mp4", Guess{Title: "Blade Runner", Year: "2049"}},
+		{"Blade Runner 2049.mp4", Guess{Title: "Blade Runner 2049"}}, // a future year is part of the title
+		{"Blade Runner 2049 (2017).mkv", Guess{Title: "Blade Runner 2049", Year: "2017"}},
 		{"Cosmos.mp4", Guess{Title: "Cosmos"}},
 		{"Doctor Who/Season 2/Doctor.Who.S02E03.School.Reunion.720p.mkv",
 			Guess{Show: "Doctor Who", Title: "School Reunion", Season: 2, Episode: 3}},
