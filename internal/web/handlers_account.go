@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/a-h/templ"
+
 	"github.com/AlexCristian/NexusPlay/internal/auth"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
@@ -40,100 +42,82 @@ func safeNext(next string) string {
 	return out
 }
 
-func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
+// loginPage handles GET /login, as a page or (htmx) a dialog.
+func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) error {
 	next := r.URL.Query().Get("next")
 	if next == "" && isHTMX(r) {
 		next = currentURL(r) // opened as a dialog: come back to the same page
 	}
-	next = safeNext(next)
-	if isHTMX(r) {
-		s.render(w, r, http.StatusOK, loginForm("", "", next))
-		return
-	}
-	s.render(w, r, http.StatusOK, authPage(s.page(r, "Log in"), loginForm("", "", next)))
+	return s.respond(w, r, http.StatusOK, "Log in", loginForm("", "", safeNext(next)), authPage)
 }
 
-func (s *Server) registerPage(w http.ResponseWriter, r *http.Request) {
-	first, err := s.firstUser(r)
+// registerPage handles GET /register, as a page or (htmx) a dialog.
+func (s *Server) registerPage(w http.ResponseWriter, r *http.Request) error {
+	first, err := s.Accounts.FirstUser(r.Context())
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
-	form := registerForm("", "", "", first)
-	if isHTMX(r) {
-		s.render(w, r, http.StatusOK, form)
-		return
-	}
-	s.render(w, r, http.StatusOK, authPage(s.page(r, "Register"), form))
+	return s.respond(w, r, http.StatusOK, "Register", registerForm("", "", "", first), authPage)
 }
 
-func (s *Server) firstUser(r *http.Request) (bool, error) {
-	return s.Accounts.FirstUser(r.Context())
+// rejectAuthForm shows a login or registration form again with its error.
+// A full page carries the failure status; an htmx dialog needs 200, because
+// htmx only swaps in successful responses.
+func (s *Server) rejectAuthForm(w http.ResponseWriter, r *http.Request, status int, title string, form templ.Component) error {
+	if isHTMX(r) {
+		status = http.StatusOK
+	}
+	return s.respond(w, r, status, title, form, authPage)
 }
 
 // login handles POST /login from the login form or dialog.
-func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+func (s *Server) login(w http.ResponseWriter, r *http.Request) error {
 	email := strings.TrimSpace(r.FormValue("email"))
 	next := safeNext(r.FormValue("next"))
 	u, err := s.Accounts.Login(r.Context(), email, r.FormValue("password"))
 	if errors.Is(err, auth.ErrInvalidCredentials) {
-		form := loginForm("Wrong e-mail or password.", email, next)
-		if isHTMX(r) {
-			s.render(w, r, http.StatusOK, form)
-		} else {
-			s.render(w, r, http.StatusUnauthorized, authPage(s.page(r, "Log in"), form))
-		}
-		return
+		return s.rejectAuthForm(w, r, http.StatusUnauthorized, "Log in", loginForm("Wrong e-mail or password.", email, next))
 	}
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	if err := s.startSession(w, r, u.ID); err != nil {
-		s.serverError(w, r, err)
-		return
+		return err
 	}
 	s.redirect(w, r, next)
+	return nil
 }
 
 // register handles POST /register. The first account becomes the administrator.
-func (s *Server) register(w http.ResponseWriter, r *http.Request) {
+func (s *Server) register(w http.ResponseWriter, r *http.Request) error {
 	in := auth.Registration{Email: r.FormValue("email"), Nickname: r.FormValue("nickname"), Password: r.FormValue("password")}
 	u, err := s.Accounts.Register(r.Context(), in)
 	var invalid *auth.ValidationError
-	msg := ""
+	var msg string
 	switch {
 	case errors.As(err, &invalid):
 		msg = invalid.Msg
 	case errors.Is(err, store.ErrDuplicate):
 		msg = "That e-mail or nickname is already registered."
 	case err != nil:
-		s.serverError(w, r, err)
-		return
-	}
-	if msg != "" {
-		first, ferr := s.firstUser(r)
-		if ferr != nil {
-			s.serverError(w, r, ferr)
-			return
+		return err
+	default:
+		if err := s.startSession(w, r, u.ID); err != nil {
+			return err
 		}
-		form := registerForm(msg, strings.TrimSpace(in.Email), strings.TrimSpace(in.Nickname), first)
-		if isHTMX(r) {
-			s.render(w, r, http.StatusOK, form)
-		} else {
-			s.render(w, r, http.StatusBadRequest, authPage(s.page(r, "Register"), form))
-		}
-		return
+		s.redirect(w, r, "/")
+		return nil
 	}
-	if err := s.startSession(w, r, u.ID); err != nil {
-		s.serverError(w, r, err)
-		return
+	first, err := s.Accounts.FirstUser(r.Context())
+	if err != nil {
+		return err
 	}
-	s.redirect(w, r, "/")
+	form := registerForm(msg, strings.TrimSpace(in.Email), strings.TrimSpace(in.Nickname), first)
+	return s.rejectAuthForm(w, r, http.StatusBadRequest, "Register", form)
 }
 
 // logout handles POST /logout.
-func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) error {
 	if c, err := r.Cookie(sessionCookie); err == nil {
 		// The cookie is cleared below regardless: the user asked to leave. A
 		// session row left behind expires on its own.
@@ -144,6 +128,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1,
 		HttpOnly: true, Secure: s.Cfg.SecureCookies, SameSite: http.SameSiteLaxMode})
 	s.redirect(w, r, "/")
+	return nil
 }
 
 // startSession logs a user in: a new session and its cookie.

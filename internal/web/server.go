@@ -80,11 +80,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /posters/{name}", s.browse(s.handle(s.poster)))
 
 	// Accounts.
-	mux.HandleFunc("GET /login", s.loginPage)
-	mux.HandleFunc("POST /login", s.login)
-	mux.HandleFunc("GET /register", s.registerPage)
-	mux.HandleFunc("POST /register", s.register)
-	mux.HandleFunc("POST /logout", s.logout)
+	mux.HandleFunc("GET /login", s.handle(s.loginPage))
+	mux.HandleFunc("POST /login", s.handle(s.login))
+	mux.HandleFunc("GET /register", s.handle(s.registerPage))
+	mux.HandleFunc("POST /register", s.handle(s.register))
+	mux.HandleFunc("POST /logout", s.handle(s.logout))
 
 	// Signed-in features.
 	mux.Handle("GET /me/resume", s.member(s.handle(s.resumeList)))
