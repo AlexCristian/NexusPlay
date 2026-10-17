@@ -8,6 +8,7 @@ require (
 	github.com/chromedp/chromedp v0.16.0
 	github.com/fsnotify/fsnotify v1.10.1
 	golang.org/x/crypto v0.58.0
+	golang.org/x/sync v0.23.0
 	modernc.org/sqlite v1.60.1
 )
 

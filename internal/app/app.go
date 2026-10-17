@@ -53,7 +53,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 	tools := ffmpeg.Tools{FFmpeg: cfg.FFmpegPath, FFprobe: cfg.FFprobePath}
-	meta := metadata.New(cfg.TMDBAPIKey, cfg.PosterDir())
+	meta := metadata.New(metadata.Config{APIKey: cfg.TMDBAPIKey, PosterDir: cfg.PosterDir()}, log.With("component", "tmdb"))
 	scanner := &library.Scanner{
 		Store: st, Prober: tools, Meta: meta,
 		MediaDir: cfg.MediaDir, Interval: cfg.ScanInterval, Log: log.With("component", "scanner"),

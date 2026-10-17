@@ -56,7 +56,7 @@ func newEnv(t *testing.T, mutate func(*config.Config)) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	meta := metadata.New("", cfg.PosterDir())
+	meta := metadata.New(metadata.Config{PosterDir: cfg.PosterDir()}, log)
 	s := &Server{Cfg: cfg, Store: st, Meta: meta, Transcodes: tm, Log: log,
 		Scanner: &library.Scanner{Store: st, MediaDir: cfg.MediaDir, Meta: meta, Log: log}}
 	ts := httptest.NewServer(s.Handler())
