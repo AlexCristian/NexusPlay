@@ -145,7 +145,7 @@ func TestCategoriesGroupCollections(t *testing.T) {
 		t.Errorf("recent = %+v, %v; want the movie and one collection tile", recent, err)
 	}
 	found, err := s.Search(ctx, u.ID, "doctor", 10)
-	if err != nil || len(found) != 1 || found[0].Title != "Doctor Who" {
+	if err != nil || len(found) != 1 || found[0].Name != "TV Shows" || len(found[0].Tiles) != 1 || found[0].Tiles[0].Title != "Doctor Who" {
 		t.Errorf("search = %+v, %v", found, err)
 	}
 	if found, _ := s.Search(ctx, u.ID, "unpublished", 10); len(found) != 0 {

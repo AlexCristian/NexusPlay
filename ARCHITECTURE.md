@@ -181,7 +181,11 @@ so its existence does not leak. For htmx requests, errors render as an
 alert inside the dialog that asked; otherwise as a full page.
 
 **Fragments.** `respond` writes the fragment alone for htmx and wraps it in
-a page otherwise, so every dialog is also a working URL. Control-panel forms
+a page otherwise, so every dialog is also a working URL. Search is a
+drawer on every page: as the visitor types, htmx fills `#search-results`,
+and app.js slides the drawer open and dims the page under it (`#page-cover`);
+an empty answer closes it. `/search` without JavaScript renders the same
+drawer already open. Control-panel forms
 are decoded and validated by `decodeMediaForm`, `decodeCollectionForm` and
 `decodeSubtitleUpload` before anything is stored. A `*formError` is shown in
 the form again.

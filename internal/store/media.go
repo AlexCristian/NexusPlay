@@ -267,10 +267,23 @@ type Category struct {
 // Categories groups everything published into categories. Media in a
 // collection appears once, as the collection's tile, under the collection's category.
 func (s *Store) Categories(ctx context.Context, userID int64) ([]Category, error) {
+	return s.categorized(ctx, userID, "", -1)
+}
+
+// Search is Categories limited to standalone media and collections whose
+// name contains q, at most limit tiles in all.
+func (s *Store) Search(ctx context.Context, userID int64, q string, limit int) ([]Category, error) {
+	return s.categorized(ctx, userID, q, limit)
+}
+
+// categorized lists tiles whose name contains q ("" matches everything),
+// grouped by category, at most limit of them (-1 for no limit).
+func (s *Store) categorized(ctx context.Context, userID int64, q string, limit int) ([]Category, error) {
 	type row struct {
 		category string
 		tile     Tile
 	}
+	pattern := "%" + likeEscape(q) + "%"
 	// Category names are compared without regard to letter case. Writes
 	// already reuse an existing spelling (canonicalCategory); grouping here
 	// also merges rows saved before that rule existed.
@@ -282,11 +295,12 @@ func (s *Store) Categories(ctx context.Context, userID int64) ([]Category, error
 	}, `
 		SELECT COALESCE(NULLIF(TRIM(category), ''), 'Other'), 0, id, title, year, poster,
 		       EXISTS (SELECT 1 FROM watched w WHERE w.media_id = m.id AND w.user_id = ?)
-		FROM media m WHERE published = 1 AND collection_id IS NULL
+		FROM media m WHERE published = 1 AND collection_id IS NULL AND title LIKE ? ESCAPE '\'
 		UNION ALL
 		SELECT COALESCE(NULLIF(TRIM(c.category), ''), 'Other'), 1, c.id, c.name, c.year, c.poster, 0
-		FROM collections c WHERE EXISTS (SELECT 1 FROM media m WHERE m.collection_id = c.id AND m.published = 1)
-		ORDER BY 1 COLLATE NOCASE, 4 COLLATE NOCASE`, userID)
+		FROM collections c WHERE c.name LIKE ? ESCAPE '\'
+		  AND EXISTS (SELECT 1 FROM media m WHERE m.collection_id = c.id AND m.published = 1)
+		ORDER BY 1 COLLATE NOCASE, 4 COLLATE NOCASE LIMIT ?`, userID, pattern, pattern, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -321,24 +335,6 @@ func (s *Store) RecentTiles(ctx context.Context, userID int64, limit int) ([]Til
 		LEFT JOIN media m ON NOT n.is_coll AND m.id = n.id
 		ORDER BY n.at DESC, n.last_id DESC
 		LIMIT ?`, userID, limit)
-}
-
-// Search finds published standalone media and collections whose name contains q.
-func (s *Store) Search(ctx context.Context, userID int64, q string, limit int) ([]Tile, error) {
-	pattern := "%" + likeEscape(q) + "%"
-	return queryAll(ctx, s.db, func(r rowScanner) (Tile, error) {
-		var t Tile
-		err := r.Scan(&t.IsCollection, &t.ID, &t.Title, &t.Year, &t.Poster, &t.Watched)
-		return t, err
-	}, `
-		SELECT 0, id, title, year, poster,
-		       EXISTS (SELECT 1 FROM watched w WHERE w.media_id = m.id AND w.user_id = ?)
-		FROM media m WHERE published = 1 AND collection_id IS NULL AND title LIKE ? ESCAPE '\'
-		UNION ALL
-		SELECT 1, c.id, c.name, c.year, c.poster, 0
-		FROM collections c WHERE c.name LIKE ? ESCAPE '\'
-		  AND EXISTS (SELECT 1 FROM media m WHERE m.collection_id = c.id AND m.published = 1)
-		ORDER BY 3 COLLATE NOCASE LIMIT ?`, userID, pattern, pattern, limit)
 }
 
 // CategoryNames lists the categories in use, for the admin form.

@@ -9,9 +9,6 @@ import (
 
 templ homePage(p Page, recent []store.Tile, cats []store.Category) {
 	@shell(p) {
-		<div class="above-panel">
-			@searchBox(p.Query)
-		</div>
 		<section class="panel library-panel" id="library">
 			@libraryView(p, recent, cats)
 		</section>
@@ -57,19 +54,29 @@ templ libraryView(p Page, recent []store.Tile, cats []store.Category) {
 	}
 }
 
-templ searchResults(q string, tiles []store.Tile) {
-	<div class="tabs">
-		<div class="tab-list">
-			<h2 class="tab" aria-selected="true">Results for “{ q }”</h2>
-		</div>
-		<div class="tile-strip">
-			if len(tiles) == 0 {
-				<p class="strip-empty">Nothing matches your search.</p>
-			} else {
-				@tileGrid(tiles)
-			}
-		</div>
-	</div>
+// searchResults fills the search drawer: "Search for" and a tab per
+// category, as on the home page. With nothing found it renders nothing, and
+// the drawer closes.
+templ searchResults(cats []store.Category) {
+	if len(cats) > 0 {
+		<section class="panel library-panel search-panel">
+			<div class="tabs" data-tabs>
+				<div class="tab-list" role="tablist">
+					<span class="tab tab-label">Search for</span>
+					for i, c := range cats {
+						<button type="button" role="tab" class="tab" aria-selected={ strconv.FormatBool(i == 0) } data-tab={ fmt.Sprintf("search-tab-%d", i) }>{ c.Name }</button>
+					}
+				</div>
+				<div class="tile-strip">
+					for i, c := range cats {
+						<div class="tab-panel" id={ fmt.Sprintf("search-tab-%d", i) } role="tabpanel" hidden?={ i != 0 }>
+							@tileGrid(c.Tiles)
+						</div>
+					}
+				</div>
+			</div>
+		</section>
+	}
 }
 
 templ tileGrid(tiles []store.Tile) {
@@ -219,14 +226,23 @@ templ notificationList(items []store.Media) {
 	}
 }
 
-templ searchPage(p Page, q string, tiles []store.Tile) {
-	@shell(p) {
-		<div class="above-panel">
-			@searchBox(q)
-		</div>
+// searchPage is /search without JavaScript: the home page with the search
+// drawer open. When nothing matches, the drawer says so.
+templ searchPage(p Page, cats []store.Category, recent []store.Tile, libCats []store.Category) {
+	@shellWithSearch(p, searchPageResults(cats)) {
 		<section class="panel library-panel" id="library">
-			@searchResults(q, tiles)
+			@libraryView(p, recent, libCats)
 		</section>
+	}
+}
+
+templ searchPageResults(cats []store.Category) {
+	if len(cats) == 0 {
+		<section class="panel message">
+			<p>Nothing matches your search.</p>
+		</section>
+	} else {
+		@searchResults(cats)
 	}
 }
 

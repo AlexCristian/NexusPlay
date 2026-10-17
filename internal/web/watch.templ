@@ -9,7 +9,7 @@ import (
 templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resumeAt float64) {
 	@shell(p) {
 		<script src="/static/js/player.js" defer></script>
-		<div class="player-container">
+		<div class="player-container" id="player-container">
 			<video
 				id="player"
 				class="player"
@@ -26,31 +26,33 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 					<track kind="subtitles" id={ "sub-" + itoa(s.ID) } src={ "/subtitles/" + itoa(s.ID) } srclang={ s.Language } label={ s.Label }/>
 				}
 			</video>
+			<button type="button" class="big-play" id="big-play" aria-label="Play" hidden>
+				@icon("play")
+			</button>
 			<p id="player-status" class="player-status" role="status" hidden></p>
+			@playerControls(len(subs) > 0)
 		</div>
 		<section class="video-content">
 			if p.V.User != nil {
 				<div class="player-actions">
-					<button type="button" id="report-subtitle" class="player-action" title="Report a subtitle error" hidden>
-						@icon("flag")
-						<span>Report a subtitle error</span>
-					</button>
 					if p.V.IsAdmin() {
-						<a class="player-action" href={ templ.SafeURL("/admin/media/" + itoa(m.ID)) } title="Edit metadata">
+						<a class="player-action" href={ templ.SafeURL("/admin/media/" + itoa(m.ID)) } title="Edit metadata" aria-label="Edit metadata">
 							@icon("pencil")
-							<span>Edit</span>
 						</a>
 					}
+					<button type="button" id="report-subtitle" class="player-action" title="Report a subtitle error" aria-label="Report a subtitle error" hidden>
+						@icon("flag")
+					</button>
 				</div>
 			}
 			<div class="metadata">
 				if m.CollectionID != 0 {
-					<a href={ templ.SafeURL(collectionURL(m.CollectionID)) } hx-get={ collectionURL(m.CollectionID) } hx-target="#modal-body" class="watch-poster">
+					<a href={ templ.SafeURL(collectionURL(m.CollectionID)) } hx-get={ collectionURL(m.CollectionID) } hx-target="#modal-body" class="watch-poster" title={ "All episodes of " + m.CollectionName }>
 						<img src={ posterURL(m.Poster) } alt={ m.CollectionName } width="120" height="180"/>
 					</a>
 					<div class="meta-text">
-						<h1>{ m.CollectionName }</h1>
-						<p class="meta-sub">{ seasonLabel(m.Season) }, Episode { strconv.Itoa(m.Episode) }: { m.Title }</p>
+						<h1>{ m.CollectionName }<span class="muted"> - { m.Title }</span></h1>
+						<p class="meta-sub">{ episodeLabel(m) }</p>
 						if m.Overview != "" {
 							<p class="overview">{ m.Overview }</p>
 						}
@@ -74,6 +76,38 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 	}
 }
 
+// playerControls is the control bar under the video, in the original's
+// style: a dark gradient bar with red progress and volume. player.js shows it
+// and hides the browser's own controls; without JavaScript the browser's
+// controls stay.
+templ playerControls(hasSubtitles bool) {
+	<div class="controls" id="controls" hidden>
+		<button type="button" class="ctl" id="ctl-play" aria-label="Play">
+			@icon("play")
+			@icon("pause")
+		</button>
+		<input type="range" class="rail" id="ctl-seek" min="0" max="1000" step="1" value="0" aria-label="Seek"/>
+		<span class="time"><span id="ctl-time">00:00</span><span class="time-sep">|</span><span id="ctl-duration">00:00</span></span>
+		if hasSubtitles {
+			<span class="ctl-wrap">
+				<button type="button" class="ctl" id="ctl-captions" aria-label="Subtitles" aria-haspopup="true" aria-expanded="false">
+					@icon("captions")
+				</button>
+				<div class="captions-menu" id="captions-menu" role="menu" hidden></div>
+			</span>
+		}
+		<button type="button" class="ctl" id="ctl-mute" aria-label="Mute">
+			@icon("volume")
+			@icon("volume-x")
+		</button>
+		<input type="range" class="volume" id="ctl-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume"/>
+		<button type="button" class="ctl" id="ctl-fullscreen" aria-label="Full screen">
+			@icon("maximize")
+			@icon("minimize")
+		</button>
+	</div>
+}
+
 templ subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []store.Change, msg, msgKind string) {
 	<div class="report" id="subtitle-report">
 		<h2 id="modal-title" class="modal-heading">Report a subtitle error</h2>
@@ -81,7 +115,6 @@ templ subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes [
 			if msg != "" {
 				@alert(msgKind, msg)
 			}
-			<p class="report-track">{ track.Label } · line at { cueTime(cue.StartMS) }</p>
 			if len(changes) > 0 {
 				<h3>Vote up a proposed change</h3>
 				<ul class="changes">
@@ -108,7 +141,7 @@ templ subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes [
 				</ul>
 				<h3>or submit your own</h3>
 			} else {
-				<h3>Suggest a correction</h3>
+				<h3>Submit a correction</h3>
 			}
 			<form
 				class="proposed-change"
@@ -121,8 +154,9 @@ templ subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes [
 				<input type="hidden" name="csrf_token" value={ csrf }/>
 				<div class="original-sub">{ cue.Text }</div>
 				<div class="changed-sub">
-					<textarea name="text" rows="2" required aria-label="Corrected line">{ cue.Text }</textarea>
+					<textarea name="text" rows="1" required maxlength="500" aria-label={ "Corrected line (" + track.Label + ", " + cueTime(cue.StartMS) + ")" }>{ cue.Text }</textarea>
 					<button type="submit" class="vote-box" title="Submit your correction">
+						<span class="count-votes">0</span>
 						@icon("thumbs-up")
 					</button>
 				</div>

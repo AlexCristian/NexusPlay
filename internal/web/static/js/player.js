@@ -122,6 +122,160 @@
   video.addEventListener("pause", function () { topBar.classList.remove("playing"); });
   video.addEventListener("ended", function () { topBar.classList.remove("playing"); });
 
+  // Controls ----------------------------------------------------------------
+  //
+  // The control bar in the original's style replaces the browser's own
+  // controls. Without this script the browser's controls stay.
+
+  var container = document.getElementById("player-container");
+  var controls = document.getElementById("controls");
+  var bigPlay = document.getElementById("big-play");
+  var seek = document.getElementById("ctl-seek");
+  var volume = document.getElementById("ctl-volume");
+  var timeNow = document.getElementById("ctl-time");
+  var timeTotal = document.getElementById("ctl-duration");
+  var captionsButton = document.getElementById("ctl-captions");
+  var captionsMenu = document.getElementById("captions-menu");
+  var seeking = false;
+
+  function clock(sec) {
+    if (!isFinite(sec) || sec < 0) sec = 0;
+    sec = Math.floor(sec);
+    var h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, s = sec % 60;
+    var mm = (m < 10 ? "0" : "") + m, ss = (s < 10 ? "0" : "") + s;
+    return h > 0 ? h + ":" + mm + ":" + ss : mm + ":" + ss;
+  }
+
+  function togglePlay() {
+    if (video.paused || video.ended) {
+      var p = video.play();
+      if (p && p.catch) p.catch(function () {});
+    } else {
+      video.pause();
+    }
+  }
+
+  function showTime() {
+    var d = video.duration;
+    timeNow.textContent = clock(video.currentTime);
+    timeTotal.textContent = clock(d);
+    if (!seeking && isFinite(d) && d > 0) seek.value = String(Math.round(video.currentTime / d * 1000));
+    seek.style.setProperty("--fill", (seek.value / 10) + "%");
+    if (isFinite(d) && d > 0 && video.buffered.length) {
+      var end = video.buffered.end(video.buffered.length - 1);
+      seek.style.setProperty("--loaded", Math.min(100, end / d * 100) + "%");
+    }
+  }
+
+  function showPlaying() {
+    var playing = !video.paused && !video.ended;
+    container.classList.toggle("is-playing", playing);
+    bigPlay.hidden = playing;
+    document.getElementById("ctl-play").setAttribute("aria-label", playing ? "Pause" : "Play");
+  }
+
+  function showVolume() {
+    var muted = video.muted || video.volume === 0;
+    container.classList.toggle("is-muted", muted);
+    volume.value = String(muted ? 0 : video.volume);
+    volume.style.setProperty("--fill", (muted ? 0 : video.volume * 100) + "%");
+  }
+
+  video.controls = false;
+  controls.hidden = false;
+  showPlaying();
+  showVolume();
+
+  video.addEventListener("click", togglePlay);
+  bigPlay.addEventListener("click", togglePlay);
+  document.getElementById("ctl-play").addEventListener("click", togglePlay);
+  ["play", "pause", "ended"].forEach(function (ev) { video.addEventListener(ev, showPlaying); });
+  ["timeupdate", "durationchange", "progress", "loadedmetadata"].forEach(function (ev) { video.addEventListener(ev, showTime); });
+  video.addEventListener("volumechange", showVolume);
+
+  seek.addEventListener("input", function () {
+    seeking = true;
+    seek.style.setProperty("--fill", (seek.value / 10) + "%");
+    if (isFinite(video.duration)) timeNow.textContent = clock(seek.value / 1000 * video.duration);
+  });
+  seek.addEventListener("change", function () {
+    if (isFinite(video.duration)) video.currentTime = seek.value / 1000 * video.duration;
+    seeking = false;
+  });
+
+  volume.addEventListener("input", function () {
+    video.volume = parseFloat(volume.value);
+    video.muted = video.volume === 0;
+  });
+  document.getElementById("ctl-mute").addEventListener("click", function () {
+    if (video.volume === 0) video.volume = 1;
+    video.muted = !video.muted;
+  });
+
+  document.getElementById("ctl-fullscreen").addEventListener("click", function () {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else if (container.requestFullscreen) {
+      container.requestFullscreen().catch(function () {});
+    } else if (video.webkitEnterFullscreen) {
+      video.webkitEnterFullscreen(); // iPhone: only the video itself can go full screen
+    }
+  });
+  video.addEventListener("dblclick", function () { document.getElementById("ctl-fullscreen").click(); });
+
+  // Space and the arrow keys work anywhere on the page except in a field.
+  document.addEventListener("keydown", function (e) {
+    if (e.target.closest("input, textarea, select, button, a, dialog[open]") || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === " " || e.key === "k") { e.preventDefault(); togglePlay(); }
+    else if (e.key === "ArrowRight") { video.currentTime = Math.min(video.duration || 0, video.currentTime + 10); }
+    else if (e.key === "ArrowLeft") { video.currentTime = Math.max(0, video.currentTime - 10); }
+    else if (e.key === "f") { document.getElementById("ctl-fullscreen").click(); }
+  });
+
+  // The subtitles menu lists "Off" and each track; picking one shows it.
+  function subtitleTracks() {
+    return Array.prototype.filter.call(video.textTracks, function (t) { return t.id.indexOf("sub-") === 0; });
+  }
+
+  function buildCaptionsMenu() {
+    var tracks = subtitleTracks();
+    var showing = tracks.filter(function (t) { return t.mode === "showing"; })[0] || null;
+    var items = [{ label: "Off", track: null }].concat(tracks.map(function (t) { return { label: t.label || t.language, track: t }; }));
+    captionsMenu.replaceChildren.apply(captionsMenu, items.map(function (item) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("role", "menuitemradio");
+      b.setAttribute("aria-checked", String(item.track === showing));
+      b.textContent = item.label;
+      b.addEventListener("click", function () {
+        tracks.forEach(function (t) { t.mode = t === item.track ? "showing" : "disabled"; });
+        closeCaptionsMenu();
+      });
+      return b;
+    }));
+  }
+
+  function closeCaptionsMenu() {
+    captionsMenu.hidden = true;
+    captionsButton.setAttribute("aria-expanded", "false");
+  }
+
+  if (captionsButton) {
+    captionsButton.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (!captionsMenu.hidden) { closeCaptionsMenu(); return; }
+      buildCaptionsMenu();
+      captionsMenu.hidden = false;
+      captionsButton.setAttribute("aria-expanded", "true");
+    });
+    document.addEventListener("click", function (e) {
+      if (!captionsMenu.hidden && !captionsMenu.contains(e.target)) closeCaptionsMenu();
+    });
+    video.textTracks.addEventListener("change", function () {
+      captionsButton.classList.toggle("on", subtitleTracks().some(function (t) { return t.mode === "showing"; }));
+    });
+  }
+
   // Progress ----------------------------------------------------------------
   //
   // The position is saved every 15 s while playing, on pause, when the page

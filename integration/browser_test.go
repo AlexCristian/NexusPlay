@@ -19,6 +19,7 @@ import (
 	cdplog "github.com/chromedp/cdproto/log"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/kb"
 )
 
 // chromePath finds the pinned headless Chrome (see scripts/install-chrome.sh).
@@ -295,12 +296,21 @@ func TestBrowserJourney(t *testing.T) {
 	movie := s.mediaID(movieMP4)
 	admin.navigate(fmt.Sprintf("%s/watch/%d", s.URL, movie))
 	admin.waitJS(`document.getElementById('player').readyState >= 2`, 20*time.Second)
-	admin.eval(`document.getElementById('player').play()`, nil)
+	// The custom control bar replaces the browser's controls.
+	admin.waitJS(`!document.getElementById('player').controls && !document.getElementById('controls').hidden`, 5*time.Second)
+	admin.click("#big-play")
 	admin.waitJS(`document.getElementById('player').currentTime > 0.5`, 10*time.Second)
-	admin.waitJS(`document.getElementById('top-bar').classList.contains('playing')`, 5*time.Second)
+	admin.waitJS(`document.getElementById('top-bar').classList.contains('playing') && document.getElementById('big-play').hidden`, 5*time.Second)
+	admin.waitJS(`document.getElementById('ctl-time').textContent !== '00:00' && document.getElementById('ctl-duration').textContent === '00:12'`, 5*time.Second)
+	admin.click("#ctl-play")
+	admin.waitJS(`document.getElementById('player').paused && !document.getElementById('big-play').hidden`, 5*time.Second)
 
-	// Subtitle correction: show the English track, pause on the first line, report it.
-	admin.eval(`(() => { const v = document.getElementById('player'); v.pause(); v.textTracks[0].mode = 'showing'; v.currentTime = 2; })()`, nil)
+	// Subtitle correction: pick the English track from the subtitles menu,
+	// go to the first line, report it.
+	admin.click("#ctl-captions")
+	admin.click(`#captions-menu button:nth-child(2)`)
+	admin.waitJS(`document.getElementById('player').textTracks[0].mode === 'showing' && document.getElementById('captions-menu').hidden`, 5*time.Second)
+	admin.eval(`document.getElementById('player').currentTime = 2`, nil)
 	admin.waitVisible("#report-subtitle")
 	admin.click("#report-subtitle")
 	admin.waitVisible("#modal[open] #subtitle-report")
@@ -398,15 +408,26 @@ func TestSearchAndLogout(t *testing.T) {
 	tb.click("form button[type=submit]")
 	tb.waitVisible(".top-bar .top-text")
 
-	// Search filters as you type and updates the address bar.
+	// Typing opens the search drawer over the page and dims the page;
+	// a query with no results, and Escape, close it again.
 	tb.run(chromedp.SendKeys(`input[name=q]`, "old", chromedp.ByQuery))
-	tb.waitJS(`(document.querySelector('#library .tab')||{textContent:''}).textContent.includes('Results for')`, 5*time.Second)
-	if n := tb.count("#library .tile"); n != 1 {
+	tb.waitJS(`document.querySelector('#search-drawer.open #search-results .tab-label')`, 5*time.Second)
+	if n := tb.count("#search-results .tile"); n != 1 {
 		t.Errorf("search for 'old' found %d tiles, want 1", n)
 	}
-	tb.waitJS(`location.search === '?q=old'`, 5*time.Second)
+	if tb.count("#page-cover.dimmed") != 1 {
+		t.Error("the page under the open drawer is not dimmed")
+	}
+	tb.run(chromedp.SendKeys(`input[name=q]`, "zzz", chromedp.ByQuery))
+	tb.waitJS(`!document.querySelector('#search-drawer.open') && !document.querySelector('#page-cover.dimmed')`, 5*time.Second)
+	tb.run(chromedp.SendKeys(`input[name=q]`, "\b\b\b", chromedp.ByQuery))
+	tb.waitJS(`document.querySelector('#search-drawer.open')`, 5*time.Second)
+	tb.run(chromedp.KeyEvent(kb.Escape))
+	tb.waitJS(`!document.querySelector('#search-drawer.open') && document.querySelector('input[name=q]').value === ''`, 5*time.Second)
+
+	// Without JavaScript, /search is the home page with the drawer open.
 	tb.navigate(s.URL + "/search?q=nothing-matches")
-	if got := tb.text(".strip-empty"); got != "Nothing matches your search." {
+	if got := tb.text("#search-results .message p"); got != "Nothing matches your search." {
 		t.Errorf("no-results message = %q", got)
 	}
 

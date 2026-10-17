@@ -25,6 +25,31 @@
     });
   }
 
+  // Search drawer. htmx puts results in #search-results as the visitor types;
+  // an empty response (no query, or nothing found) closes the drawer. Opening
+  // slides it down (CSS) and dims the page under it.
+  var drawer = document.getElementById("search-drawer");
+  var results = document.getElementById("search-results");
+  var cover = document.getElementById("page-cover");
+
+  function setDrawer(open) {
+    if (!drawer) return;
+    drawer.classList.toggle("open", open);
+    cover.classList.toggle("dimmed", open);
+  }
+
+  document.addEventListener("htmx:afterSwap", function (e) {
+    if (e.detail.target === results) setDrawer(results.children.length > 0);
+  });
+
+  // Escape in the search box clears it and closes the drawer.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape" || !e.target.matches(".search input")) return;
+    e.target.value = "";
+    results.replaceChildren();
+    setDrawer(false);
+  });
+
   // Tabs: a [data-tabs] container with [data-tab] buttons naming panel ids.
   document.addEventListener("click", function (e) {
     var tab = e.target.closest("[data-tab]");

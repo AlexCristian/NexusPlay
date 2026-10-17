@@ -82,7 +82,12 @@ func TestScreens(t *testing.T) {
 			tb.waitVisible("#modal[open] input[name=nickname]")
 		}},
 		{"login-page", anon, func(tb *tab) { tb.navigate(s.URL + "/login") }},
-		{"search-results", viewer, func(tb *tab) { tb.navigate(s.URL + "/search?q=test") }},
+		{"search-results", viewer, func(tb *tab) {
+			tb.navigate(s.URL)
+			tb.waitHTMX("input[name=q]")
+			tb.run(chromedp.SendKeys(`input[name=q]`, "test", chromedp.ByQuery))
+			tb.waitJS(`document.querySelector('#search-drawer.open .tile')`, 5*time.Second)
+		}},
 		{"collection-dialog", viewer, func(tb *tab) {
 			tb.navigate(s.URL)
 			tb.click(`.tab[data-tab="tab-1"]`)
@@ -96,6 +101,7 @@ func TestScreens(t *testing.T) {
 			tb.waitVisible("#report-subtitle")
 		}},
 		{"subtitle-report", viewer, func(tb *tab) {
+			s.proposeCorrection(tb.t, movie, 2000, "alex", "Hello there!")
 			tb.navigate(fmt.Sprintf("%s/watch/%d", s.URL, movie))
 			tb.waitJS(`document.getElementById('player').readyState >= 1`, 20*time.Second)
 			tb.eval(`(() => { const v = document.getElementById('player'); v.textTracks[0].mode = 'showing'; v.currentTime = 2; })()`, nil)
@@ -314,4 +320,27 @@ func (s *server) collectionWithPoster(t *testing.T) int64 {
 		}
 	})
 	return c.ID
+}
+
+// proposeCorrection has user nick propose text for the line of the media's
+// first subtitle track that shows at ms.
+func (s *server) proposeCorrection(t *testing.T, mediaID, ms int64, nick, text string) {
+	t.Helper()
+	ctx := context.Background()
+	st := s.App.Store
+	subs, err := st.Subtitles(ctx, mediaID)
+	if err != nil || len(subs) == 0 {
+		t.Fatalf("no subtitles to correct: %v", err)
+	}
+	cue, err := st.CueAt(ctx, subs[0].ID, ms)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := st.UserByEmail(ctx, nick+"@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ProposeChange(ctx, cue.ID, u.ID, text, 4); err != nil {
+		t.Fatal(err)
+	}
 }

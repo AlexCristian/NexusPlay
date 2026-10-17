@@ -22,14 +22,39 @@ templ layout(p Page) {
 	</html>
 }
 
-// shell is the body every page shares: top bar, content, modal and footer.
+// shell is the body every page shares: top bar, search, content, modal and
+// footer.
 templ shell(p Page) {
+	@shellWithSearch(p, nil) {
+		{ children... }
+	}
+}
+
+// shellWithSearch is shell with the search drawer already open on results,
+// for /search without JavaScript. The drawer slides down over the top of the
+// page and dims everything under it (#page-cover); app.js opens and closes
+// it as search results come and go.
+templ shellWithSearch(p Page, results templ.Component) {
 	@layout(p) {
 		<!-- hx-headers carries the CSRF token for htmx; player.js reads it too. -->
 		<body hx-headers={ csrfHeaders(p.V) }>
 			@topBar(p)
 			<main class="page">
-				{ children... }
+				<div class="above-panel">
+					@searchBox(p.Query)
+				</div>
+				<div id="search-drawer" class={ "search-drawer", templ.KV("open", results != nil) }>
+					<div class="search-drawer-inner">
+						<div id="search-results">
+							if results != nil {
+								@results
+							}
+						</div>
+					</div>
+				</div>
+				<div id="page-cover" class={ "page-cover", templ.KV("dimmed", results != nil) }>
+					{ children... }
+				</div>
 			</main>
 			<footer class="footer">
 				Built on Nexus Play, an open-source web media center.
@@ -96,9 +121,9 @@ templ searchBox(q string) {
 			aria-label="Search media"
 			autocomplete="off"
 			hx-get="/search"
-			hx-trigger="input changed delay:300ms, search"
-			hx-target="#library"
-			hx-push-url="true"
+			hx-trigger="input changed delay:250ms, search"
+			hx-target="#search-results"
+			hx-sync="this:replace"
 		/>
 	</form>
 }

@@ -105,6 +105,14 @@ type Playback struct {
 	URL    string // the file or the HLS playlist
 }
 
+// episodeLabel is the line under an episode's title: "Season 3, episode 5".
+func episodeLabel(m store.Media) string {
+	if m.Season == 0 {
+		return "Specials, episode " + strconv.Itoa(m.Episode)
+	}
+	return "Season " + strconv.Itoa(m.Season) + ", episode " + strconv.Itoa(m.Episode)
+}
+
 // fmtSeconds formats a resume position for player.js.
 func fmtSeconds(f float64) string { return strconv.FormatFloat(f, 'f', 1, 64) }
 

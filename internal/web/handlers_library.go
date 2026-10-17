@@ -20,7 +20,7 @@ type libraryHandlers struct {
 type libraryStore interface {
 	RecentTiles(ctx context.Context, userID int64, limit int) ([]store.Tile, error)
 	Categories(ctx context.Context, userID int64) ([]store.Category, error)
-	Search(ctx context.Context, userID int64, q string, limit int) ([]store.Tile, error)
+	Search(ctx context.Context, userID int64, q string, limit int) ([]store.Category, error)
 	CollectionByID(ctx context.Context, id int64) (store.Collection, error)
 	CollectionEpisodes(ctx context.Context, collectionID int64) ([]store.Media, error)
 	WatchedIn(ctx context.Context, userID, collectionID int64) (map[int64]bool, error)
@@ -58,31 +58,32 @@ func (h *libraryHandlers) libraryData(r *http.Request) ([]store.Tile, []store.Ca
 	return recent, cats, err
 }
 
-// search handles GET /search?q=. htmx swaps the results into the library
-// panel as the visitor types; an empty query brings the library back.
+// search handles GET /search?q=. As the visitor types, htmx puts the
+// results in the search drawer; an empty query or no results renders
+// nothing, which closes it. Without JavaScript it is the home page with the
+// drawer open.
 func (h *libraryHandlers) search(w http.ResponseWriter, r *http.Request) error {
 	q := truncate(strings.TrimSpace(r.URL.Query().Get("q")), maxQuery)
-	if q == "" {
-		if !isHTMX(r) {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-			return nil
-		}
-		recent, cats, err := h.libraryData(r)
-		if err != nil {
-			return err
-		}
-		h.render(w, r, http.StatusOK, libraryView(newPage(r, "Search"), recent, cats))
+	if q == "" && !isHTMX(r) {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return nil
 	}
-	tiles, err := h.store.Search(r.Context(), viewer(r).ID(), q, searchLimit)
+	var cats []store.Category
+	if q != "" {
+		var err error
+		if cats, err = h.store.Search(r.Context(), viewer(r).ID(), q, searchLimit); err != nil {
+			return err
+		}
+	}
+	if isHTMX(r) {
+		h.render(w, r, http.StatusOK, searchResults(cats))
+		return nil
+	}
+	recent, libCats, err := h.libraryData(r)
 	if err != nil {
 		return err
 	}
-	if isHTMX(r) {
-		h.render(w, r, http.StatusOK, searchResults(q, tiles))
-	} else {
-		h.render(w, r, http.StatusOK, searchPage(newPage(r, "Search"), q, tiles))
-	}
+	h.render(w, r, http.StatusOK, searchPage(newPage(r, "Search"), cats, recent, libCats))
 	return nil
 }
 
