@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
+	"github.com/AlexCristian/NexusPlay/internal/media"
 )
 
 // ErrBusy means the concurrent transcode limit is reached.
@@ -61,8 +62,8 @@ func NewManager(tools ffmpeg.Tools, dir string, max int, log *slog.Logger) (*Man
 
 // Playlist starts (or reuses) a transcode for mediaID and waits until its
 // playlist has a first segment. It returns the directory holding the output.
-func (m *Manager) Playlist(ctx context.Context, mediaID int64, src, videoCodec, audioCodec string) (string, error) {
-	j, err := m.start(mediaID, src, videoCodec, audioCodec)
+func (m *Manager) Playlist(ctx context.Context, mediaID int64, src string, f media.Format) (string, error) {
+	j, err := m.start(mediaID, src, f)
 	if err != nil {
 		return "", err
 	}
@@ -107,7 +108,7 @@ func (m *Manager) Touch(mediaID int64) string {
 	return j.dir
 }
 
-func (m *Manager) start(mediaID int64, src, videoCodec, audioCodec string) (*job, error) {
+func (m *Manager) start(mediaID int64, src string, f media.Format) (*job, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if j, ok := m.jobs[mediaID]; ok {
@@ -144,13 +145,13 @@ func (m *Manager) start(mediaID int64, src, videoCodec, audioCodec string) (*job
 	j := &job{dir: dir, cancel: cancel, done: make(chan struct{}), lastAccess: time.Now()}
 	m.jobs[mediaID] = j
 
-	proc, err := m.Tools.Start(ctx, ffmpegArgs(src, dir, videoCodec, audioCodec))
+	proc, err := m.Tools.Start(ctx, ffmpegArgs(src, dir, f))
 	if err != nil {
 		cancel()
 		delete(m.jobs, mediaID)
 		return nil, err
 	}
-	m.Log.Info("transcode started", "media", mediaID, "video", videoCodec, "audio", audioCodec)
+	m.Log.Info("transcode started", "media", mediaID, "video", f.VideoCodec, "audio", f.AudioCodec)
 	go func() {
 		err := proc.Wait()
 		m.mu.Lock()
@@ -166,19 +167,20 @@ func (m *Manager) start(mediaID int64, src, videoCodec, audioCodec string) (*job
 	return j, nil
 }
 
-// ffmpegArgs builds an HLS transcode. H.264 video is copied as-is (a cheap
-// remux, e.g. for MKV files); anything else is encoded to H.264. Audio is
-// always made stereo AAC, which every browser plays.
-func ffmpegArgs(src, dir, videoCodec, audioCodec string) []string {
+// ffmpegArgs builds an HLS transcode. Browser-safe H.264 (8-bit 4:2:0) is
+// copied as-is, a cheap remux for MKV files; anything else, including 10-bit
+// H.264, is encoded to H.264. Audio is copied when it is AAC and otherwise
+// made stereo AAC, which every browser plays.
+func ffmpegArgs(src, dir string, f media.Format) []string {
 	args := []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-i", src,
 		"-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn"}
-	if videoCodec == "h264" {
+	if f.VideoCodec == "h264" && media.BrowserSafeH264(f.PixFmt) {
 		args = append(args, "-c:v", "copy")
 	} else {
 		args = append(args, "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
 			"-pix_fmt", "yuv420p", "-profile:v", "high", "-force_key_frames", "expr:gte(t,n_forced*6)")
 	}
-	if audioCodec == "aac" {
+	if f.AudioCodec == "aac" {
 		args = append(args, "-c:a", "copy")
 	} else {
 		args = append(args, "-c:a", "aac", "-b:a", "160k", "-ac", "2")

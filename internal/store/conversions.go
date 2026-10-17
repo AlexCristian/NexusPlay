@@ -55,6 +55,7 @@ type ReplacedFile struct {
 	Container  string
 	VideoCodec string
 	AudioCodec string
+	PixFmt     string
 	Size       int64
 }
 
@@ -64,8 +65,8 @@ func (s *Store) ReplaceMediaFile(ctx context.Context, id int64, f ReplacedFile) 
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `
 			UPDATE media SET path = ?, duration = ?, container = ?, video_codec = ?, audio_codec = ?,
-				size = ?, convert_status = '', convert_error = ''
-			WHERE id = ?`, f.Path, f.Duration, f.Container, f.VideoCodec, f.AudioCodec, f.Size, id)
+				pix_fmt = ?, size = ?, convert_status = '', convert_error = ''
+			WHERE id = ?`, f.Path, f.Duration, f.Container, f.VideoCodec, f.AudioCodec, f.PixFmt, f.Size, id)
 		return err
 	})
 }

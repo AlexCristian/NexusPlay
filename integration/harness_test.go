@@ -49,6 +49,8 @@ const (
 	episode3 = "Test Show (2019)/Season 2/Test.Show.S02E01.mp4"
 	// French 5.1 AC-3 and English stereo AAC, plus a built-in English subtitle track.
 	multiTrack = "Movies/Multi Language (2018).mkv"
+	// 10-bit H.264 in MP4: looks browser-ready by codec, but no browser decodes it.
+	tenBit     = "Movies/Ten Bit (2021).mp4"
 	fixtureLen = "12" // seconds
 )
 
@@ -97,6 +99,8 @@ func makeFixtures(dir string) error {
 			"-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac"}},
 		{episode3, []string{"-f", "lavfi", "-i", "testsrc=size=640x360:rate=25", "-f", "lavfi", "-i", "sine=frequency=770",
 			"-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart"}},
+		{tenBit, []string{"-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25", "-f", "lavfi", "-i", "sine=frequency=990",
+			"-c:v", "libx264", "-pix_fmt", "yuv420p10le", "-profile:v", "high10", "-c:a", "aac", "-movflags", "+faststart"}},
 	}
 	embedded := filepath.Join(dir, ".embedded.srt")
 	if err := os.WriteFile(embedded, []byte("1\n00:00:01,000 --> 00:00:03,000\nBuilt-in line\n"), 0o644); err != nil {

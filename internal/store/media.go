@@ -24,6 +24,7 @@ type Media struct {
 	Container    string
 	VideoCodec   string
 	AudioCodec   string
+	PixFmt       string // video pixel format, e.g. "yuv420p"; "" if not probed yet
 	Size         int64
 	Published    bool
 	Views        int
@@ -45,13 +46,14 @@ type ScannedMedia struct {
 	Container  string
 	VideoCodec string
 	AudioCodec string
+	PixFmt     string
 	Size       int64
 }
 
 const mediaCols = `m.id, m.path, m.title, m.year, m.overview, m.category, COALESCE(m.collection_id, 0),
 	m.season, m.episode, CASE WHEN m.poster <> '' THEN m.poster ELSE COALESCE(c.poster, '') END,
 	m.duration, m.container, m.video_codec, m.audio_codec, m.size, m.published, m.views,
-	m.added_at, m.published_at, COALESCE(c.name, '')`
+	m.added_at, m.published_at, COALESCE(c.name, ''), m.pix_fmt`
 
 const mediaFrom = ` FROM media m LEFT JOIN collections c ON c.id = m.collection_id `
 
@@ -65,11 +67,11 @@ func (s *Store) queryMedia(ctx context.Context, where string, args ...any) ([]Me
 // It returns the new ID, or 0 when the path was already known.
 func (s *Store) InsertScannedMedia(ctx context.Context, sm ScannedMedia) (int64, error) {
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO media (path, title, year, season, episode, duration, container, video_codec, audio_codec, size, added_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO media (path, title, year, season, episode, duration, container, video_codec, audio_codec, pix_fmt, size, added_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO NOTHING`,
 		sm.Path, sm.Title, sm.Year, sm.Season, sm.Episode, sm.Duration, sm.Container,
-		sm.VideoCodec, sm.AudioCodec, sm.Size, s.unix())
+		sm.VideoCodec, sm.AudioCodec, sm.PixFmt, sm.Size, s.unix())
 	if err != nil {
 		return 0, err
 	}
@@ -91,6 +93,34 @@ func (s *Store) SetScannedMetadata(ctx context.Context, id int64, title, year, o
 			poster = CASE WHEN ? <> '' THEN ? ELSE poster END
 		WHERE id = ? AND published = 0`,
 		title, title, year, year, overview, overview, poster, poster, id)
+	return err
+}
+
+// H264MissingPixFmt returns H.264 media whose pixel format has not been
+// recorded yet (added before it was stored), path mapped to ID.
+func (s *Store) H264MissingPixFmt(ctx context.Context) (map[string]int64, error) {
+	type row struct {
+		path string
+		id   int64
+	}
+	rows, err := queryAll(ctx, s.db, func(r rowScanner) (row, error) {
+		var x row
+		err := r.Scan(&x.path, &x.id)
+		return x, err
+	}, `SELECT path, id FROM media WHERE video_codec = 'h264' AND pix_fmt = ''`)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]int64, len(rows))
+	for _, x := range rows {
+		out[x.path] = x.id
+	}
+	return out, nil
+}
+
+// SetPixFmt records a media item's video pixel format.
+func (s *Store) SetPixFmt(ctx context.Context, id int64, pixFmt string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE media SET pix_fmt = ? WHERE id = ?`, pixFmt, id)
 	return err
 }
 

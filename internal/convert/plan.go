@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
+	"github.com/AlexCristian/NexusPlay/internal/media"
 )
 
 // Plan is how one file will be converted.
@@ -66,8 +67,10 @@ func MakePlan(src ffmpeg.Probe, videoBase string) (Plan, error) {
 			p.DroppedOther++
 		}
 	}
-	// Browsers decode 8-bit 4:2:0 H.264; 10-bit or 4:4:4 H.264 must be re-encoded.
-	p.CopyVideo = p.Video.Codec == "h264" && (p.Video.PixFmt == "yuv420p" || p.Video.PixFmt == "yuvj420p")
+	// Browsers decode only 8-bit 4:2:0 H.264; anything else is re-encoded.
+	// Here the pixel format comes straight from ffprobe, so an empty one is
+	// treated as unknown and re-encoded too.
+	p.CopyVideo = p.Video.Codec == "h264" && p.Video.PixFmt != "" && media.BrowserSafeH264(p.Video.PixFmt)
 	nameSubtitles(p.Subtitles, videoBase)
 	return p, nil
 }

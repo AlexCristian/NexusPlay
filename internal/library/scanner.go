@@ -264,6 +264,8 @@ func (s *Scanner) Scan(ctx context.Context) (Result, error) {
 		s.Log.Warn("media folder has no videos; skipping removals in case it is unmounted", "dir", s.MediaDir)
 		return res, nil
 	}
+	s.backfillPixFmt(ctx, videos)
+
 	for _, id := range missingMedia(known, onDisk, unreadable) {
 		if err := s.Store.DeleteMedia(ctx, id); err != nil {
 			return res, err
@@ -271,6 +273,44 @@ func (s *Scanner) Scan(ctx context.Context) (Result, error) {
 		res.Removed++
 	}
 	return res, nil
+}
+
+// backfillLimit caps how many files one scan re-probes, so the first scan
+// after upgrading a large library does not hold the scan lock for long; the
+// rest are picked up by later scans.
+const backfillLimit = 50
+
+// backfillPixFmt records the pixel format of H.264 files added before it was
+// stored. Without it, a 10-bit H.264 file (which no browser plays) would be
+// served as is and never converted.
+func (s *Scanner) backfillPixFmt(ctx context.Context, videos []found) {
+	missing, err := s.Store.H264MissingPixFmt(ctx)
+	if err != nil || len(missing) == 0 {
+		if err != nil {
+			s.Log.Warn("could not list media to re-probe", "err", err)
+		}
+		return
+	}
+	done := 0
+	for _, v := range videos {
+		id, ok := missing[v.rel]
+		if !ok || done == backfillLimit {
+			continue
+		}
+		done++
+		pctx, cancel := context.WithTimeout(ctx, time.Minute)
+		probe, err := s.Prober.Probe(pctx, v.abs)
+		cancel()
+		if err != nil {
+			s.Log.Warn("could not re-probe media", "path", v.rel, "err", err)
+			continue
+		}
+		if video, ok := probe.Video(); ok && video.PixFmt != "" {
+			if err := s.Store.SetPixFmt(ctx, id, video.PixFmt); err != nil {
+				s.Log.Warn("could not record pixel format", "path", v.rel, "err", err)
+			}
+		}
+	}
 }
 
 // missingMedia returns the IDs of known media whose files are gone: not seen
@@ -304,14 +344,15 @@ func (s *Scanner) addMedia(ctx context.Context, v found) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if _, ok := probe.Video(); !ok {
+	video, ok := probe.Video()
+	if !ok {
 		return 0, ffmpeg.ErrNoVideo
 	}
 	g := ParsePath(v.rel)
 	id, err := s.Store.InsertScannedMedia(ctx, store.ScannedMedia{
 		Path: v.rel, Title: g.Title, Year: g.Year, Season: g.Season, Episode: g.Episode,
 		Duration: probe.Duration, Container: probe.Container,
-		VideoCodec: probe.VideoCodec(), AudioCodec: probe.AudioCodec(), Size: v.info.Size(),
+		VideoCodec: video.Codec, AudioCodec: probe.AudioCodec(), PixFmt: video.PixFmt, Size: v.info.Size(),
 	})
 	if err != nil || id == 0 {
 		return id, err

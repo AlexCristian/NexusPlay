@@ -175,7 +175,7 @@ func (c *Converter) queue(ctx context.Context) ([]store.Media, error) {
 		if c.active[m.ID] != nil || now.Before(c.waitUntil[m.ID]) {
 			continue
 		}
-		if media.NeedsConversion(media.Format{Path: m.Path, VideoCodec: m.VideoCodec, AudioCodec: m.AudioCodec}) {
+		if media.NeedsConversion(media.Format{Path: m.Path, VideoCodec: m.VideoCodec, AudioCodec: m.AudioCodec, PixFmt: m.PixFmt}) {
 			out = append(out, m)
 		}
 	}
@@ -435,8 +435,9 @@ func (c *Converter) verify(ctx context.Context, file string, source ffmpeg.Probe
 	if err != nil {
 		return store.ReplacedFile{}, err
 	}
+	video, _ := got.Video() // CheckConverted made sure there is one
 	return store.ReplacedFile{Duration: got.Duration, Container: got.Container,
-		VideoCodec: got.VideoCodec(), AudioCodec: got.AudioCodec(), Size: info.Size()}, nil
+		VideoCodec: video.Codec, AudioCodec: got.AudioCodec(), PixFmt: video.PixFmt, Size: info.Size()}, nil
 }
 
 // CheckConverted compares a converted file with its source and plan. The

@@ -93,7 +93,7 @@ func (s *Server) watch(w http.ResponseWriter, r *http.Request) {
 			s.Log.Warn("counting view", "err", err)
 		}
 	}
-	pb := Playback{Direct: media.Deliver(media.Format{Path: m.Path, VideoCodec: m.VideoCodec, AudioCodec: m.AudioCodec}) == media.DirectPlay}
+	pb := Playback{Direct: media.Deliver(formatOf(m)) == media.DirectPlay}
 	if pb.Direct {
 		pb.URL = "/media/" + itoa(m.ID) + "/file"
 	} else {
@@ -104,6 +104,11 @@ func (s *Server) watch(w http.ResponseWriter, r *http.Request) {
 		title = m.CollectionName + " · " + m.Title
 	}
 	s.render(w, r, http.StatusOK, watchPage(s.page(r, title), m, pb, subs, resumeAt))
+}
+
+// formatOf describes a media item for the playback policy.
+func formatOf(m store.Media) media.Format {
+	return media.Format{Path: m.Path, VideoCodec: m.VideoCodec, AudioCodec: m.AudioCodec, PixFmt: m.PixFmt}
 }
 
 // mediaPath resolves a media item's file, refusing anything outside the media folder.
@@ -164,7 +169,7 @@ func (s *Server) hls(w http.ResponseWriter, r *http.Request) {
 			s.serverError(w, r, err)
 			return
 		}
-		dir, err = s.Transcodes.Playlist(r.Context(), m.ID, src, m.VideoCodec, m.AudioCodec)
+		dir, err = s.Transcodes.Playlist(r.Context(), m.ID, src, formatOf(m))
 		if errors.Is(err, stream.ErrBusy) {
 			w.Header().Set("Retry-After", "30")
 			http.Error(w, "The server is busy converting other videos. Try again in a minute.", http.StatusServiceUnavailable)
