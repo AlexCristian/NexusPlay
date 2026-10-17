@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,18 +33,15 @@ type Store struct {
 // Open opens (creating if needed) the SQLite database at path and applies
 // any pending migrations.
 func Open(ctx context.Context, path string) (*Store, error) {
-	// Every pooled connection gets these settings. _txlock=immediate makes
-	// transactions take the write lock when they begin. Without it, a
-	// transaction that reads and then writes (creating the first user,
-	// voting) can fail with SQLITE_BUSY when another connection wrote in
-	// between; with it, a second writer waits up to busy_timeout instead.
-	// Every transaction in this package writes, so nothing is lost.
-	dsn := "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)" +
-		"&_pragma=synchronous(NORMAL)&_txlock=immediate"
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite", dataSourceName(path))
 	if err != nil {
 		return nil, err
 	}
+	// A bounded pool. WAL lets readers run alongside the single writer, so
+	// one connection would make every page load wait behind every write (and
+	// a query issued while a result set is still open would deadlock). Eight
+	// is plenty for a household server.
+	db.SetMaxOpenConns(8)
 	s := &Store{db: db, now: time.Now}
 	if err := s.migrate(ctx); err != nil {
 		db.Close()
@@ -57,6 +55,26 @@ func (s *Store) Close() error { return s.db.Close() }
 
 // Ping checks that the database answers.
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
+
+// dataSourceName builds the driver's connection string. The path is
+// URL-encoded, so a data folder with "?", "#" or "%" in its name opens the
+// right file instead of silently creating a database elsewhere and
+// dropping every setting after the stray "?".
+//
+// Every pooled connection gets these settings. _txlock=immediate makes
+// transactions take the write lock when they begin. Without it, a
+// transaction that reads and then writes (creating the first user, voting)
+// can fail with SQLITE_BUSY when another connection wrote in between; with
+// it, a second writer waits up to busy_timeout instead. Every transaction in
+// this package writes, so nothing is lost.
+func dataSourceName(path string) string {
+	q := url.Values{}
+	for _, p := range []string{"foreign_keys(1)", "journal_mode(WAL)", "busy_timeout(5000)", "synchronous(NORMAL)"} {
+		q.Add("_pragma", p)
+	}
+	q.Set("_txlock", "immediate")
+	return (&url.URL{Scheme: "file", Path: path, RawQuery: q.Encode()}).String()
+}
 
 func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)`); err != nil {

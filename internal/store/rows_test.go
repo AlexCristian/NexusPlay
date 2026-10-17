@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -95,5 +97,27 @@ func TestConcurrentWriteTransactions(t *testing.T) {
 	}
 	if len(users) != 40 || admins != 1 {
 		t.Errorf("%d users, %d admins; want 40 and exactly 1", len(users), admins)
+	}
+}
+
+// A data folder with URL-special characters must open the right file, with
+// its settings applied.
+func TestOpenPathWithQueryCharacters(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "we?ird#dir %20x")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "nexusplay.db")
+	s, err := Open(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("database not created at %s: %v", path, err)
+	}
+	var mode string
+	if err := s.db.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || mode != "wal" {
+		t.Errorf("journal_mode = %q (%v), want wal: settings were not applied", mode, err)
 	}
 }
