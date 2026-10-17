@@ -6,16 +6,6 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-// Playback describes how the browser should load a video.
-type Playback struct {
-	Direct bool
-	URL    string
-}
-
-func fmtSeconds(f float64) string { return strconv.FormatFloat(f, 'f', 1, 64) }
-
-func itoa(n int64) string { return strconv.FormatInt(n, 10) }
-
 templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resumeAt float64) {
 	@shell(p) {
 		<script src="/static/js/player.js" defer></script>
@@ -139,16 +129,4 @@ templ subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes [
 			</form>
 		</div>
 	</div>
-}
-
-func cueTime(ms int64) string {
-	s := ms / 1000
-	return strconv.FormatInt(s/3600, 10) + ":" + pad2(s/60%60) + ":" + pad2(s%60)
-}
-
-func pad2(n int64) string {
-	if n < 10 {
-		return "0" + strconv.FormatInt(n, 10)
-	}
-	return strconv.FormatInt(n, 10)
 }

@@ -46,7 +46,7 @@ func (s *Server) controlPanel(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, controlPanel(s.page(r, "Control panel"), pending, colls, cats, s.Meta.Enabled(), conv,
+	s.render(w, r, http.StatusOK, controlPanel(newPage(r, "Control panel"), pending, colls, cats, s.Meta.Enabled(), conv,
 		doneMessages[r.URL.Query().Get("done")]))
 	return nil
 }
@@ -142,7 +142,7 @@ func (s *Server) editMediaPage(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	f.Saved = r.URL.Query().Get("saved") == "1"
-	s.render(w, r, http.StatusOK, editMediaPage(s.page(r, "Edit "+m.Title), f))
+	s.render(w, r, http.StatusOK, editMediaPage(newPage(r, "Edit "+m.Title), f))
 	return nil
 }
 
@@ -158,7 +158,7 @@ func (s *Server) showMediaFormError(w http.ResponseWriter, r *http.Request, m st
 		return ferr
 	}
 	f.Error = fe.msg
-	s.render(w, r, http.StatusBadRequest, editMediaPage(s.page(r, "Edit "+m.Title), f))
+	s.render(w, r, http.StatusBadRequest, editMediaPage(newPage(r, "Edit "+m.Title), f))
 	return nil
 }
 
@@ -492,7 +492,7 @@ func (s *Server) editCollectionPage(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, editCollectionPage(s.page(r, "Edit "+c.Name), c, cats, s.Meta.Enabled(), ""))
+	s.render(w, r, http.StatusOK, editCollectionPage(newPage(r, "Edit "+c.Name), c, cats, s.Meta.Enabled(), ""))
 	return nil
 }
 
@@ -523,7 +523,7 @@ func (s *Server) saveCollection(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		existing.Name, existing.Category, existing.Year, existing.Overview = u.Name, u.Category, u.Year, u.Overview
-		s.render(w, r, http.StatusBadRequest, editCollectionPage(s.page(r, "Edit collection"), existing, cats, s.Meta.Enabled(), fe.msg))
+		s.render(w, r, http.StatusBadRequest, editCollectionPage(newPage(r, "Edit collection"), existing, cats, s.Meta.Enabled(), fe.msg))
 		return nil
 	}
 	if err != nil {

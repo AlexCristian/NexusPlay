@@ -78,17 +78,6 @@ templ controlPanel(p Page, pending []store.Media, collections []store.Collection
 	}
 }
 
-func detectedAs(m store.Media) string {
-	g := guessFor(m)
-	if g.IsEpisode() {
-		return g.Show + " · S" + strconv.Itoa(m.Season) + "E" + strconv.Itoa(m.Episode) + " · " + m.Title
-	}
-	if m.Year != "" {
-		return m.Title + " (" + m.Year + ")"
-	}
-	return m.Title
-}
-
 templ categoryList(categories []string) {
 	<datalist id="categories">
 		<option value="Movies"></option>
@@ -170,18 +159,6 @@ templ editCollectionPage(p Page, c store.Collection, categories []string, metaEn
 			@categoryList(categories)
 		</section>
 	}
-}
-
-// MediaForm is the data behind the edit and publish form.
-type MediaForm struct {
-	Media          store.Media
-	CollectionName string
-	Collections    []store.Collection
-	Categories     []string
-	Subtitles      []store.Subtitle
-	MetaEnabled    bool
-	Error          string
-	Saved          bool
 }
 
 templ editMediaPage(p Page, f MediaForm) {
@@ -295,16 +272,4 @@ templ editMediaPage(p Page, f MediaForm) {
 			@categoryList(f.Categories)
 		</section>
 	}
-}
-
-func techSummary(m store.Media) string {
-	s := m.VideoCodec
-	if m.AudioCodec != "" {
-		s += " / " + m.AudioCodec
-	}
-	if m.Duration > 0 {
-		s += " · " + minutes(m.Duration)
-	}
-	s += " · " + strconv.FormatFloat(float64(m.Size)/(1<<30), 'f', 2, 64) + " GB"
-	return s
 }

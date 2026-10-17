@@ -7,49 +7,6 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-// Season is one season's episodes in a collection.
-type Season struct {
-	Number   int
-	Episodes []store.Media
-}
-
-func posterURL(name string) string {
-	if name == "" {
-		return "/static/img/no-poster.svg"
-	}
-	return "/posters/" + name
-}
-
-func watchURL(id int64) templ.SafeURL {
-	return templ.SafeURL("/watch/" + strconv.FormatInt(id, 10))
-}
-
-func collectionURL(id int64) string {
-	return "/collections/" + strconv.FormatInt(id, 10)
-}
-
-func seasonLabel(n int) string {
-	if n == 0 {
-		return "Specials"
-	}
-	return "Season " + strconv.Itoa(n)
-}
-
-func seasonSummary(c store.Collection, seasons []Season) string {
-	s := "1 Season"
-	if len(seasons) != 1 {
-		s = strconv.Itoa(len(seasons)) + " Seasons"
-	}
-	if c.Year != "" {
-		s += ", " + c.Year
-	}
-	return s
-}
-
-func minutes(sec float64) string {
-	return strconv.Itoa(int(sec/60)) + " min"
-}
-
 templ homePage(p Page, recent []store.Tile, cats []store.Category) {
 	@shell(p) {
 		<div class="above-panel">
@@ -260,14 +217,6 @@ templ notificationList(items []store.Media) {
 			}
 		</ul>
 	}
-}
-
-// displayTitle names an episode with its show, e.g. "Cosmos · S1E3 · The Harmony of the Worlds".
-func displayTitle(m store.Media) string {
-	if m.CollectionName == "" {
-		return m.Title
-	}
-	return fmt.Sprintf("%s · S%dE%d · %s", m.CollectionName, m.Season, m.Episode, m.Title)
 }
 
 templ searchPage(p Page, q string, tiles []store.Tile) {

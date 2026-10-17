@@ -79,7 +79,7 @@ func (s *Server) respond(w http.ResponseWriter, r *http.Request, status int, tit
 	if isHTMX(r) {
 		s.render(w, r, status, fragment)
 	} else {
-		s.render(w, r, status, page(s.page(r, title), fragment))
+		s.render(w, r, status, page(newPage(r, title), fragment))
 	}
 	return nil
 }
@@ -110,7 +110,7 @@ func (s *Server) errorPage(w http.ResponseWriter, r *http.Request, status int, t
 		s.render(w, r, status, alert("error", msg))
 		return
 	}
-	s.render(w, r, status, messagePage(s.page(r, title), title, msg))
+	s.render(w, r, status, messagePage(newPage(r, title), title, msg))
 }
 
 // isHTMX reports whether htmx sent the request to swap part of a page.

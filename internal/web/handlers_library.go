@@ -23,7 +23,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, homePage(s.page(r, ""), recent, cats))
+	s.render(w, r, http.StatusOK, homePage(newPage(r, ""), recent, cats))
 	return nil
 }
 
@@ -50,7 +50,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		s.render(w, r, http.StatusOK, libraryView(s.page(r, "Search"), recent, cats))
+		s.render(w, r, http.StatusOK, libraryView(newPage(r, "Search"), recent, cats))
 		return nil
 	}
 	tiles, err := s.Store.Search(r.Context(), viewer(r).ID(), q, searchLimit)
@@ -60,7 +60,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) error {
 	if isHTMX(r) {
 		s.render(w, r, http.StatusOK, searchResults(q, tiles))
 	} else {
-		s.render(w, r, http.StatusOK, searchPage(s.page(r, "Search"), q, tiles))
+		s.render(w, r, http.StatusOK, searchPage(newPage(r, "Search"), q, tiles))
 	}
 	return nil
 }

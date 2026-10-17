@@ -1,28 +1,5 @@
 package web
 
-import (
-	"fmt"
-	"net/http"
-)
-
-// Page carries what every full page needs.
-type Page struct {
-	Title string
-	V     Viewer
-	Query string
-}
-
-func (s *Server) page(r *http.Request, title string) Page {
-	return Page{Title: title, V: viewer(r), Query: r.URL.Query().Get("q")}
-}
-
-func csrfHeaders(v Viewer) string {
-	if v.User == nil {
-		return "{}"
-	}
-	return fmt.Sprintf(`{"X-CSRF-Token": %q}`, v.CSRF)
-}
-
 templ layout(p Page) {
 	<!DOCTYPE html>
 	<html lang="en">

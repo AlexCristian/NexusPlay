@@ -90,7 +90,7 @@ func (s *Server) watch(w http.ResponseWriter, r *http.Request) error {
 	if m.CollectionName != "" {
 		title = m.CollectionName + " · " + m.Title
 	}
-	s.render(w, r, http.StatusOK, watchPage(s.page(r, title), m, playbackFor(m), subs, resumeAt))
+	s.render(w, r, http.StatusOK, watchPage(newPage(r, title), m, playbackFor(m), subs, resumeAt))
 	return nil
 }
 

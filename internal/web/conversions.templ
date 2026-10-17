@@ -1,23 +1,6 @@
 package web
 
-import (
-	"strconv"
-
-	"github.com/AlexCristian/NexusPlay/internal/convert"
-	"github.com/AlexCristian/NexusPlay/internal/store"
-)
-
-// ConversionView is the control panel's view of the conversion queue.
-type ConversionView struct {
-	Status   convert.Status
-	Failures []store.ConversionFailure
-}
-
-// busy reports whether conversions are running or waiting, which makes the
-// panel refresh itself.
-func (v ConversionView) busy() bool {
-	return !v.Status.Off && (len(v.Status.Active) > 0 || v.Status.Queued > 0)
-}
+import "strconv"
 
 // conversionsSection refreshes itself every few seconds while work is running.
 templ conversionsSection(csrf string, v ConversionView) {
@@ -79,11 +62,4 @@ templ conversionsSection(csrf string, v ConversionView) {
 			</table>
 		}
 	</section>
-}
-
-func queuedLabel(n int) string {
-	if n == 1 {
-		return "1 file"
-	}
-	return strconv.Itoa(n) + " files"
 }
