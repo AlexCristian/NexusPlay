@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
 )
@@ -375,5 +376,52 @@ func TestUpdateCollectionRemovesPoster(t *testing.T) {
 		if c.Poster != step.want {
 			t.Errorf("after %+v: poster = %q, want %q", step.u, c.Poster, step.want)
 		}
+	}
+}
+
+// Recent tiles are newest first, one per collection (placed by its newest
+// episode), and a show with many new episodes does not crowd out the rest.
+func TestRecentTiles(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	u := mustUser(t, s, "a@example.com", "a")
+	clock := time.Unix(1_700_000_000, 0)
+	s.now = func() time.Time { clock = clock.Add(time.Minute); return clock }
+	publish := func(path string, u MediaUpdate) int64 {
+		t.Helper()
+		id := mustMedia(t, s, path)
+		if err := s.UpdateMedia(ctx, id, u, true); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	show, _ := s.CreateCollection(ctx, Collection{Name: "Cosmos", Category: "TV Shows"})
+	old := publish("old.mp4", MediaUpdate{Title: "Old Film"})
+	publish("e1.mp4", MediaUpdate{Title: "E1", CollectionID: show, Episode: 1})
+	film := publish("film.mp4", MediaUpdate{Title: "Film"})
+	for i := 2; i <= 30; i++ {
+		publish(fmt.Sprintf("e%d.mp4", i), MediaUpdate{Title: fmt.Sprintf("E%d", i), CollectionID: show, Episode: i})
+	}
+	mustMedia(t, s, "unpublished.mp4")
+	s.SaveProgress(ctx, u.ID, film, 1, true)
+
+	got, err := s.RecentTiles(ctx, u.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Tile{
+		{IsCollection: true, ID: show, Title: "Cosmos"},
+		{ID: film, Title: "Film", Watched: true},
+		{ID: old, Title: "Old Film"},
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("recent tiles:\n got %+v\nwant %+v", got, want)
+	}
+	// The 29 newest rows are all episodes; three tiles still come back.
+	if got, _ := s.RecentTiles(ctx, u.ID, 3); len(got) != 3 {
+		t.Errorf("limit 3 gave %d tiles: %+v", len(got), got)
+	}
+	if got, _ := s.RecentTiles(ctx, u.ID, 2); len(got) != 2 {
+		t.Errorf("limit 2 gave %d tiles", len(got))
 	}
 }

@@ -170,11 +170,6 @@ func (s *Store) PendingMedia(ctx context.Context) ([]Media, error) {
 	return s.queryMedia(ctx, `WHERE m.published = 0 ORDER BY m.path`)
 }
 
-// RecentlyPublished returns the newest published media.
-func (s *Store) RecentlyPublished(ctx context.Context, limit int) ([]Media, error) {
-	return s.queryMedia(ctx, `WHERE m.published = 1 ORDER BY m.published_at DESC, m.id DESC LIMIT ?`, limit)
-}
-
 // CollectionEpisodes lists the published media in a collection, by season and episode.
 func (s *Store) CollectionEpisodes(ctx context.Context, collectionID int64) ([]Media, error) {
 	return s.queryMedia(ctx, `WHERE m.published = 1 AND m.collection_id = ? ORDER BY m.season, m.episode, m.title`, collectionID)
@@ -290,38 +285,27 @@ func (s *Store) Categories(ctx context.Context, userID int64) ([]Category, error
 	return out, nil
 }
 
-// RecentTiles returns tiles for the newest published media, collapsing
-// episodes into their collection.
+// RecentTiles returns tiles for the newest published media. Episodes appear
+// as their collection's tile, placed by the collection's newest episode.
 func (s *Store) RecentTiles(ctx context.Context, userID int64, limit int) ([]Tile, error) {
-	recent, err := s.RecentlyPublished(ctx, limit*4)
-	if err != nil {
-		return nil, err
-	}
-	seen := map[int64]bool{}
-	var out []Tile
-	for _, m := range recent {
-		if len(out) == limit {
-			break
-		}
-		if m.CollectionID != 0 {
-			if seen[m.CollectionID] {
-				continue
-			}
-			seen[m.CollectionID] = true
-			c, err := s.CollectionByID(ctx, m.CollectionID)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, Tile{IsCollection: true, ID: c.ID, Title: c.Name, Year: c.Year, Poster: c.Poster})
-			continue
-		}
-		w, err := s.IsWatched(ctx, userID, m.ID)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, Tile{ID: m.ID, Title: m.Title, Year: m.Year, Poster: m.Poster, Watched: w})
-	}
-	return out, nil
+	return queryAll(ctx, s.db, func(r rowScanner) (Tile, error) {
+		var t Tile
+		err := r.Scan(&t.IsCollection, &t.ID, &t.Title, &t.Year, &t.Poster, &t.Watched)
+		return t, err
+	}, `
+		WITH newest AS (
+			SELECT collection_id IS NOT NULL AS is_coll, COALESCE(collection_id, id) AS id,
+			       MAX(published_at) AS at, MAX(id) AS last_id
+			FROM media WHERE published = 1
+			GROUP BY 1, 2
+		)
+		SELECT n.is_coll, n.id, COALESCE(c.name, m.title), COALESCE(c.year, m.year), COALESCE(c.poster, m.poster),
+		       NOT n.is_coll AND EXISTS (SELECT 1 FROM watched w WHERE w.media_id = n.id AND w.user_id = ?)
+		FROM newest n
+		LEFT JOIN collections c ON n.is_coll AND c.id = n.id
+		LEFT JOIN media m ON NOT n.is_coll AND m.id = n.id
+		ORDER BY n.at DESC, n.last_id DESC
+		LIMIT ?`, userID, limit)
 }
 
 // Search finds published standalone media and collections whose name contains q.
