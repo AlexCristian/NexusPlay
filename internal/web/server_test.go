@@ -375,3 +375,36 @@ func TestFormBodyLimit(t *testing.T) {
 		t.Errorf("oversize form: %d, want 413", resp.StatusCode)
 	}
 }
+
+// Members cannot act on unpublished media by guessing IDs.
+func TestUnpublishedMediaRejectsProgressAndVotes(t *testing.T) {
+	e := newEnv(t, nil)
+	ctx := context.Background()
+	e.client().register("admin")
+	member := e.client()
+	member.register("sam")
+	id, _ := e.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "secret.mp4", Title: "Secret", VideoCodec: "h264"})
+	sub, _ := e.store.AddSubtitle(ctx, id, "en", "English", "", []subtitle.Cue{{StartMS: 0, EndMS: 1000, Text: "Helo"}})
+	cue, _ := e.store.CueAt(ctx, sub, 500)
+
+	if resp, _ := member.do("POST", "/me/progress", url.Values{"csrf_token": {member.csrf}, "media_id": {itoa(id)}, "position": {"5"}}, nil); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("progress on unpublished media: %d, want 404", resp.StatusCode)
+	}
+	headers := map[string]string{"X-CSRF-Token": member.csrf, "HX-Request": "true"}
+	if resp, _ := member.do("POST", "/cues/"+itoa(cue.ID)+"/changes", url.Values{"text": {"Hello"}}, headers); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("correction on unpublished media: %d, want 404", resp.StatusCode)
+	}
+	if changes, _ := e.store.Changes(ctx, cue.ID, 0); len(changes) != 0 {
+		t.Errorf("a correction was recorded on unpublished media: %+v", changes)
+	}
+
+	e.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "Secret"}, true)
+	for _, bad := range []string{"NaN", "Inf", "-1", "abc"} {
+		if resp, _ := member.do("POST", "/me/progress", url.Values{"csrf_token": {member.csrf}, "media_id": {itoa(id)}, "position": {bad}}, nil); resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("position %q: %d, want 400", bad, resp.StatusCode)
+		}
+	}
+	if resp, _ := member.do("POST", "/me/progress", url.Values{"csrf_token": {member.csrf}, "media_id": {itoa(id)}, "position": {"5"}}, nil); resp.StatusCode != http.StatusNoContent {
+		t.Errorf("progress on published media: %d, want 204", resp.StatusCode)
+	}
+}

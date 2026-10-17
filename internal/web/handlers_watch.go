@@ -2,6 +2,7 @@ package web
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"os"
 	"path"
@@ -16,6 +17,35 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
 )
 
+// visibleTo reports whether a viewer may see a media item. Unpublished media
+// is visible only to administrators, who preview it before publishing; to
+// everyone else it does not exist (404, not 403).
+func visibleTo(m store.Media, v Viewer) bool {
+	return m.Published || v.IsAdmin()
+}
+
+// cueVisible reports whether the subtitle line's video is visible to the
+// viewer, answering 404 (or a server error) itself when it is not.
+func (s *Server) cueVisible(w http.ResponseWriter, r *http.Request, cueID int64) bool {
+	ctx := r.Context()
+	_, subID, err := s.Store.CueByID(ctx, cueID)
+	if err == nil {
+		var track store.Subtitle
+		if track, err = s.Store.SubtitleByID(ctx, subID); err == nil {
+			var m store.Media
+			if m, err = s.Store.MediaByID(ctx, track.MediaID); err == nil && visibleTo(m, viewer(r)) {
+				return true
+			}
+		}
+	}
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		s.serverError(w, r, err)
+		return false
+	}
+	s.notFound(w, r)
+	return false
+}
+
 // loadMedia fetches the media named in the path. Unpublished media is only
 // visible to administrators, who preview it before publishing.
 func (s *Server) loadMedia(w http.ResponseWriter, r *http.Request) (store.Media, bool) {
@@ -25,7 +55,7 @@ func (s *Server) loadMedia(w http.ResponseWriter, r *http.Request) (store.Media,
 		return store.Media{}, false
 	}
 	m, err := s.Store.MediaByID(r.Context(), id)
-	if errors.Is(err, store.ErrNotFound) || (err == nil && !m.Published && !viewer(r).IsAdmin()) {
+	if errors.Is(err, store.ErrNotFound) || (err == nil && !visibleTo(m, viewer(r))) {
 		s.notFound(w, r)
 		return m, false
 	}
@@ -199,7 +229,7 @@ func (s *Server) subtitleVTT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m, err := s.Store.MediaByID(ctx, track.MediaID)
-	if err != nil || (!m.Published && !viewer(r).IsAdmin()) {
+	if err != nil || !visibleTo(m, viewer(r)) {
 		s.notFound(w, r)
 		return
 	}
@@ -235,12 +265,12 @@ func (s *Server) saveProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pos, err := strconv.ParseFloat(r.FormValue("position"), 64)
-	if err != nil || pos < 0 {
+	if err != nil || pos < 0 || math.IsNaN(pos) || math.IsInf(pos, 0) {
 		http.Error(w, "bad position", http.StatusBadRequest)
 		return
 	}
 	m, err := s.Store.MediaByID(r.Context(), id)
-	if err != nil {
+	if err != nil || !visibleTo(m, viewer(r)) {
 		http.Error(w, "unknown media", http.StatusNotFound)
 		return
 	}
@@ -301,6 +331,9 @@ func (s *Server) proposeChange(w http.ResponseWriter, r *http.Request) {
 		s.errorPage(w, r, http.StatusBadRequest, "Bad request", "A correction must be between 1 and 500 characters.")
 		return
 	}
+	if !s.cueVisible(w, r, cueID) {
+		return
+	}
 	applied, err := s.Store.ProposeChange(r.Context(), cueID, viewer(r).ID(), text, s.Cfg.VotesRequired)
 	s.afterVote(w, r, cueID, applied, err, "Correction submitted. It is applied once enough people vote for it.")
 }
@@ -314,6 +347,9 @@ func (s *Server) voteChange(w http.ResponseWriter, r *http.Request) {
 	cueID, err := s.Store.CueForChange(r.Context(), changeID)
 	if err != nil {
 		s.errorPage(w, r, http.StatusNotFound, "Not found", "That correction no longer exists. It may have just been applied.")
+		return
+	}
+	if !s.cueVisible(w, r, cueID) {
 		return
 	}
 	applied, err := s.Store.VoteChange(r.Context(), changeID, viewer(r).ID(), s.Cfg.VotesRequired)
