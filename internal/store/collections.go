@@ -60,8 +60,8 @@ type CollectionUpdate struct {
 }
 
 // posterSQL is the new value of a poster column, with the parameters
-// (remove, poster, poster). The poster file itself stays on disk, as it does
-// when a poster is replaced.
+// (remove, poster, poster). The old file is left for posters.Sweeper, since
+// another row may use it too.
 const posterSQL = `CASE WHEN ? THEN '' WHEN ? <> '' THEN ? ELSE poster END`
 
 // UpdateCollection saves a collection's fields. It returns ErrDuplicate if
