@@ -18,8 +18,6 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
 )
 
-const maxUpload = 20 << 20
-
 func (s *Server) controlPanel(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	pending, err := s.Store.PendingMedia(ctx)
@@ -158,8 +156,7 @@ func (s *Server) saveMedia(w http.ResponseWriter, r *http.Request) {
 		f.Error = msg
 		s.render(w, r, status, editMediaPage(s.page(r, "Edit "+m.Title), f))
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
-	if err := r.ParseMultipartForm(maxUpload); err != nil {
+	if err := parseForm(r, maxUpload); err != nil {
 		fail(http.StatusBadRequest, "The upload is too large or malformed.")
 		return
 	}
@@ -316,8 +313,7 @@ func (s *Server) uploadSubtitle(w http.ResponseWriter, r *http.Request) {
 		f.Error = msg
 		s.render(w, r, http.StatusBadRequest, editMediaPage(s.page(r, "Edit "+m.Title), f))
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
-	if err := r.ParseMultipartForm(maxUpload); err != nil {
+	if err := parseForm(r, maxUpload); err != nil {
 		fail("The upload is too large or malformed.")
 		return
 	}
@@ -392,8 +388,7 @@ func (s *Server) deleteSubtitle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) collectionFromForm(w http.ResponseWriter, r *http.Request) (store.Collection, error) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
-	if err := r.ParseMultipartForm(maxUpload); err != nil {
+	if err := parseForm(r, maxUpload); err != nil {
 		return store.Collection{}, errors.New("the upload is too large or malformed")
 	}
 	c := store.Collection{

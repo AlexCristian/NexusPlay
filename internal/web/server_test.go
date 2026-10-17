@@ -1,9 +1,11 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -308,5 +310,68 @@ func TestHealthz(t *testing.T) {
 	e := newEnv(t, nil)
 	if resp, body := e.client().do("GET", "/healthz", nil, nil); resp.StatusCode != 200 || body != "ok\n" {
 		t.Errorf("healthz: %d %q", resp.StatusCode, body)
+	}
+}
+
+// An upload over the size limit is answered as too large, never as a CSRF
+// failure, whether the token comes in a form field or a header.
+func TestOversizeUploadIsRejectedAsTooLarge(t *testing.T) {
+	e := newEnv(t, nil)
+	admin := e.client()
+	admin.register("alex")
+	id, _ := e.store.InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "m.mp4", Title: "M", VideoCodec: "h264"})
+
+	upload := func(headerToken bool, size int) (*http.Response, string) {
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		if !headerToken {
+			mw.WriteField("csrf_token", admin.csrf)
+		}
+		mw.WriteField("language", "en")
+		fw, _ := mw.CreateFormFile("file", "big.srt")
+		fw.Write(bytes.Repeat([]byte("x"), size))
+		mw.Close()
+		headers := map[string]string{"Content-Type": mw.FormDataContentType()}
+		if headerToken {
+			headers["X-CSRF-Token"] = admin.csrf
+		}
+		req, _ := http.NewRequest("POST", e.srv.URL+"/admin/media/"+itoa(id)+"/subtitles", &buf)
+		req.Header.Set("Origin", e.srv.URL)
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		resp, err := admin.http.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp, string(b)
+	}
+
+	resp, body := upload(false, maxUpload+1<<20)
+	if resp.StatusCode != http.StatusRequestEntityTooLarge || !strings.Contains(body, "too large") {
+		t.Errorf("oversize upload with a form token: %d %q", resp.StatusCode, body)
+	}
+	resp, body = upload(true, maxUpload+1<<20)
+	if resp.StatusCode == http.StatusForbidden || !strings.Contains(body, "too large") {
+		t.Errorf("oversize upload with a header token: %d, body mentions too large: %v", resp.StatusCode, strings.Contains(body, "too large"))
+	}
+	// A normal upload still goes through (it is not a valid subtitle, so the
+	// form comes back with that error, not a size or CSRF error).
+	resp, body = upload(false, 1000)
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(body, "not a valid SRT or WebVTT") {
+		t.Errorf("small upload: %d", resp.StatusCode)
+	}
+}
+
+// Ordinary forms outside the admin area have a small limit.
+func TestFormBodyLimit(t *testing.T) {
+	e := newEnv(t, nil)
+	c := e.client()
+	c.register("alex")
+	resp, _ := c.do("POST", "/me/progress", url.Values{"csrf_token": {c.csrf}, "pad": {strings.Repeat("x", maxFormBody)}}, nil)
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Errorf("oversize form: %d, want 413", resp.StatusCode)
 	}
 }

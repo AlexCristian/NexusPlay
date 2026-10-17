@@ -3,8 +3,10 @@ package web
 
 import (
 	"context"
+	"crypto/subtle"
 	"embed"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -206,9 +208,38 @@ func (s *Server) session(next http.Handler) http.Handler {
 	})
 }
 
-// csrf protects state-changing requests. Every unsafe request must come from
-// this site (Origin or Referer matches the Host); signed-in requests must
-// also carry the session's CSRF token in a header or form field.
+// Request body limits. Only the admin forms accept uploads (posters and
+// subtitle files); everything else is a small form or a progress beacon.
+const (
+	maxUpload   = 20 << 20
+	maxFormBody = 1 << 20
+)
+
+// bodyLimit returns the largest request body a route accepts.
+func bodyLimit(r *http.Request) int64 {
+	if strings.HasPrefix(r.URL.Path, "/admin/") {
+		return maxUpload
+	}
+	return maxFormBody
+}
+
+// csrf protects state-changing requests in two layers:
+//
+//   - Origin check (every unsafe request): Origin, else Referer, must match the
+//     Host (or X-Forwarded-Host behind a reverse proxy). When neither header is
+//     present the request is accepted only if Sec-Fetch-Site is absent (a
+//     non-browser client, which has no ambient cookies to abuse) or
+//     "same-origin".
+//   - Token (signed-in requests): the session's CSRF token in X-CSRF-Token
+//     (htmx sends it from hx-headers on <body>, and player.js reads it from
+//     there) or in the csrf_token form field (plain forms).
+//
+// /login and /register skip the token, because a visitor may not have a
+// session yet or may hold a stale one; the Origin check still stops login CSRF.
+//
+// The body size limit is applied here, before anything reads the body, so an
+// oversize upload is answered with 413 rather than looking like a missing
+// token.
 func (s *Server) csrf(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -216,26 +247,51 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, maxUpload+1<<20)
+		limit := bodyLimit(r)
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		if !sameOrigin(r) {
 			http.Error(w, "cross-site request refused", http.StatusForbidden)
 			return
 		}
-		// Logging in or registering needs no token (the visitor may not have a
-		// session yet); the same-origin check above still applies.
 		v := viewer(r)
-		if v.User != nil && r.URL.Path != "/login" && r.URL.Path != "/register" {
-			token := r.Header.Get("X-CSRF-Token")
-			if token == "" {
-				token = r.FormValue("csrf_token")
-			}
-			if token != v.CSRF {
-				http.Error(w, "invalid or missing CSRF token; reload the page and try again", http.StatusForbidden)
+		if v.User == nil || r.URL.Path == "/login" || r.URL.Path == "/register" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		token := r.Header.Get("X-CSRF-Token")
+		if token == "" {
+			if err := parseForm(r, limit); err != nil {
+				writeFormError(w, err)
 				return
 			}
+			token = r.FormValue("csrf_token")
+		}
+		if subtle.ConstantTimeCompare([]byte(token), []byte(v.CSRF)) != 1 {
+			http.Error(w, "invalid or missing CSRF token; reload the page and try again", http.StatusForbidden)
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// parseForm parses a URL-encoded or multipart body. Parsing twice is
+// harmless: later calls return the already parsed form.
+func parseForm(r *http.Request, limit int64) error {
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		return r.ParseMultipartForm(limit)
+	}
+	return r.ParseForm()
+}
+
+// writeFormError answers a body that could not be parsed: 413 when it was
+// over the size limit, 400 otherwise.
+func writeFormError(w http.ResponseWriter, err error) {
+	var tooBig *http.MaxBytesError
+	if errors.As(err, &tooBig) {
+		http.Error(w, fmt.Sprintf("The upload is too large. The limit is %d MB.", tooBig.Limit>>20), http.StatusRequestEntityTooLarge)
+		return
+	}
+	http.Error(w, "The form could not be read.", http.StatusBadRequest)
 }
 
 func sameOrigin(r *http.Request) bool {
