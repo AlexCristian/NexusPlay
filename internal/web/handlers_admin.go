@@ -338,7 +338,8 @@ func (s *Server) uploadSubtitle(w http.ResponseWriter, r *http.Request) {
 		fail("That file is not a valid SRT or WebVTT subtitle: " + err.Error())
 		return
 	}
-	if _, err := s.Store.AddSubtitle(ctx, m.ID, lang, subtitle.LanguageName(lang), "", cues); err != nil {
+	// An upload has no source, so it is always inserted.
+	if _, _, err := s.Store.AddSubtitle(ctx, store.NewSubtitle{MediaID: m.ID, Language: lang, Label: subtitle.LanguageName(lang), Cues: cues}); err != nil {
 		s.serverError(w, r, err)
 		return
 	}

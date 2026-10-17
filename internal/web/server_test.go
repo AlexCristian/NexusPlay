@@ -228,7 +228,7 @@ func TestSubtitleFlow(t *testing.T) {
 	b.register("sam")
 	id, _ := e.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "m.mp4", Title: "M", VideoCodec: "h264"})
 	e.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "M"}, true)
-	sub, _ := e.store.AddSubtitle(ctx, id, "en", "English", "", []subtitle.Cue{{StartMS: 1000, EndMS: 2000, Text: "Helo"}})
+	sub, _, _ := e.store.AddSubtitle(ctx, store.NewSubtitle{MediaID: id, Language: "en", Label: "English", Cues: []subtitle.Cue{{StartMS: 1000, EndMS: 2000, Text: "Helo"}}})
 
 	resp, body := a.do("GET", "/media/"+itoa(id)+"/subtitle-report?track="+itoa(sub)+"&t=1500", nil, nil)
 	if resp.StatusCode != 200 || !strings.Contains(body, "Helo") {
@@ -384,7 +384,7 @@ func TestUnpublishedMediaRejectsProgressAndVotes(t *testing.T) {
 	member := e.client()
 	member.register("sam")
 	id, _ := e.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "secret.mp4", Title: "Secret", VideoCodec: "h264"})
-	sub, _ := e.store.AddSubtitle(ctx, id, "en", "English", "", []subtitle.Cue{{StartMS: 0, EndMS: 1000, Text: "Helo"}})
+	sub, _, _ := e.store.AddSubtitle(ctx, store.NewSubtitle{MediaID: id, Language: "en", Label: "English", Cues: []subtitle.Cue{{StartMS: 0, EndMS: 1000, Text: "Helo"}}})
 	cue, _ := e.store.CueAt(ctx, sub, 500)
 
 	if resp, _ := member.do("POST", "/me/progress", url.Values{"csrf_token": {member.csrf}, "media_id": {itoa(id)}, "position": {"5"}}, nil); resp.StatusCode != http.StatusNotFound {

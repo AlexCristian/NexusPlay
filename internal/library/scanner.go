@@ -371,12 +371,17 @@ func (s *Scanner) importSidecars(ctx context.Context, mediaID int64, videoRel st
 			imported[sub] = true // do not retry a broken file on every scan
 			continue
 		}
-		if _, err := s.Store.AddSubtitle(ctx, mediaID, lang, subtitle.LanguageName(lang), sub, cues); err != nil {
+		_, inserted, err := s.Store.AddSubtitle(ctx, store.NewSubtitle{
+			MediaID: mediaID, Language: lang, Label: subtitle.LanguageName(lang), Source: sub, Cues: cues,
+		})
+		if err != nil {
 			s.Log.Warn("could not save subtitle", "path", sub, "err", err)
 			continue
 		}
 		imported[sub] = true
-		n++
+		if inserted {
+			n++
+		}
 	}
 	return n
 }

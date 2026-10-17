@@ -191,10 +191,10 @@ func TestSubtitleVoting(t *testing.T) {
 		users = append(users, mustUser(t, s, n+"@example.com", n+"user"))
 	}
 	m := mustMedia(t, s, "m.mp4")
-	sub, err := s.AddSubtitle(ctx, m, "en", "English", "", []subtitle.Cue{
+	sub, _, err := s.AddSubtitle(ctx, NewSubtitle{MediaID: m, Language: "en", Label: "English", Cues: []subtitle.Cue{
 		{StartMS: 1000, EndMS: 2000, Text: "Helo"},
 		{StartMS: 3000, EndMS: 4000, Text: "World"},
-	})
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,13 +254,16 @@ func TestSidecarImportIsIdempotent(t *testing.T) {
 	s := newStore(t)
 	m := mustMedia(t, s, "m.mp4")
 	cues := []subtitle.Cue{{StartMS: 0, EndMS: 1, Text: "x"}}
-	id1, err := s.AddSubtitle(ctx, m, "en", "English", "m.en.srt", cues)
-	if err != nil || id1 == 0 {
-		t.Fatalf("first import: %d %v", id1, err)
+	sidecar := NewSubtitle{MediaID: m, Language: "en", Label: "English", Source: "m.en.srt", Cues: cues}
+	id1, inserted, err := s.AddSubtitle(ctx, sidecar)
+	if err != nil || id1 == 0 || !inserted {
+		t.Fatalf("first import: id=%d inserted=%v err=%v", id1, inserted, err)
 	}
-	id2, err := s.AddSubtitle(ctx, m, "en", "English", "m.en.srt", cues)
-	if err != nil || id2 != 0 {
-		t.Errorf("second import: id=%d err=%v, want 0 and nil", id2, err)
+	if _, inserted, err := s.AddSubtitle(ctx, sidecar); err != nil || inserted {
+		t.Errorf("second import: inserted=%v err=%v, want false and nil", inserted, err)
+	}
+	if subs, _ := s.Subtitles(ctx, m); len(subs) != 1 {
+		t.Errorf("%d tracks after importing the same sidecar twice, want 1", len(subs))
 	}
 	srcs, _ := s.SubtitleSources(ctx)
 	if !srcs["m.en.srt"] {
@@ -273,7 +276,7 @@ func TestDeletingMediaCascades(t *testing.T) {
 	s := newStore(t)
 	u := mustUser(t, s, "a@example.com", "a")
 	m := mustMedia(t, s, "m.mp4")
-	s.AddSubtitle(ctx, m, "en", "English", "", []subtitle.Cue{{StartMS: 0, EndMS: 1, Text: "x"}})
+	s.AddSubtitle(ctx, NewSubtitle{MediaID: m, Language: "en", Label: "English", Cues: []subtitle.Cue{{StartMS: 0, EndMS: 1, Text: "x"}}})
 	s.SaveProgress(ctx, u.ID, m, 5, false)
 	if err := s.DeleteMedia(ctx, m); err != nil {
 		t.Fatal(err)

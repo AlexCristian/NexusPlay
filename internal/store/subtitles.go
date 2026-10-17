@@ -42,15 +42,24 @@ var (
 	ErrUnchanged    = errors.New("the proposed text is the same as the current line")
 )
 
-// AddSubtitle stores a track and its cues. A non-empty source makes the import
-// idempotent: a sidecar file is only imported once per media item.
-func (s *Store) AddSubtitle(ctx context.Context, mediaID int64, language, label, source string, cues []subtitle.Cue) (int64, error) {
-	var id int64
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+// NewSubtitle is a subtitle track to store.
+type NewSubtitle struct {
+	MediaID  int64
+	Language string // BCP 47 code, e.g. "en"
+	Label    string // shown in the player, e.g. "English"
+	Source   string // sidecar file it came from, relative to the media folder; "" for uploads
+	Cues     []subtitle.Cue
+}
+
+// AddSubtitle stores a track and its cues. A track with a Source is imported
+// only once per media item: adding it again returns inserted == false and
+// changes nothing.
+func (s *Store) AddSubtitle(ctx context.Context, t NewSubtitle) (id int64, inserted bool, err error) {
+	err = s.tx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx,
 			`INSERT INTO subtitles (media_id, language, label, source, created_at) VALUES (?, ?, ?, ?, ?)
 			 ON CONFLICT DO NOTHING`,
-			mediaID, language, label, source, s.unix())
+			t.MediaID, t.Language, t.Label, t.Source, s.unix())
 		if err != nil {
 			return err
 		}
@@ -61,20 +70,24 @@ func (s *Store) AddSubtitle(ctx context.Context, mediaID int64, language, label,
 		if id, err = res.LastInsertId(); err != nil {
 			return err
 		}
+		inserted = true
 		stmt, err := tx.PrepareContext(ctx,
 			`INSERT INTO subtitle_cues (subtitle_id, idx, start_ms, end_ms, text) VALUES (?, ?, ?, ?, ?)`)
 		if err != nil {
 			return err
 		}
 		defer stmt.Close()
-		for i, c := range cues {
+		for i, c := range t.Cues {
 			if _, err := stmt.ExecContext(ctx, id, i, c.StartMS, c.EndMS, c.Text); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
-	return id, err
+	if err != nil {
+		return 0, false, err
+	}
+	return id, inserted, nil
 }
 
 // SubtitleSources returns the sidecar files that have already been imported.
