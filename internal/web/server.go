@@ -41,8 +41,15 @@ type Server struct {
 	Scanner    *library.Scanner
 	Meta       *metadata.Client
 	Transcodes *stream.Manager
-	Converter  *convert.Converter // nil when conversion is turned off
+	Converter  Conversions
 	Log        *slog.Logger
+}
+
+// Conversions is the MP4 converter as the control panel sees it.
+// convert.Disabled stands in when conversion is turned off.
+type Conversions interface {
+	Status(ctx context.Context) (convert.Status, error)
+	Wake()
 }
 
 type ctxKey int

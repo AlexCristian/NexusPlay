@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/exec"
@@ -211,12 +212,13 @@ func TestConvertReadOnlyMediaFolder(t *testing.T) {
 	os.Chmod(filepath.Join(s.Media, "Movies"), 0o555)
 	os.Chmod(s.Media, 0o555)
 	t.Cleanup(func() { os.Chmod(s.Media, 0o755); os.Chmod(filepath.Join(s.Media, "Movies"), 0o755) })
-	c := &convert.Converter{Store: s.App.Store, Tools: ffmpeg.Tools{FFmpeg: "ffmpeg", FFprobe: "ffprobe"}, MediaDir: s.Media, Max: 1}
+	c := convert.New(convert.Deps{Store: s.App.Store, Tools: ffmpeg.Tools{FFmpeg: "ffmpeg", FFprobe: "ffprobe"}, Log: slog.Default()},
+		convert.Config{MediaDir: s.Media, Max: 1})
 	runCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	c.Run(runCtx) // returns at once when the folder is not writable
 	st, _ := c.Status(context.Background())
-	if !strings.Contains(st.Disabled, "read-only") {
+	if !strings.Contains(st.Unavailable, "read-only") {
 		t.Errorf("status = %+v, want it disabled because the folder is read-only", st)
 	}
 	if got := s.mediaFiles(); len(got) != 1 {

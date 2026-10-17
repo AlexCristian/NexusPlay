@@ -9,9 +9,14 @@ import (
 
 // ConversionView is the control panel's view of the conversion queue.
 type ConversionView struct {
-	Enabled  bool
 	Status   convert.Status
 	Failures []store.ConversionFailure
+}
+
+// busy reports whether conversions are running or waiting, which makes the
+// panel refresh itself.
+func (v ConversionView) busy() bool {
+	return !v.Status.Off && (len(v.Status.Active) > 0 || v.Status.Queued > 0)
 }
 
 // conversionsSection refreshes itself every few seconds while work is running.
@@ -19,7 +24,7 @@ templ conversionsSection(csrf string, v ConversionView) {
 	<section
 		id="conversions"
 		class="conversions"
-		if v.Enabled && (len(v.Status.Active) > 0 || v.Status.Queued > 0) {
+		if v.busy() {
 			hx-get="/admin/conversions"
 			hx-trigger="every 3s"
 			hx-swap="outerHTML"
@@ -27,10 +32,12 @@ templ conversionsSection(csrf string, v ConversionView) {
 	>
 		<h2>Conversion to MP4</h2>
 		switch {
-			case !v.Enabled:
-				<p class="muted">Off. Set NEXUSPLAY_CONVERT=true to convert files browsers cannot play to MP4 and delete the originals.</p>
-			case v.Status.Disabled != "":
-				@alert("error", v.Status.Disabled)
+			case v.Status.Off:
+				<p class="muted">Off (NEXUSPLAY_CONVERT=false). It is on by default: files browsers cannot play are converted to MP4 and the originals deleted. Until then they play through on-the-fly conversion.</p>
+			case v.Status.Unavailable != "":
+				@alert("error", v.Status.Unavailable)
+			case len(v.Status.Active) == 0 && v.Status.Queued == 0 && v.Status.Postponed > 0:
+				<p class="muted">{ queuedLabel(v.Status.Postponed) } waiting for free disk space. They are retried every 30 minutes.</p>
 			case len(v.Status.Active) == 0 && v.Status.Queued == 0 && len(v.Failures) > 0:
 				<p class="muted">Nothing is converting. The files below need attention.</p>
 			case len(v.Status.Active) == 0 && v.Status.Queued == 0:
@@ -46,7 +53,7 @@ templ conversionsSection(csrf string, v ConversionView) {
 					}
 				</ul>
 				if v.Status.Queued > 0 {
-					<p class="muted">{ queuedLabel(v.Status.Queued) } waiting. Originals are deleted once their MP4 is checked.</p>
+					<p class="muted">{ queuedLabel(v.Status.Queued) } more waiting. Originals are deleted once their MP4 is checked.</p>
 				}
 		}
 		if len(v.Failures) > 0 {
@@ -76,7 +83,7 @@ templ conversionsSection(csrf string, v ConversionView) {
 
 func queuedLabel(n int) string {
 	if n == 1 {
-		return "1 more file"
+		return "1 file"
 	}
-	return strconv.Itoa(n) + " more files"
+	return strconv.Itoa(n) + " files"
 }

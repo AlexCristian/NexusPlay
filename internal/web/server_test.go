@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/AlexCristian/NexusPlay/internal/config"
+	"github.com/AlexCristian/NexusPlay/internal/convert"
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
@@ -58,7 +59,7 @@ func newEnv(t *testing.T, mutate func(*config.Config)) *env {
 		t.Fatal(err)
 	}
 	meta := metadata.New(metadata.Config{PosterDir: cfg.PosterDir()}, log)
-	s := &Server{Cfg: cfg, Store: st, Meta: meta, Transcodes: tm, Log: log,
+	s := &Server{Cfg: cfg, Store: st, Meta: meta, Transcodes: tm, Converter: convert.Disabled{}, Log: log,
 		Scanner: library.NewScanner(library.Deps{Store: st, Meta: meta, Log: log}, library.Config{MediaDir: cfg.MediaDir})}
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(func() { ts.Close(); st.Close() })

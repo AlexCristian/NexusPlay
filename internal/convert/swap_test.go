@@ -36,7 +36,7 @@ func newSwapFixture(t *testing.T, srcName string) (*Converter, store.Media, stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := &Converter{Store: st, MediaDir: media, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	c := New(Deps{Store: st, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDir: media})
 	return c, m, media
 }
 
@@ -69,7 +69,7 @@ func TestSwapNeverOverwritesAnExistingTarget(t *testing.T) {
 	if got := readFile(t, src); got != "original" {
 		t.Errorf("original = %q, want it untouched", got)
 	}
-	if cur, _ := c.Store.MediaByID(context.Background(), m.ID); cur.Path != "Movie.mkv" {
+	if cur, _ := c.deps.Store.MediaByID(context.Background(), m.ID); cur.Path != "Movie.mkv" {
 		t.Errorf("row now points at %q, want the original", cur.Path)
 	}
 }
@@ -83,7 +83,7 @@ func TestSwapDatabaseFailureRemovesOnlyItsOwnFile(t *testing.T) {
 	tmp := filepath.Join(media, ".Movie"+tmpSuffix)
 	os.WriteFile(tmp, []byte("converted"), 0o644)
 	// Another row already uses the target path, so the update hits the unique index.
-	if _, _, err := c.Store.InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "Movie.mp4", Title: "x"}); err != nil {
+	if _, _, err := c.deps.Store.(*store.Store).InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "Movie.mp4", Title: "x"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -117,7 +117,7 @@ func TestSwapReplacesAndDeletesOriginal(t *testing.T) {
 			t.Errorf("%s should be gone, stat err = %v", filepath.Base(gone), err)
 		}
 	}
-	if cur, _ := c.Store.MediaByID(context.Background(), m.ID); cur.Path != "Movie.mp4" || cur.VideoCodec != "h264" {
+	if cur, _ := c.deps.Store.MediaByID(context.Background(), m.ID); cur.Path != "Movie.mp4" || cur.VideoCodec != "h264" {
 		t.Errorf("row = %+v", cur)
 	}
 }

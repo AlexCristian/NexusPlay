@@ -28,7 +28,8 @@ type App struct {
 	Store      *store.Store
 	Scanner    *library.Scanner
 	Transcodes *stream.Manager
-	Converter  *convert.Converter // nil when NEXUSPLAY_CONVERT is off
+	Converter  web.Conversions    // convert.Disabled when NEXUSPLAY_CONVERT is off
+	runner     *convert.Converter // nil when conversion is off
 	Handler    http.Handler
 }
 
@@ -64,16 +65,19 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 		st.Close()
 		return nil, fmt.Errorf("transcode folder: %w", err)
 	}
-	var conv *convert.Converter
+	var conversions web.Conversions = convert.Disabled{}
+	var runner *convert.Converter
 	if cfg.Convert {
-		conv = &convert.Converter{
-			Store: st, Scanner: scanner, Tools: tools,
-			MediaDir: cfg.MediaDir, Max: cfg.MaxConversions, Log: log.With("component", "convert"),
-		}
-		scanner.OnAdded(conv.Wake)
+		runner = convert.New(
+			convert.Deps{Store: st, Tools: tools, Library: scanner, Log: log.With("component", "convert")},
+			convert.Config{MediaDir: cfg.MediaDir, Max: cfg.MaxConversions},
+		)
+		scanner.OnAdded(runner.Wake)
+		conversions = runner
 	}
-	srv := &web.Server{Cfg: cfg, Store: st, Scanner: scanner, Meta: meta, Transcodes: transcodes, Converter: conv, Log: log}
-	return &App{Cfg: cfg, Log: log, Store: st, Scanner: scanner, Transcodes: transcodes, Converter: conv, Handler: srv.Handler()}, nil
+	srv := &web.Server{Cfg: cfg, Store: st, Scanner: scanner, Meta: meta, Transcodes: transcodes, Converter: conversions, Log: log}
+	return &App{Cfg: cfg, Log: log, Store: st, Scanner: scanner, Transcodes: transcodes,
+		Converter: conversions, runner: runner, Handler: srv.Handler()}, nil
 }
 
 // Start runs the scanner, the transcode janitor, the converter and session
@@ -81,8 +85,8 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 func (a *App) Start(ctx context.Context) {
 	go a.Scanner.Run(ctx)
 	go a.Transcodes.Run(ctx)
-	if a.Converter != nil {
-		go a.Converter.Run(ctx)
+	if a.runner != nil {
+		go a.runner.Run(ctx)
 	}
 	go func() {
 		t := time.NewTicker(time.Hour)

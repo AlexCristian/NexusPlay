@@ -55,12 +55,10 @@ func (s *Server) controlPanel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) conversionView(ctx context.Context) (ConversionView, error) {
-	v := ConversionView{Enabled: s.Converter != nil}
+	var v ConversionView
 	var err error
-	if v.Enabled {
-		if v.Status, err = s.Converter.Status(ctx); err != nil {
-			return v, err
-		}
+	if v.Status, err = s.Converter.Status(ctx); err != nil {
+		return v, err
 	}
 	v.Failures, err = s.Store.ConversionFailures(ctx)
 	return v, err
@@ -86,9 +84,7 @@ func (s *Server) retryConversion(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	if s.Converter != nil {
-		s.Converter.Wake()
-	}
+	s.Converter.Wake()
 	http.Redirect(w, r, "/admin?done=retry", http.StatusSeeOther)
 }
 

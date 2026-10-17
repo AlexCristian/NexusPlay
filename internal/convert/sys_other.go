@@ -2,4 +2,8 @@
 
 package convert
 
-func freeBytes(string) (uint64, bool) { return 0, false }
+import "errors"
+
+func freeBytes(string) (uint64, error) {
+	return 0, errors.New("free space check not supported on this system")
+}

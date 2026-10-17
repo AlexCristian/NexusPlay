@@ -4,110 +4,123 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"math"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
-	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/media"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-const (
-	tmpSuffix = ".nexusplay-converting.mp4"
-	// spaceMargin is kept free on top of the source file's size.
-	spaceMargin = 256 << 20
-	// noSpaceRetry is how long a file waits after a disk-space check fails.
-	noSpaceRetry = 30 * time.Minute
-)
+// Store is the database as the converter uses it; *store.Store implements it.
+type Store interface {
+	ConversionCandidates(ctx context.Context) ([]store.Media, error)
+	MediaByID(ctx context.Context, id int64) (store.Media, error)
+	ReplaceMediaFile(ctx context.Context, id int64, f store.ReplacedFile) error
+	SetConvertFailed(ctx context.Context, id int64, reason string) error
+}
+
+// Tools runs ffprobe and ffmpeg; ffmpeg.Tools is the real one.
+type Tools interface {
+	Probe(ctx context.Context, file string) (ffmpeg.Probe, error)
+	Run(ctx context.Context, args []string, opt ffmpeg.RunOptions) error
+}
+
+// Library is the scanner as the converter sees it: the lock it shares with
+// scans, and a way to ask for a rescan (which imports extracted subtitles).
+type Library interface {
+	Exclusive(fn func() error) error
+	Trigger()
+}
+
+// Deps are the converter's collaborators.
+type Deps struct {
+	Store   Store
+	Tools   Tools
+	Library Library // nil in tests that run without a scanner
+	Log     *slog.Logger
+}
+
+// Config tunes the converter.
+type Config struct {
+	MediaDir string
+	Max      int // conversions at once (at least 1)
+	// FreeSpace reports the free bytes in a folder's file system. Nil uses
+	// the operating system; tests replace it.
+	FreeSpace func(dir string) (uint64, error)
+}
 
 // Converter works through the queue of files that need converting, at most
 // Max at a time, newest first, and deletes each original once its MP4 is
 // verified and in the library. Conversions run at low CPU priority so
-// playback stays smooth.
+// playback stays smooth. Build it with New; it is safe for concurrent use.
+//
+// A file's state, from the control panel's point of view:
+//   - queued: needs converting (media.NeedsConversion) and has not failed;
+//   - running: being converted now;
+//   - postponed: skipped for noSpaceRetry because the disk was full;
+//   - failed: recorded in the database until an administrator retries it.
+//
+// Only "failed" is stored; the queue is computed from the library.
 type Converter struct {
-	Store    *store.Store
-	Scanner  *library.Scanner
-	Tools    ffmpeg.Tools
-	MediaDir string
-	Max      int
-	Log      *slog.Logger
+	deps Deps
+	cfg  Config
+	now  func() time.Time
+	wake chan struct{}
 
-	wake      chan struct{}
-	mu        sync.Mutex
-	active    map[int64]*job
-	waitUntil map[int64]time.Time
-	disabled  string
-	now       func() time.Time
+	mu          sync.Mutex // guards everything below
+	active      map[int64]*job
+	waitUntil   map[int64]time.Time // postponed files
+	unavailable string              // why Run stopped before converting anything
 }
 
+// job is one conversion in progress.
 type job struct {
 	media    store.Media
-	duration float64
+	duration float64 // seconds; from the probe once known
 	done     float64 // seconds converted so far
 }
 
-// JobStatus describes a conversion in progress.
-type JobStatus struct {
-	Media   store.Media
-	Percent int
-}
-
-// Status is a snapshot for the control panel.
-type Status struct {
-	Disabled string // why conversions are off, if they are
-	Active   []JobStatus
-	Queued   int
-}
-
-func (c *Converter) init() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.wake == nil {
-		c.wake = make(chan struct{}, 1)
-		c.active = map[int64]*job{}
-		c.waitUntil = map[int64]time.Time{}
-	}
-	if c.now == nil {
-		c.now = time.Now
-	}
-	if c.Log == nil {
-		c.Log = slog.Default()
-	}
+// New returns a converter. Call Run to start working through the queue.
+func New(d Deps, c Config) *Converter {
 	if c.Max < 1 {
 		c.Max = 1
+	}
+	if c.FreeSpace == nil {
+		c.FreeSpace = freeBytes
+	}
+	return &Converter{
+		deps: d, cfg: c, now: time.Now, wake: make(chan struct{}, 1),
+		active: map[int64]*job{}, waitUntil: map[int64]time.Time{},
 	}
 }
 
 // Wake asks the converter to look at the queue now (after a scan found new files).
 func (c *Converter) Wake() {
-	c.init()
 	select {
 	case c.wake <- struct{}{}:
 	default:
 	}
 }
 
-// Run processes the queue until ctx ends.
-func (c *Converter) Run(ctx context.Context) {
-	c.init()
-	if err := checkWritable(c.MediaDir); err != nil {
+// Run processes the queue until ctx ends, and returns after every running
+// conversion has stopped. If the media folder is not writable it returns at
+// once and Status says why.
+func (c *Converter) Run(ctx context.Context) error {
+	if err := checkWritable(c.cfg.MediaDir); err != nil {
 		c.mu.Lock()
-		c.disabled = fmt.Sprintf("Conversion is off: the media folder is read-only or not writable by this "+
+		c.unavailable = fmt.Sprintf("Conversion is off: the media folder is read-only or not writable by this "+
 			"server's user (UID %d), so originals cannot be replaced. In Docker, mount it without :ro and make "+
 			"sure that user owns it, or set user: in docker-compose.yml to the folder's owner.", os.Getuid())
 		c.mu.Unlock()
-		c.Log.Warn("automatic conversion disabled", "reason", err)
-		return
+		c.deps.Log.Warn("automatic conversion disabled", "reason", err)
+		return nil
 	}
-	if err := c.removeLeftovers(); err != nil {
-		c.Log.Warn("could not remove files left by an interrupted conversion", "err", err)
+	if err := removeLeftovers(c.cfg.MediaDir); err != nil {
+		c.deps.Log.Warn("could not remove files left by an interrupted conversion", "err", err)
 	}
 
 	tick := time.NewTicker(time.Minute)
@@ -118,75 +131,87 @@ func (c *Converter) Run(ctx context.Context) {
 		c.fill(ctx, &wg)
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-c.wake:
 		case <-tick.C:
 		}
 	}
 }
 
-// fill starts conversions until Max are running or the queue is empty.
+// fill starts conversions until Max are running or the queue is empty. Only
+// Run calls it, so the free-slot count cannot change underneath it except by
+// jobs finishing, which only frees more.
 func (c *Converter) fill(ctx context.Context, wg *sync.WaitGroup) {
 	c.mu.Lock()
-	free := c.Max - len(c.active)
+	free := c.cfg.Max - len(c.active)
 	c.mu.Unlock()
 	if free <= 0 {
 		return
 	}
-	queue, err := c.queue(ctx)
+	queue, _, err := c.queue(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
-			c.Log.Error("reading the conversion queue", "err", err)
+			c.deps.Log.Error("reading the conversion queue", "err", err)
 		}
 		return
 	}
-	for _, m := range queue {
-		if free == 0 {
-			return
-		}
-		c.mu.Lock()
+	for _, m := range queue[:min(free, len(queue))] {
 		j := &job{media: m, duration: m.Duration}
+		c.mu.Lock()
 		c.active[m.ID] = j
 		c.mu.Unlock()
-		free--
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			c.runJob(ctx, j)
 			c.mu.Lock()
 			delete(c.active, j.media.ID)
 			c.mu.Unlock()
 			c.Wake()
-		}()
+		})
 	}
 }
 
-// queue lists files waiting for conversion, newest first, skipping running jobs.
-func (c *Converter) queue(ctx context.Context) ([]store.Media, error) {
-	cands, err := c.Store.ConversionCandidates(ctx)
+// queue lists files waiting for conversion, newest first, leaving out
+// running ones. It also counts postponed ones.
+func (c *Converter) queue(ctx context.Context) (queued []store.Media, postponed int, err error) {
+	cands, err := c.deps.Store.ConversionCandidates(ctx)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	now := c.now()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	var out []store.Media
 	for _, m := range cands {
-		if c.active[m.ID] != nil || now.Before(c.waitUntil[m.ID]) {
-			continue
-		}
-		if media.NeedsConversion(media.Format{Path: m.Path, VideoCodec: m.VideoCodec, AudioCodec: m.AudioCodec, PixFmt: m.PixFmt}) {
-			out = append(out, m)
+		f := media.Format{Path: m.Path, VideoCodec: m.VideoCodec, AudioCodec: m.AudioCodec, PixFmt: m.PixFmt}
+		switch {
+		case !media.NeedsConversion(f) || c.active[m.ID] != nil:
+		case now.Before(c.waitUntil[m.ID]):
+			postponed++
+		default:
+			queued = append(queued, m)
 		}
 	}
-	return out, nil
+	return queued, postponed, nil
+}
+
+// JobStatus describes a conversion in progress.
+type JobStatus struct {
+	Media   store.Media
+	Percent int
+}
+
+// Status is a snapshot for the control panel.
+type Status struct {
+	Off         bool   // conversion is turned off in the configuration
+	Unavailable string // why conversion cannot run (a read-only folder), if it cannot
+	Active      []JobStatus
+	Queued      int
+	Postponed   int // waiting for disk space
 }
 
 // Status reports what the converter is doing.
 func (c *Converter) Status(ctx context.Context) (Status, error) {
-	c.init()
 	c.mu.Lock()
-	st := Status{Disabled: c.disabled}
+	st := Status{Unavailable: c.unavailable}
 	for _, j := range c.active {
 		pct := 0
 		if j.duration > 0 {
@@ -195,296 +220,65 @@ func (c *Converter) Status(ctx context.Context) (Status, error) {
 		st.Active = append(st.Active, JobStatus{Media: j.media, Percent: pct})
 	}
 	c.mu.Unlock()
-	if st.Disabled != "" {
+	if st.Unavailable != "" {
 		return st, nil
 	}
-	q, err := c.queue(ctx)
-	st.Queued = len(q)
+	q, postponed, err := c.queue(ctx)
+	st.Queued, st.Postponed = len(q), postponed
 	return st, err
 }
 
-var errNoSpace = errors.New("not enough free disk space")
+// Disabled stands in for the converter when conversion is turned off, so
+// callers never need a nil check.
+type Disabled struct{}
 
+// Status reports that conversion is off.
+func (Disabled) Status(context.Context) (Status, error) { return Status{Off: true}, nil }
+
+// Wake does nothing.
+func (Disabled) Wake() {}
+
+// runJob converts one file and records the outcome. Shutdown, a changed
+// source and a full disk are not failures; anything else is recorded so the
+// control panel can show it.
 func (c *Converter) runJob(ctx context.Context, j *job) {
 	m := j.media
 	start := c.now()
-	c.Log.Info("converting", "media", m.ID, "path", m.Path)
+	c.deps.Log.Info("converting", "media", m.ID, "path", m.Path)
 	newPath, err := c.convert(ctx, j)
 	switch {
 	case ctx.Err() != nil:
-		c.Log.Info("conversion stopped by shutdown; it will restart", "path", m.Path)
+		c.deps.Log.Info("conversion stopped by shutdown; it will restart", "path", m.Path)
 	case errors.Is(err, ErrSourceChanged):
-		// Not a failure: the next scan decides what the row is now.
-		c.Log.Info("conversion discarded; the file changed while converting", "path", m.Path)
-	case errors.Is(err, errNoSpace):
+		c.deps.Log.Info("conversion discarded; the file changed while converting", "path", m.Path)
+	case errors.Is(err, ErrNoSpace):
 		c.mu.Lock()
 		c.waitUntil[m.ID] = c.now().Add(noSpaceRetry)
 		c.mu.Unlock()
-		c.Log.Warn("conversion postponed", "path", m.Path, "err", err)
+		c.deps.Log.Warn("conversion postponed", "path", m.Path, "err", err)
 	case err != nil:
-		c.Log.Error("conversion failed", "path", m.Path, "err", err)
-		if err := c.Store.SetConvertFailed(context.WithoutCancel(ctx), m.ID, err.Error()); err != nil {
-			c.Log.Error("recording a failed conversion", "err", err)
+		c.deps.Log.Error("conversion failed", "path", m.Path, "err", err)
+		if err := c.deps.Store.SetConvertFailed(context.WithoutCancel(ctx), m.ID, err.Error()); err != nil {
+			c.deps.Log.Error("recording a failed conversion", "err", err)
 		}
 	default:
-		c.Log.Info("converted", "media", m.ID, "from", m.Path, "to", newPath, "took", c.now().Sub(start).Round(time.Second))
-		if c.Scanner != nil {
-			c.Scanner.Trigger() // picks up extracted subtitles
+		c.deps.Log.Info("converted", "media", m.ID, "from", m.Path, "to", newPath, "took", c.now().Sub(start).Round(time.Second))
+		if c.deps.Library != nil {
+			c.deps.Library.Trigger() // imports the extracted subtitles
 		}
 	}
 }
 
-// convert writes the MP4 next to the original, checks it, and swaps it in.
-func (c *Converter) convert(ctx context.Context, j *job) (string, error) {
-	m := j.media
-	src := filepath.Join(c.MediaDir, filepath.FromSlash(m.Path))
-	info, err := os.Stat(src)
-	if err != nil {
-		return "", fmt.Errorf("original file: %w", err)
-	}
-	dir := filepath.Dir(src)
-	if free, ok := freeBytes(dir); ok && free < uint64(info.Size())+spaceMargin {
-		return "", fmt.Errorf("%w: %d MB free, %d MB needed", errNoSpace, free>>20, (uint64(info.Size())+spaceMargin)>>20)
-	}
+func (c *Converter) setProgress(j *job, seconds float64) {
+	c.mu.Lock()
+	j.done = seconds
+	c.mu.Unlock()
+}
 
-	pctx, cancel := context.WithTimeout(ctx, time.Minute)
-	source, err := c.Tools.Probe(pctx, src)
-	cancel()
-	if err != nil {
-		return "", err
-	}
-	if source.Duration > 0 {
+func (c *Converter) setDuration(j *job, seconds float64) {
+	if seconds > 0 {
 		c.mu.Lock()
-		j.duration = source.Duration
+		j.duration = seconds
 		c.mu.Unlock()
 	}
-	base := stripExt(filepath.Base(src))
-	plan, err := MakePlan(source, base)
-	if err != nil {
-		return "", err
-	}
-	target := filepath.Join(dir, base+".mp4")
-	if target != src {
-		if _, err := os.Lstat(target); err == nil {
-			return "", fmt.Errorf("%s: %w; rename one of them", filepath.Base(target), ErrTargetExists)
-		}
-	}
-
-	for _, sp := range plan.Subtitles {
-		if err := c.extractSubtitle(ctx, src, dir, sp); err != nil {
-			c.Log.Warn("could not extract a subtitle track", "path", m.Path, "file", sp.File, "err", err)
-		}
-	}
-	if plan.DroppedSubs > 0 {
-		c.Log.Info("image-based subtitles cannot be kept in MP4", "path", m.Path, "tracks", plan.DroppedSubs)
-	}
-
-	tmp := filepath.Join(dir, "."+base+tmpSuffix)
-	defer os.Remove(tmp) // only matters if we stop before the rename
-	err = c.Tools.Run(ctx, plan.ConvertArgs(src, tmp), ffmpeg.RunOptions{
-		LowPriority: true,
-		OnProgress: func(seconds float64) {
-			c.mu.Lock()
-			j.done = seconds
-			c.mu.Unlock()
-		},
-	})
-	if err != nil {
-		return "", err
-	}
-	result, err := c.verify(ctx, tmp, source, plan)
-	if err != nil {
-		return "", fmt.Errorf("the converted file failed its checks: %w", err)
-	}
-
-	rel, err := filepath.Rel(c.MediaDir, target)
-	if err != nil {
-		return "", err
-	}
-	result.Path = filepath.ToSlash(rel)
-	err = c.exclusive(func() error { return c.swap(ctx, m, src, tmp, target, result) })
-	return result.Path, err
 }
-
-func (c *Converter) exclusive(fn func() error) error {
-	if c.Scanner == nil {
-		return fn()
-	}
-	return c.Scanner.Exclusive(fn)
-}
-
-// Errors swap returns for situations that are not conversion failures.
-var (
-	// ErrTargetExists means a file already sits at the MP4's name, for
-	// example one the user added while the conversion ran. It is never
-	// overwritten.
-	ErrTargetExists = errors.New("a file with the converted file's name already exists")
-	// ErrSourceChanged means the media row no longer points at the file that
-	// was converted (a rescan replaced or removed it).
-	ErrSourceChanged = errors.New("the file changed in the library while it was being converted")
-)
-
-// swap makes the verified MP4 the library's copy of the media. The order of
-// the steps is what keeps a file from ever being lost:
-//
-//  1. Put tmp at target. For a same-name MP4 (wrong codecs inside) this is a
-//     rename, which atomically replaces the original, so the file is never
-//     missing. For a different name (Movie.mkv -> Movie.mp4) it is a
-//     no-overwrite move: if anything appeared at target meanwhile, swap stops
-//     with ErrTargetExists and touches nothing.
-//  2. Point the media row at target. If this fails and the names differ, the
-//     file placed in step 1 (which this job created) is removed and the
-//     original is untouched. If the names are the same, the converted file
-//     stays; the row keeps the old codecs, the job is recorded as failed, and
-//     Retry in the control panel simply remuxes it.
-//  3. Delete the original. Failing here only leaves a stray file behind; the
-//     library is already correct.
-//
-// swap runs under Scanner.Exclusive, so no scan sees the state between steps
-// 1 and 2, and ignores cancellation: a half-finished swap is worse than a slow
-// shutdown.
-func (c *Converter) swap(ctx context.Context, m store.Media, src, tmp, target string, result store.ReplacedFile) error {
-	ctx = context.WithoutCancel(ctx)
-	cur, err := c.Store.MediaByID(ctx, m.ID)
-	if err != nil {
-		return fmt.Errorf("re-reading media %d: %w", m.ID, err)
-	}
-	if cur.Path != m.Path {
-		return ErrSourceChanged
-	}
-	sameName := target == src
-	if sameName {
-		if err := os.Rename(tmp, target); err != nil {
-			return fmt.Errorf("putting the converted file in place: %w", err)
-		}
-	} else if err := moveNoReplace(tmp, target); err != nil {
-		return err
-	}
-	if err := c.Store.ReplaceMediaFile(ctx, m.ID, result); err != nil {
-		if !sameName {
-			if rmErr := os.Remove(target); rmErr != nil {
-				c.Log.Error("could not remove the converted file after a failed update", "path", target, "err", rmErr)
-			}
-		}
-		return fmt.Errorf("updating the library: %w", err)
-	}
-	if !sameName {
-		if err := os.Remove(src); err != nil {
-			c.Log.Error("could not delete the original; delete it by hand", "path", src, "err", err)
-		}
-	}
-	return nil
-}
-
-// moveNoReplace moves tmp to target only if nothing exists at target. A hard
-// link fails atomically when target exists, unlike rename, which would
-// replace it. On file systems without hard links (FAT, some network shares)
-// it falls back to checking first, which is safe here because the caller
-// holds the scan lock and the scanner never creates files.
-func moveNoReplace(tmp, target string) error {
-	err := os.Link(tmp, target)
-	switch {
-	case err == nil:
-		if err := os.Remove(tmp); err != nil {
-			return fmt.Errorf("removing the temporary file: %w", err)
-		}
-		return nil
-	case errors.Is(err, fs.ErrExist):
-		return fmt.Errorf("%s: %w; rename one of them", filepath.Base(target), ErrTargetExists)
-	}
-	if _, statErr := os.Lstat(target); statErr == nil {
-		return fmt.Errorf("%s: %w; rename one of them", filepath.Base(target), ErrTargetExists)
-	}
-	if err := os.Rename(tmp, target); err != nil {
-		return fmt.Errorf("putting the converted file in place: %w", err)
-	}
-	return nil
-}
-
-func (c *Converter) extractSubtitle(ctx context.Context, src, dir string, sp SubtitlePlan) error {
-	out := filepath.Join(dir, sp.File)
-	// Defence in depth on top of safeLanguage: sidecars live next to the video.
-	if filepath.Dir(out) != filepath.Clean(dir) {
-		return fmt.Errorf("refusing to write subtitle %q outside the video's folder", sp.File)
-	}
-	if _, err := os.Lstat(out); err == nil {
-		return nil // keep an existing file of the same name
-	}
-	tmp := filepath.Join(dir, "."+sp.File+".part")
-	defer os.Remove(tmp)
-	if err := c.Tools.Run(ctx, SubtitleArgs(src, sp, tmp), ffmpeg.RunOptions{}); err != nil {
-		return err
-	}
-	return os.Rename(tmp, out)
-}
-
-// verify checks the converted file before anything is deleted: H.264 video,
-// every planned audio track present, and the same length as the original.
-// It returns what the library should record about the new file.
-func (c *Converter) verify(ctx context.Context, file string, source ffmpeg.Probe, plan Plan) (store.ReplacedFile, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-	got, err := c.Tools.Probe(ctx, file)
-	if err != nil {
-		return store.ReplacedFile{}, err
-	}
-	if err := CheckConverted(got, source, plan); err != nil {
-		return store.ReplacedFile{}, err
-	}
-	info, err := os.Stat(file)
-	if err != nil {
-		return store.ReplacedFile{}, err
-	}
-	video, _ := got.Video() // CheckConverted made sure there is one
-	return store.ReplacedFile{Duration: got.Duration, Container: got.Container,
-		VideoCodec: video.Codec, AudioCodec: got.AudioCodec(), PixFmt: video.PixFmt, Size: info.Size()}, nil
-}
-
-// CheckConverted compares a converted file with its source and plan. The
-// original is deleted only when this passes, so it is deliberately strict.
-func CheckConverted(got, source ffmpeg.Probe, plan Plan) error {
-	if v := got.VideoCodec(); v != "h264" {
-		return fmt.Errorf("video is %q, want h264", v)
-	}
-	if n := got.Count("audio"); n != len(plan.Audio) {
-		return fmt.Errorf("%d audio tracks, want %d", n, len(plan.Audio))
-	}
-	if source.Duration > 0 {
-		tolerance := math.Max(2, source.Duration*0.01)
-		if math.Abs(got.Duration-source.Duration) > tolerance {
-			return fmt.Errorf("lasts %.1fs, the original %.1fs", got.Duration, source.Duration)
-		}
-	}
-	return nil
-}
-
-// removeLeftovers deletes half-written files from a conversion that was
-// interrupted (a crash or a power cut).
-func (c *Converter) removeLeftovers() error {
-	var errs []error
-	walkErr := filepath.WalkDir(c.MediaDir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // an unreadable folder holds no leftovers we could remove
-		}
-		if !d.IsDir() && strings.HasPrefix(d.Name(), ".") &&
-			(strings.HasSuffix(d.Name(), tmpSuffix) || strings.HasSuffix(d.Name(), ".srt.part")) {
-			if err := os.Remove(p); err != nil {
-				errs = append(errs, err)
-			}
-		}
-		return nil
-	})
-	return errors.Join(append(errs, walkErr)...)
-}
-
-func checkWritable(dir string) error {
-	f, err := os.CreateTemp(dir, ".nexusplay-write-test-*")
-	if err != nil {
-		return err
-	}
-	name := f.Name()
-	f.Close()
-	return os.Remove(name)
-}
-
-func stripExt(name string) string { return name[:len(name)-len(filepath.Ext(name))] }
