@@ -61,7 +61,7 @@ func newEnv(t *testing.T, mutate func(*config.Config)) *env {
 		t.Fatal(err)
 	}
 	meta := metadata.New(metadata.Config{PosterDir: cfg.PosterDir()}, log)
-	accounts, err := auth.NewAccounts(st, log)
+	accounts, err := auth.NewAccounts(st, cfg.MaxAccounts, log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -478,5 +478,21 @@ func TestRemovePoster(t *testing.T) {
 	_, page = admin.do("GET", "/admin/media/"+itoa(id), nil, nil)
 	if strings.Contains(page, `name="remove_poster"`) {
 		t.Error("the edit page offers to remove a poster that is not there")
+	}
+}
+
+// Once NEXUSPLAY_MAX_ACCOUNTS accounts exist, the sign-up form is replaced
+// by a notice and a direct POST is refused.
+func TestRegistrationClosedAtLimit(t *testing.T) {
+	e := newEnv(t, func(c *config.Config) { c.MaxAccounts = 1 })
+	e.client().register("alex")
+	c := e.client()
+	_, page := c.do("GET", "/register", nil, nil)
+	if !strings.Contains(page, "Registration is closed") || strings.Contains(page, `name="password"`) {
+		t.Error("the register page still offers the form at the limit")
+	}
+	resp, _ := c.do("POST", "/register", url.Values{"nickname": {"sam"}, "email": {"sam@example.com"}, "password": {"long enough password"}}, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("register past the limit: %d, want 403", resp.StatusCode)
 	}
 }

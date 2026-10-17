@@ -127,7 +127,7 @@ func build(cfg config.Config, st *store.Store, log *slog.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("transcode folder: %w", err)
 	}
-	accounts, err := auth.NewAccounts(st, log.With("component", "auth"))
+	accounts, err := auth.NewAccounts(st, cfg.MaxAccounts, log.With("component", "auth"))
 	if err != nil {
 		return nil, err
 	}

@@ -31,7 +31,7 @@ var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
 
 func newAccounts(t *testing.T, st *store.Store) *Accounts {
 	t.Helper()
-	a, err := NewAccounts(st, quiet)
+	a, err := NewAccounts(st, 0, quiet)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,8 +41,8 @@ func newAccounts(t *testing.T, st *store.Store) *Accounts {
 func TestRegisterFirstUserIsAdmin(t *testing.T) {
 	ctx := context.Background()
 	a := newAccounts(t, newTestStore(t))
-	if first, _ := a.FirstUser(ctx); !first {
-		t.Error("FirstUser on an empty install = false")
+	if st, _ := a.RegistrationStatus(ctx); !st.FirstUser || st.Closed {
+		t.Errorf("status on an empty install = %+v", st)
 	}
 	alex, err := a.Register(ctx, Registration{Email: " alex@example.com ", Nickname: "alex", Password: "long enough"})
 	if err != nil || !alex.IsAdmin || alex.Email != "alex@example.com" {
@@ -116,7 +116,7 @@ func TestLoginRehashesWeakHash(t *testing.T) {
 	salt := []byte("saltsaltsaltsalt")
 	weak := fmt.Sprintf("$argon2id$v=19$m=4096,t=1,p=1$%s$%s",
 		b64(salt), b64(argon2.IDKey([]byte("old password"), salt, 1, 4096, 1, 32)))
-	u, err := st.CreateUser(ctx, "old@example.com", "old", weak)
+	u, err := st.CreateUser(ctx, "old@example.com", "old", weak, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestLoginRehashesWeakHash(t *testing.T) {
 func TestLoginCorruptHashIsAnError(t *testing.T) {
 	ctx := context.Background()
 	st := newTestStore(t)
-	st.CreateUser(ctx, "x@example.com", "x", "not-a-hash")
+	st.CreateUser(ctx, "x@example.com", "x", "not-a-hash", 0)
 	_, err := newAccounts(t, st).Login(ctx, "x@example.com", "anything")
 	if err == nil || errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("err = %v, want a real error", err)
@@ -146,7 +146,7 @@ func TestLoginCorruptHashIsAnError(t *testing.T) {
 func TestSessions(t *testing.T) {
 	ctx := context.Background()
 	st := newTestStore(t)
-	u, _ := st.CreateUser(ctx, "a@example.com", "a", "hash")
+	u, _ := st.CreateUser(ctx, "a@example.com", "a", "hash", 0)
 	s := NewSessions(st, time.Hour, quiet)
 
 	token, expires, err := s.Start(ctx, u.ID)
@@ -177,7 +177,7 @@ func TestSessions(t *testing.T) {
 func TestSessionsExpire(t *testing.T) {
 	ctx := context.Background()
 	st := newTestStore(t)
-	u, _ := st.CreateUser(ctx, "a@example.com", "a", "hash")
+	u, _ := st.CreateUser(ctx, "a@example.com", "a", "hash", 0)
 	s := NewSessions(st, time.Hour, quiet)
 	s.now = func() time.Time { return time.Now().Add(-2 * time.Hour) } // started two hours ago
 	token, _, _ := s.Start(ctx, u.ID)
@@ -187,3 +187,24 @@ func TestSessionsExpire(t *testing.T) {
 }
 
 func b64(b []byte) string { return base64.RawStdEncoding.EncodeToString(b) }
+
+// With a limit of two, the third registration is refused and the status
+// says registration is closed.
+func TestRegisterAccountLimit(t *testing.T) {
+	ctx := context.Background()
+	a, err := NewAccounts(newTestStore(t), 2, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, nick := range []string{"ann", "bob"} {
+		if _, err := a.Register(ctx, Registration{Email: nick + "@example.com", Nickname: nick, Password: "long enough"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := a.Register(ctx, Registration{Email: "cat@example.com", Nickname: "cat", Password: "long enough"}); !errors.Is(err, ErrRegistrationClosed) {
+		t.Errorf("third account: %v, want ErrRegistrationClosed", err)
+	}
+	if st, _ := a.RegistrationStatus(ctx); !st.Closed || st.MaxAccounts != 2 {
+		t.Errorf("status = %+v, want closed at 2", st)
+	}
+}

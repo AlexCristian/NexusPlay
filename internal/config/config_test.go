@@ -17,7 +17,7 @@ func TestDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.Addr != ":8080" || !c.Convert || c.MaxConversions != 1 || c.MaxTranscodes != 2 ||
-		c.VotesRequired != 4 || c.ScanInterval != 5*time.Minute || c.RequireLogin {
+		c.VotesRequired != 4 || c.ScanInterval != 5*time.Minute || c.RequireLogin || c.MaxAccounts != 10 {
 		t.Errorf("defaults = %+v", c)
 	}
 	if !filepath.IsAbs(c.MediaDir) || !filepath.IsAbs(c.DataDir) {
@@ -77,6 +77,7 @@ func TestValidate(t *testing.T) {
 		"negative scan":         func(c *Config) { c.ScanInterval = -time.Minute },
 		"no address":            func(c *Config) { c.Addr = "" },
 		"zero votes to approve": func(c *Config) { c.VotesRequired = 0 },
+		"negative accounts":     func(c *Config) { c.MaxAccounts = -1 },
 	} {
 		c := Defaults()
 		mutate(&c)

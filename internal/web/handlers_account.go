@@ -24,7 +24,7 @@ type accountHandlers struct {
 
 // accountService checks credentials and creates accounts (auth.Accounts).
 type accountService interface {
-	FirstUser(ctx context.Context) (bool, error)
+	RegistrationStatus(ctx context.Context) (auth.RegistrationStatus, error)
 	Register(ctx context.Context, in auth.Registration) (store.User, error)
 	Login(ctx context.Context, email, password string) (store.User, error)
 }
@@ -76,11 +76,11 @@ func (h *accountHandlers) loginPage(w http.ResponseWriter, r *http.Request) erro
 
 // registerPage handles GET /register, as a page or (htmx) a dialog.
 func (h *accountHandlers) registerPage(w http.ResponseWriter, r *http.Request) error {
-	first, err := h.accounts.FirstUser(r.Context())
+	st, err := h.accounts.RegistrationStatus(r.Context())
 	if err != nil {
 		return err
 	}
-	return h.respond(w, r, http.StatusOK, "Register", registerForm("", "", "", first), authPage)
+	return h.respond(w, r, http.StatusOK, "Register", registerForm("", "", "", st), authPage)
 }
 
 // rejectAuthForm shows a login or registration form again with its error.
@@ -117,11 +117,14 @@ func (h *accountHandlers) register(w http.ResponseWriter, r *http.Request) error
 	u, err := h.accounts.Register(r.Context(), in)
 	var invalid *auth.ValidationError
 	var msg string
+	status := http.StatusBadRequest
 	switch {
 	case errors.As(err, &invalid):
 		msg = invalid.Msg
 	case errors.Is(err, store.ErrDuplicate):
 		msg = "That e-mail or nickname is already registered."
+	case errors.Is(err, auth.ErrRegistrationClosed):
+		status = http.StatusForbidden // the form below says why
 	case err != nil:
 		return err
 	default:
@@ -131,12 +134,12 @@ func (h *accountHandlers) register(w http.ResponseWriter, r *http.Request) error
 		h.redirect(w, r, "/")
 		return nil
 	}
-	first, err := h.accounts.FirstUser(r.Context())
+	st, err := h.accounts.RegistrationStatus(r.Context())
 	if err != nil {
 		return err
 	}
-	form := registerForm(msg, strings.TrimSpace(in.Email), strings.TrimSpace(in.Nickname), first)
-	return h.rejectAuthForm(w, r, http.StatusBadRequest, "Register", form)
+	form := registerForm(msg, strings.TrimSpace(in.Email), strings.TrimSpace(in.Nickname), st)
+	return h.rejectAuthForm(w, r, status, "Register", form)
 }
 
 // logout handles POST /logout.

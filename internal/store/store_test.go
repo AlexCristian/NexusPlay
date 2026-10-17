@@ -24,7 +24,7 @@ func newStore(t *testing.T) *Store {
 
 func mustUser(t *testing.T, s *Store, email, nick string) User {
 	t.Helper()
-	u, err := s.CreateUser(context.Background(), email, nick, "hash")
+	u, err := s.CreateUser(context.Background(), email, nick, "hash", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,10 +58,10 @@ func TestFirstUserIsAdmin(t *testing.T) {
 	if !a.IsAdmin || b.IsAdmin {
 		t.Errorf("admin flags: first=%v second=%v, want true/false", a.IsAdmin, b.IsAdmin)
 	}
-	if _, err := s.CreateUser(context.Background(), "A@EXAMPLE.COM", "other", "h"); !errors.Is(err, ErrDuplicate) {
+	if _, err := s.CreateUser(context.Background(), "A@EXAMPLE.COM", "other", "h", 0); !errors.Is(err, ErrDuplicate) {
 		t.Errorf("duplicate email (other case): got %v, want ErrDuplicate", err)
 	}
-	if _, err := s.CreateUser(context.Background(), "c@example.com", "BOB", "h"); !errors.Is(err, ErrDuplicate) {
+	if _, err := s.CreateUser(context.Background(), "c@example.com", "BOB", "h", 0); !errors.Is(err, ErrDuplicate) {
 		t.Errorf("duplicate nickname: got %v, want ErrDuplicate", err)
 	}
 }

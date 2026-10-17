@@ -164,6 +164,7 @@ All settings are environment variables.
 | `NEXUSPLAY_MAX_CONVERSIONS` | `1` | Files converted to MP4 at the same time |
 | `NEXUSPLAY_MAX_TRANSCODES` | `2` | Videos streamed through on-the-fly HLS at the same time (only files not yet converted) |
 | `NEXUSPLAY_REQUIRE_LOGIN` | `false` | Hide the library from visitors who are not signed in |
+| `NEXUSPLAY_MAX_ACCOUNTS` | `10` | How many accounts can exist, the administrator included; registration closes at the limit. `0` for no limit |
 | `NEXUSPLAY_SECURE_COOKIES` | `false` | Set to `true` when serving over HTTPS |
 | `NEXUSPLAY_FFMPEG`, `NEXUSPLAY_FFPROBE` | `ffmpeg`, `ffprobe` | Paths to the ffmpeg tools |
 | `NEXUSPLAY_DEBUG` | `false` | `true` logs every request |

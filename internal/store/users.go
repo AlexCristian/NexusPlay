@@ -27,6 +27,9 @@ type Session struct {
 // ErrDuplicate is returned when an email or nickname is already taken.
 var ErrDuplicate = errors.New("already exists")
 
+// ErrUserLimit is returned by CreateUser when the account limit is reached.
+var ErrUserLimit = errors.New("account limit reached")
+
 const userCols = `id, email, nickname, password_hash, is_admin, created_at`
 
 func scanUser(row rowScanner) (User, error) {
@@ -40,13 +43,19 @@ func scanUser(row rowScanner) (User, error) {
 // CreateUser inserts a user. The first account ever created becomes the
 // administrator, so a fresh install needs no separate setup step. It
 // returns ErrDuplicate if the email or nickname is taken (compared without
-// regard to letter case).
-func (s *Store) CreateUser(ctx context.Context, email, nickname, passwordHash string) (User, error) {
+// regard to letter case), and ErrUserLimit if maxUsers accounts already
+// exist. maxUsers 0 means no limit. The count and the insert are one
+// transaction, so two people registering at once cannot both take the last
+// place.
+func (s *Store) CreateUser(ctx context.Context, email, nickname, passwordHash string, maxUsers int) (User, error) {
 	var u User
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var count int
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
 			return err
+		}
+		if maxUsers > 0 && count >= maxUsers {
+			return ErrUserLimit
 		}
 		res, err := tx.ExecContext(ctx,
 			`INSERT INTO users (email, nickname, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?)`,
@@ -67,11 +76,11 @@ func (s *Store) CreateUser(ctx context.Context, email, nickname, passwordHash st
 	return u, err
 }
 
-// HasUsers reports whether any account exists yet.
-func (s *Store) HasUsers(ctx context.Context) (bool, error) {
+// UserCount returns how many accounts exist.
+func (s *Store) UserCount(ctx context.Context) (int, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&n)
-	return n > 0, err
+	return n, err
 }
 
 // UserByEmail looks a user up by email, case-insensitively, or returns

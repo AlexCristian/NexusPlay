@@ -55,6 +55,12 @@ func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 // minutes formats a duration in seconds as "42 min".
 func minutes(sec float64) string { return strconv.Itoa(int(sec/60)) + " min" }
 
+// registrationClosedMessage explains why the sign-up form is not shown.
+func registrationClosedMessage(maxAccounts int) string {
+	return "Registration is closed: this server allows " + strconv.Itoa(maxAccounts) +
+		" accounts and all of them are taken. Ask the administrator if you need one."
+}
+
 // ---- Library ----
 
 // Season is one season's episodes in a collection.

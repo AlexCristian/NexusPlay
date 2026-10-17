@@ -31,15 +31,19 @@ func (v Viewer) IsAdmin() bool { return v.User != nil && v.User.IsAdmin }
 
 // UserStore is the database as Accounts uses it; *store.Store implements it.
 type UserStore interface {
-	CreateUser(ctx context.Context, email, nickname, passwordHash string) (store.User, error)
+	CreateUser(ctx context.Context, email, nickname, passwordHash string, maxUsers int) (store.User, error)
 	UserByEmail(ctx context.Context, email string) (store.User, error)
 	UpdatePasswordHash(ctx context.Context, id int64, hash string) error
-	HasUsers(ctx context.Context) (bool, error)
+	UserCount(ctx context.Context) (int, error)
 }
 
 // ErrInvalidCredentials means the email or the password is wrong. It never
 // says which, so the login form does not reveal who has an account.
 var ErrInvalidCredentials = errors.New("wrong e-mail or password")
+
+// ErrRegistrationClosed means the install has as many accounts as
+// NEXUSPLAY_MAX_ACCOUNTS allows.
+var ErrRegistrationClosed = errors.New("registration is closed")
 
 // ValidationError is input the user can fix; Msg is shown to them.
 type ValidationError struct {
@@ -57,35 +61,49 @@ type Registration struct {
 // Accounts holds the rules for creating accounts and logging in. It is safe
 // for concurrent use.
 type Accounts struct {
-	users  UserStore
-	log    *slog.Logger
-	verify func(password, hash string) (bool, error) // VerifyPassword; replaced in tests
+	users       UserStore
+	maxAccounts int // 0: no limit
+	log         *slog.Logger
+	verify      func(password, hash string) (bool, error) // VerifyPassword; replaced in tests
 
 	// dummyHash is checked against when an email is unknown, so failed logins
 	// take as long whether or not the email is registered.
 	dummyHash string
 }
 
-// NewAccounts returns the account rules. It fails only if the system's
-// random source is broken.
-func NewAccounts(users UserStore, log *slog.Logger) (*Accounts, error) {
+// NewAccounts returns the account rules. At most maxAccounts accounts can
+// exist (0 means no limit). It fails only if the system's random source is
+// broken.
+func NewAccounts(users UserStore, maxAccounts int, log *slog.Logger) (*Accounts, error) {
 	h, err := HashPassword("nexusplay-timing-equalizer")
 	if err != nil {
 		return nil, fmt.Errorf("creating the timing-equalizer hash: %w", err)
 	}
-	return &Accounts{users: users, log: log, verify: VerifyPassword, dummyHash: h}, nil
+	return &Accounts{users: users, maxAccounts: maxAccounts, log: log, verify: VerifyPassword, dummyHash: h}, nil
 }
 
-// FirstUser reports whether no account exists yet, in which case the next
-// registration becomes the administrator.
-func (a *Accounts) FirstUser(ctx context.Context) (bool, error) {
-	has, err := a.users.HasUsers(ctx)
-	return !has, err
+// RegistrationStatus tells the sign-up form what to say.
+type RegistrationStatus struct {
+	FirstUser   bool // the next account becomes the administrator
+	Closed      bool // the account limit is reached
+	MaxAccounts int  // the limit; 0 for none
+}
+
+// RegistrationStatus reports whether registering is possible and whether
+// the next account would be the administrator.
+func (a *Accounts) RegistrationStatus(ctx context.Context) (RegistrationStatus, error) {
+	n, err := a.users.UserCount(ctx)
+	return RegistrationStatus{
+		FirstUser:   n == 0,
+		Closed:      a.maxAccounts > 0 && n >= a.maxAccounts,
+		MaxAccounts: a.maxAccounts,
+	}, err
 }
 
 // Register validates a registration and creates the account. The first
 // account becomes the administrator. It returns *ValidationError for bad
-// input and store.ErrDuplicate when the email or nickname is taken.
+// input, store.ErrDuplicate when the email or nickname is taken, and
+// ErrRegistrationClosed when the account limit is reached.
 func (a *Accounts) Register(ctx context.Context, in Registration) (store.User, error) {
 	in.Email = strings.TrimSpace(in.Email)
 	in.Nickname = strings.TrimSpace(in.Nickname)
@@ -96,7 +114,10 @@ func (a *Accounts) Register(ctx context.Context, in Registration) (store.User, e
 	if err != nil {
 		return store.User{}, err
 	}
-	u, err := a.users.CreateUser(ctx, in.Email, in.Nickname, hash)
+	u, err := a.users.CreateUser(ctx, in.Email, in.Nickname, hash, a.maxAccounts)
+	if errors.Is(err, store.ErrUserLimit) {
+		return store.User{}, ErrRegistrationClosed
+	}
 	if err != nil {
 		return store.User{}, err
 	}

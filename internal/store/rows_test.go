@@ -77,7 +77,7 @@ func TestConcurrentWriteTransactions(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			email := time.Now().Format("150405.000000000") + string(rune('a'+i%26)) + "@x.com"
-			_, err := s.CreateUser(ctx, email, email, "hash")
+			_, err := s.CreateUser(ctx, email, email, "hash", 0)
 			errs <- err
 		}()
 	}

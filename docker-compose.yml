@@ -31,6 +31,7 @@ services:
       NEXUSPLAY_TMDB_API_KEY: ${NEXUSPLAY_TMDB_API_KEY:-}
       # Set to "true" to hide the library from visitors who are not signed in.
       NEXUSPLAY_REQUIRE_LOGIN: ${NEXUSPLAY_REQUIRE_LOGIN:-false}
+      NEXUSPLAY_MAX_ACCOUNTS: ${NEXUSPLAY_MAX_ACCOUNTS:-10}
       # Convert non-MP4 videos in the background and delete the originals.
       NEXUSPLAY_CONVERT: ${NEXUSPLAY_CONVERT:-true}
       # How many files to convert at the same time. Keep 1 on a small NAS.

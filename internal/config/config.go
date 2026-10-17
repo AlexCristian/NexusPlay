@@ -22,6 +22,7 @@ type Config struct {
 	VotesRequired int           // NEXUSPLAY_VOTES_REQUIRED
 	MaxTranscodes int           // NEXUSPLAY_MAX_TRANSCODES
 	RequireLogin  bool          // NEXUSPLAY_REQUIRE_LOGIN
+	MaxAccounts   int           // NEXUSPLAY_MAX_ACCOUNTS: 0 for no limit
 	SecureCookies bool          // NEXUSPLAY_SECURE_COOKIES
 	FFmpegPath    string        // NEXUSPLAY_FFMPEG
 	FFprobePath   string        // NEXUSPLAY_FFPROBE
@@ -42,6 +43,7 @@ func Defaults() Config {
 		ScanInterval:   5 * time.Minute,
 		VotesRequired:  4,
 		MaxTranscodes:  2,
+		MaxAccounts:    10,
 		FFmpegPath:     "ffmpeg",
 		FFprobePath:    "ffprobe",
 		Convert:        true,
@@ -99,6 +101,7 @@ func (c *Config) variables() []variable {
 		{"NEXUSPLAY_VOTES_REQUIRED", number(&c.VotesRequired)},
 		{"NEXUSPLAY_MAX_TRANSCODES", number(&c.MaxTranscodes)},
 		{"NEXUSPLAY_MAX_CONVERSIONS", number(&c.MaxConversions)},
+		{"NEXUSPLAY_MAX_ACCOUNTS", number(&c.MaxAccounts)},
 		{"NEXUSPLAY_CONVERT", flag(&c.Convert)},
 		{"NEXUSPLAY_REQUIRE_LOGIN", flag(&c.RequireLogin)},
 		{"NEXUSPLAY_SECURE_COOKIES", flag(&c.SecureCookies)},
@@ -158,6 +161,9 @@ func (c Config) Validate() error {
 	// is only the safety net, and walking a big library too often wastes disk I/O.
 	if c.ScanInterval < 10*time.Second {
 		errs = append(errs, fmt.Errorf("NEXUSPLAY_SCAN_INTERVAL must be at least 10s, not %s", c.ScanInterval))
+	}
+	if c.MaxAccounts < 0 {
+		errs = append(errs, fmt.Errorf("NEXUSPLAY_MAX_ACCOUNTS must be 0 (no limit) or more, not %d", c.MaxAccounts))
 	}
 	if c.Addr == "" {
 		errs = append(errs, errors.New("NEXUSPLAY_ADDR must not be empty"))

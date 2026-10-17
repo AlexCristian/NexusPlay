@@ -8,6 +8,8 @@ package web
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "github.com/AlexCristian/NexusPlay/internal/auth"
+
 func authPage(p Page, form templ.Component) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -101,7 +103,7 @@ func loginForm(errMsg, email, next string) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(next)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/account.templ`, Line: 18, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/account.templ`, Line: 20, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -114,7 +116,7 @@ func loginForm(errMsg, email, next string) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(email)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/account.templ`, Line: 21, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/account.templ`, Line: 23, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -128,7 +130,7 @@ func loginForm(errMsg, email, next string) templ.Component {
 	})
 }
 
-func registerForm(errMsg, email, nickname string, firstUser bool) templ.Component {
+func registerForm(errMsg, email, nickname string, st auth.RegistrationStatus) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -149,49 +151,72 @@ func registerForm(errMsg, email, nickname string, firstUser bool) templ.Componen
 			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"auth\" id=\"auth-form\"><h2 id=\"modal-title\" class=\"modal-heading\">Register</h2><form class=\"auth-body\" method=\"post\" action=\"/register\" hx-post=\"/register\" hx-target=\"#auth-form\" hx-swap=\"outerHTML\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"auth\" id=\"auth-form\"><h2 id=\"modal-title\" class=\"modal-heading\">Register</h2>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if errMsg != "" {
-			templ_7745c5c3_Err = alert("error", errMsg).Render(ctx, templ_7745c5c3_Buffer)
+		if st.Closed {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"auth-body\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = alert("info", registrationClosedMessage(st.MaxAccounts)).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<p class=\"auth-switch\">Already registered? <a href=\"/login\" hx-get=\"/login\" hx-target=\"#auth-form\" hx-swap=\"outerHTML\">Log in</a></p></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<form class=\"auth-body\" method=\"post\" action=\"/register\" hx-post=\"/register\" hx-target=\"#auth-form\" hx-swap=\"outerHTML\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if errMsg != "" {
+				templ_7745c5c3_Err = alert("error", errMsg).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			if st.FirstUser {
+				templ_7745c5c3_Err = alert("info", "This is the first account on this server, so it becomes the administrator.").Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<label>Nickname <input type=\"text\" name=\"nickname\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var7 string
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(nickname)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/account.templ`, Line: 59, Col: 56}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" required maxlength=\"40\" autocomplete=\"username\" autofocus></label> <label>E-mail <input type=\"email\" name=\"email\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var8 string
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(email)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/account.templ`, Line: 63, Col: 51}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" required autocomplete=\"email\"></label> <label>Password <input type=\"password\" name=\"password\" required minlength=\"8\" autocomplete=\"new-password\"></label> <button type=\"submit\" class=\"button\">Create account</button><p class=\"auth-note\">An account lets you resume playback where you left off, subscribe to shows and help correct subtitles.</p><p class=\"auth-switch\">Already registered? <a href=\"/login\" hx-get=\"/login\" hx-target=\"#auth-form\" hx-swap=\"outerHTML\">Log in</a></p></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		if firstUser {
-			templ_7745c5c3_Err = alert("info", "This is the first account on this server, so it becomes the administrator.").Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<label>Nickname <input type=\"text\" name=\"nickname\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var7 string
-		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(nickname)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/account.templ`, Line: 48, Col: 55}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" required maxlength=\"40\" autocomplete=\"username\" autofocus></label> <label>E-mail <input type=\"email\" name=\"email\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var8 string
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(email)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/account.templ`, Line: 52, Col: 50}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" required autocomplete=\"email\"></label> <label>Password <input type=\"password\" name=\"password\" required minlength=\"8\" autocomplete=\"new-password\"></label> <button type=\"submit\" class=\"button\">Create account</button><p class=\"auth-note\">An account lets you resume playback where you left off, subscribe to shows and help correct subtitles.</p><p class=\"auth-switch\">Already registered? <a href=\"/login\" hx-get=\"/login\" hx-target=\"#auth-form\" hx-swap=\"outerHTML\">Log in</a></p></form></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

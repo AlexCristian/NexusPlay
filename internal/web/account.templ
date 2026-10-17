@@ -1,5 +1,7 @@
 package web
 
+import "github.com/AlexCristian/NexusPlay/internal/auth"
+
 templ authPage(p Page, form templ.Component) {
 	@shell(p) {
 		<section class="panel auth-panel">
@@ -33,37 +35,47 @@ templ loginForm(errMsg, email, next string) {
 	</div>
 }
 
-templ registerForm(errMsg, email, nickname string, firstUser bool) {
+templ registerForm(errMsg, email, nickname string, st auth.RegistrationStatus) {
 	<div class="auth" id="auth-form">
 		<h2 id="modal-title" class="modal-heading">Register</h2>
-		<form class="auth-body" method="post" action="/register" hx-post="/register" hx-target="#auth-form" hx-swap="outerHTML">
-			if errMsg != "" {
-				@alert("error", errMsg)
-			}
-			if firstUser {
-				@alert("info", "This is the first account on this server, so it becomes the administrator.")
-			}
-			<label>
-				Nickname
-				<input type="text" name="nickname" value={ nickname } required maxlength="40" autocomplete="username" autofocus/>
-			</label>
-			<label>
-				E-mail
-				<input type="email" name="email" value={ email } required autocomplete="email"/>
-			</label>
-			<label>
-				Password
-				<input type="password" name="password" required minlength="8" autocomplete="new-password"/>
-			</label>
-			<button type="submit" class="button">Create account</button>
-			<p class="auth-note">
-				An account lets you resume playback where you left off, subscribe to shows
-				and help correct subtitles.
-			</p>
-			<p class="auth-switch">
-				Already registered?
-				<a href="/login" hx-get="/login" hx-target="#auth-form" hx-swap="outerHTML">Log in</a>
-			</p>
-		</form>
+		if st.Closed {
+			<div class="auth-body">
+				@alert("info", registrationClosedMessage(st.MaxAccounts))
+				<p class="auth-switch">
+					Already registered?
+					<a href="/login" hx-get="/login" hx-target="#auth-form" hx-swap="outerHTML">Log in</a>
+				</p>
+			</div>
+		} else {
+			<form class="auth-body" method="post" action="/register" hx-post="/register" hx-target="#auth-form" hx-swap="outerHTML">
+				if errMsg != "" {
+					@alert("error", errMsg)
+				}
+				if st.FirstUser {
+					@alert("info", "This is the first account on this server, so it becomes the administrator.")
+				}
+				<label>
+					Nickname
+					<input type="text" name="nickname" value={ nickname } required maxlength="40" autocomplete="username" autofocus/>
+				</label>
+				<label>
+					E-mail
+					<input type="email" name="email" value={ email } required autocomplete="email"/>
+				</label>
+				<label>
+					Password
+					<input type="password" name="password" required minlength="8" autocomplete="new-password"/>
+				</label>
+				<button type="submit" class="button">Create account</button>
+				<p class="auth-note">
+					An account lets you resume playback where you left off, subscribe to shows
+					and help correct subtitles.
+				</p>
+				<p class="auth-switch">
+					Already registered?
+					<a href="/login" hx-get="/login" hx-target="#auth-form" hx-swap="outerHTML">Log in</a>
+				</p>
+			</form>
+		}
 	</div>
 }
