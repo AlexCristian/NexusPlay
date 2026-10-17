@@ -54,10 +54,10 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 	}
 	tools := ffmpeg.Tools{FFmpeg: cfg.FFmpegPath, FFprobe: cfg.FFprobePath}
 	meta := metadata.New(metadata.Config{APIKey: cfg.TMDBAPIKey, PosterDir: cfg.PosterDir()}, log.With("component", "tmdb"))
-	scanner := &library.Scanner{
-		Store: st, Prober: tools, Meta: meta,
-		MediaDir: cfg.MediaDir, Interval: cfg.ScanInterval, Log: log.With("component", "scanner"),
-	}
+	scanner := library.NewScanner(
+		library.Deps{Store: st, Prober: tools, Meta: meta, Log: log.With("component", "scanner")},
+		library.Config{MediaDir: cfg.MediaDir, Interval: cfg.ScanInterval},
+	)
 	transcodes, err := stream.NewManager(stream.FFmpegStarter(tools),
 		stream.Config{Dir: cfg.TranscodeDir(), Max: cfg.MaxTranscodes}, log.With("component", "transcode"))
 	if err != nil {
@@ -70,7 +70,7 @@ func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error)
 			Store: st, Scanner: scanner, Tools: tools,
 			MediaDir: cfg.MediaDir, Max: cfg.MaxConversions, Log: log.With("component", "convert"),
 		}
-		scanner.OnAdded = conv.Wake
+		scanner.OnAdded(conv.Wake)
 	}
 	srv := &web.Server{Cfg: cfg, Store: st, Scanner: scanner, Meta: meta, Transcodes: transcodes, Converter: conv, Log: log}
 	return &App{Cfg: cfg, Log: log, Store: st, Scanner: scanner, Transcodes: transcodes, Converter: conv, Handler: srv.Handler()}, nil

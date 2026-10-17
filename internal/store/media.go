@@ -63,9 +63,9 @@ func (s *Store) queryMedia(ctx context.Context, where string, args ...any) ([]Me
 	return queryAll(ctx, s.db, scanMedia, `SELECT `+mediaCols+mediaFrom+where, args...)
 }
 
-// InsertScannedMedia adds a newly discovered file as unpublished media.
-// It returns the new ID, or 0 when the path was already known.
-func (s *Store) InsertScannedMedia(ctx context.Context, sm ScannedMedia) (int64, error) {
+// InsertScannedMedia adds a newly discovered file as unpublished media. If
+// the path is already known it changes nothing and returns inserted == false.
+func (s *Store) InsertScannedMedia(ctx context.Context, sm ScannedMedia) (id int64, inserted bool, err error) {
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO media (path, title, year, season, episode, duration, container, video_codec, audio_codec, pix_fmt, size, added_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -73,18 +73,27 @@ func (s *Store) InsertScannedMedia(ctx context.Context, sm ScannedMedia) (int64,
 		sm.Path, sm.Title, sm.Year, sm.Season, sm.Episode, sm.Duration, sm.Container,
 		sm.VideoCodec, sm.AudioCodec, sm.PixFmt, sm.Size, s.unix())
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	n, err := res.RowsAffected()
 	if err != nil || n == 0 {
-		return 0, err
+		return 0, false, err
 	}
-	return res.LastInsertId()
+	id, err = res.LastInsertId()
+	return id, err == nil, err
+}
+
+// ScannedMetadata is what an online lookup found for a new file. Empty
+// fields mean "nothing found" and leave the current value alone.
+type ScannedMetadata struct {
+	Title, Year, Overview string
+	Poster                string // file name in the poster directory
 }
 
 // SetScannedMetadata fills in details found by a metadata lookup. It only
-// touches unpublished media, so an administrator's edits are never overwritten.
-func (s *Store) SetScannedMetadata(ctx context.Context, id int64, title, year, overview, poster string) error {
+// touches unpublished media, so an administrator's edits are never
+// overwritten, and only fields the lookup found.
+func (s *Store) SetScannedMetadata(ctx context.Context, id int64, md ScannedMetadata) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE media SET
 			title = CASE WHEN ? <> '' THEN ? ELSE title END,
@@ -92,7 +101,7 @@ func (s *Store) SetScannedMetadata(ctx context.Context, id int64, title, year, o
 			overview = CASE WHEN ? <> '' THEN ? ELSE overview END,
 			poster = CASE WHEN ? <> '' THEN ? ELSE poster END
 		WHERE id = ? AND published = 0`,
-		title, title, year, year, overview, overview, poster, poster, id)
+		md.Title, md.Title, md.Year, md.Year, md.Overview, md.Overview, md.Poster, md.Poster, id)
 	return err
 }
 

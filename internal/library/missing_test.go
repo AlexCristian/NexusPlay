@@ -19,7 +19,7 @@ func TestMissingMediaKeepsUnreadableFolders(t *testing.T) {
 
 	got := missingMedia(known, onDisk, unreadable)
 	slices.Sort(got)
-	if want := []int64{2, 5}; !slices.Equal(got, want) {
+	if want := []string{"Movies/B.mp4", "Shows/XY/E1.mp4"}; !slices.Equal(got, want) {
 		t.Errorf("missingMedia = %v, want %v", got, want)
 	}
 }

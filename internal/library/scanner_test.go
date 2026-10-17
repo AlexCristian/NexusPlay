@@ -52,12 +52,12 @@ func TestScan(t *testing.T) {
 	makeVideo(t, fresh)
 	os.Chtimes(fresh, time.Now(), time.Now())
 
-	sc := &Scanner{Store: st, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, MediaDir: media, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	sc := NewScanner(Deps{Store: st, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDir: media})
 	res, err := sc.Scan(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Added != 2 || res.Subtitle != 1 || res.Waiting != 1 {
+	if res.Added != 2 || res.Subtitles != 1 || res.Waiting != 1 {
 		t.Fatalf("first scan = %+v, want 2 added, 1 subtitle, 1 waiting", res)
 	}
 	pending, _ := st.PendingMedia(ctx)
@@ -79,7 +79,7 @@ func TestScan(t *testing.T) {
 	}
 
 	// A second scan changes nothing.
-	if res, _ := sc.Scan(ctx); res.Added+res.Removed+res.Subtitle != 0 {
+	if res, _ := sc.Scan(ctx); res.Added+res.Removed+res.Subtitles != 0 {
 		t.Errorf("rescan = %+v, want no changes", res)
 	}
 
@@ -115,7 +115,7 @@ func TestScanKeepsMediaInUnreadableFolders(t *testing.T) {
 	defer st.Close()
 	makeVideo(t, filepath.Join(media, "Movies", "Alien (1979).mp4"))
 	makeVideo(t, filepath.Join(media, "Share", "Cosmos.S01E01.mp4"))
-	sc := &Scanner{Store: st, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, MediaDir: media, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	sc := NewScanner(Deps{Store: st, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDir: media})
 	if res, err := sc.Scan(ctx); err != nil || res.Added != 2 {
 		t.Fatalf("first scan = %+v, %v", res, err)
 	}

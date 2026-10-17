@@ -59,7 +59,7 @@ func newEnv(t *testing.T, mutate func(*config.Config)) *env {
 	}
 	meta := metadata.New(metadata.Config{PosterDir: cfg.PosterDir()}, log)
 	s := &Server{Cfg: cfg, Store: st, Meta: meta, Transcodes: tm, Log: log,
-		Scanner: &library.Scanner{Store: st, MediaDir: cfg.MediaDir, Meta: meta, Log: log}}
+		Scanner: library.NewScanner(library.Deps{Store: st, Meta: meta, Log: log}, library.Config{MediaDir: cfg.MediaDir})}
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(func() { ts.Close(); st.Close() })
 	return &env{t: t, srv: ts, store: st, cfg: cfg}
@@ -193,7 +193,7 @@ func TestUnpublishedMediaIsHidden(t *testing.T) {
 	e := newEnv(t, nil)
 	admin := e.client()
 	admin.register("alex")
-	id, _ := e.store.InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "secret.mp4", Title: "Secret", VideoCodec: "h264", AudioCodec: "aac"})
+	id, _, _ := e.store.InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "secret.mp4", Title: "Secret", VideoCodec: "h264", AudioCodec: "aac"})
 	path := "/watch/" + itoa(id)
 
 	if resp, _ := e.client().do("GET", path, nil, nil); resp.StatusCode != http.StatusNotFound {
@@ -214,7 +214,7 @@ func TestMediaStreamingSupportsRanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	id, _ := e.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "clip.mp4", Title: "Clip", VideoCodec: "h264"})
+	id, _, _ := e.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "clip.mp4", Title: "Clip", VideoCodec: "h264"})
 	e.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "Clip"}, true)
 	resp, body := e.client().do("GET", "/media/"+itoa(id)+"/file", nil, map[string]string{"Range": "bytes=2-5"})
 	if resp.StatusCode != http.StatusPartialContent || body != "2345" || resp.Header.Get("Content-Type") != "video/mp4" {
@@ -228,7 +228,7 @@ func TestSubtitleFlow(t *testing.T) {
 	a, b := e.client(), e.client()
 	a.register("alex")
 	b.register("sam")
-	id, _ := e.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "m.mp4", Title: "M", VideoCodec: "h264"})
+	id, _, _ := e.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "m.mp4", Title: "M", VideoCodec: "h264"})
 	e.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "M"}, true)
 	sub, _, _ := e.store.AddSubtitle(ctx, store.NewSubtitle{MediaID: id, Language: "en", Label: "English", Cues: []subtitle.Cue{{StartMS: 1000, EndMS: 2000, Text: "Helo"}}})
 
@@ -321,7 +321,7 @@ func TestOversizeUploadIsRejectedAsTooLarge(t *testing.T) {
 	e := newEnv(t, nil)
 	admin := e.client()
 	admin.register("alex")
-	id, _ := e.store.InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "m.mp4", Title: "M", VideoCodec: "h264"})
+	id, _, _ := e.store.InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "m.mp4", Title: "M", VideoCodec: "h264"})
 
 	upload := func(headerToken bool, size int) (*http.Response, string) {
 		var buf bytes.Buffer
@@ -385,7 +385,7 @@ func TestUnpublishedMediaRejectsProgressAndVotes(t *testing.T) {
 	e.client().register("admin")
 	member := e.client()
 	member.register("sam")
-	id, _ := e.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "secret.mp4", Title: "Secret", VideoCodec: "h264"})
+	id, _, _ := e.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "secret.mp4", Title: "Secret", VideoCodec: "h264"})
 	sub, _, _ := e.store.AddSubtitle(ctx, store.NewSubtitle{MediaID: id, Language: "en", Label: "English", Cues: []subtitle.Cue{{StartMS: 0, EndMS: 1000, Text: "Helo"}}})
 	cue, _ := e.store.CueAt(ctx, sub, 500)
 

@@ -28,7 +28,7 @@ func newSwapFixture(t *testing.T, srcName string) (*Converter, store.Media, stri
 	if err := os.WriteFile(filepath.Join(media, srcName), []byte("original"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	id, err := st.InsertScannedMedia(ctx, store.ScannedMedia{Path: srcName, Title: "Movie", VideoCodec: "mpeg4"})
+	id, _, err := st.InsertScannedMedia(ctx, store.ScannedMedia{Path: srcName, Title: "Movie", VideoCodec: "mpeg4"})
 	if err != nil || id == 0 {
 		t.Fatalf("insert: %d %v", id, err)
 	}
@@ -83,7 +83,7 @@ func TestSwapDatabaseFailureRemovesOnlyItsOwnFile(t *testing.T) {
 	tmp := filepath.Join(media, ".Movie"+tmpSuffix)
 	os.WriteFile(tmp, []byte("converted"), 0o644)
 	// Another row already uses the target path, so the update hits the unique index.
-	if _, err := c.Store.InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "Movie.mp4", Title: "x"}); err != nil {
+	if _, _, err := c.Store.InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "Movie.mp4", Title: "x"}); err != nil {
 		t.Fatal(err)
 	}
 

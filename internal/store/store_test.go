@@ -32,7 +32,7 @@ func mustUser(t *testing.T, s *Store, email, nick string) User {
 
 func mustMedia(t *testing.T, s *Store, path string) int64 {
 	t.Helper()
-	id, err := s.InsertScannedMedia(context.Background(), ScannedMedia{Path: path, Title: path, VideoCodec: "h264"})
+	id, _, err := s.InsertScannedMedia(context.Background(), ScannedMedia{Path: path, Title: path, VideoCodec: "h264"})
 	if err != nil || id == 0 {
 		t.Fatalf("insert %s: id=%d err=%v", path, id, err)
 	}
@@ -68,9 +68,8 @@ func TestFirstUserIsAdmin(t *testing.T) {
 func TestScannedMediaIsUniqueByPath(t *testing.T) {
 	s := newStore(t)
 	mustMedia(t, s, "a.mp4")
-	id, err := s.InsertScannedMedia(context.Background(), ScannedMedia{Path: "a.mp4", Title: "again"})
-	if err != nil || id != 0 {
-		t.Errorf("second insert: id=%d err=%v, want 0 and nil", id, err)
+	if _, inserted, err := s.InsertScannedMedia(context.Background(), ScannedMedia{Path: "a.mp4", Title: "again"}); err != nil || inserted {
+		t.Errorf("second insert: inserted=%v err=%v, want false and nil", inserted, err)
 	}
 }
 
