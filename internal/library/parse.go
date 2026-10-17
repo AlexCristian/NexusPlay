@@ -10,12 +10,6 @@ import (
 	"time"
 )
 
-// SupportedExtensions are the video files the scanner picks up.
-var SupportedExtensions = map[string]bool{
-	".mp4": true, ".m4v": true, ".mkv": true, ".webm": true,
-	".mov": true, ".avi": true, ".ts": true, ".wmv": true,
-}
-
 // Guess is what a file path says about its content.
 type Guess struct {
 	Title   string

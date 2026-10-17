@@ -15,6 +15,7 @@ import (
 
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/library"
+	"github.com/AlexCristian/NexusPlay/internal/media"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
@@ -174,7 +175,7 @@ func (c *Converter) queue(ctx context.Context) ([]store.Media, error) {
 		if c.active[m.ID] != nil || now.Before(c.waitUntil[m.ID]) {
 			continue
 		}
-		if NeedsConversion(m.Path, m.VideoCodec, m.AudioCodec) {
+		if media.NeedsConversion(media.Format{Path: m.Path, VideoCodec: m.VideoCodec, AudioCodec: m.AudioCodec}) {
 			out = append(out, m)
 		}
 	}

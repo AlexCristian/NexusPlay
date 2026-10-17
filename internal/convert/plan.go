@@ -4,7 +4,6 @@ package convert
 
 import (
 	"fmt"
-	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -167,14 +166,4 @@ func (p Plan) ConvertArgs(src, out string) []string {
 func SubtitleArgs(src string, s SubtitlePlan, out string) []string {
 	return []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-i", src,
 		"-map", fmt.Sprintf("0:%d", s.Stream.Index), "-c:s", "srt", "-f", "srt", "-y", out}
-}
-
-// NeedsConversion reports whether a file should be converted: anything that
-// is not an MP4 with H.264 video and AAC or MP3 audio.
-func NeedsConversion(file, videoCodec, audioCodec string) bool {
-	ext := strings.ToLower(path.Ext(file))
-	if ext != ".mp4" && ext != ".m4v" {
-		return true
-	}
-	return videoCodec != "h264" || (audioCodec != "" && audioCodec != "aac" && audioCodec != "mp3")
 }

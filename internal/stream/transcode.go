@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -17,27 +16,6 @@ import (
 
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 )
-
-// DirectPlayable reports whether every mainstream browser can play the file
-// as-is, so it can be streamed with plain range requests.
-func DirectPlayable(file, videoCodec, audioCodec string) bool {
-	switch strings.ToLower(path.Ext(file)) {
-	case ".mp4", ".m4v":
-		return in(videoCodec, "h264", "av1", "vp9") && in(audioCodec, "", "aac", "mp3", "opus", "flac")
-	case ".webm":
-		return in(videoCodec, "vp8", "vp9", "av1") && in(audioCodec, "", "opus", "vorbis")
-	}
-	return false
-}
-
-func in(v string, set ...string) bool {
-	for _, s := range set {
-		if v == s {
-			return true
-		}
-	}
-	return false
-}
 
 // ErrBusy means the concurrent transcode limit is reached.
 var ErrBusy = errors.New("too many transcodes running")

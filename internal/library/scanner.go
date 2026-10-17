@@ -15,6 +15,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
+	"github.com/AlexCristian/NexusPlay/internal/media"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
@@ -218,7 +219,7 @@ func (s *Scanner) Scan(ctx context.Context) (Result, error) {
 		rel = filepath.ToSlash(rel)
 		ext := strings.ToLower(path.Ext(rel))
 		switch {
-		case SupportedExtensions[ext]:
+		case media.IsVideo(rel):
 			info, err := d.Info()
 			if err != nil {
 				markUnreadable(p, err)

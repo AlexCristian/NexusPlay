@@ -5,13 +5,13 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/AlexCristian/NexusPlay/internal/media"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 	"github.com/AlexCristian/NexusPlay/internal/stream"
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
@@ -93,7 +93,7 @@ func (s *Server) watch(w http.ResponseWriter, r *http.Request) {
 			s.Log.Warn("counting view", "err", err)
 		}
 	}
-	pb := Playback{Direct: stream.DirectPlayable(m.Path, m.VideoCodec, m.AudioCodec)}
+	pb := Playback{Direct: media.Deliver(media.Format{Path: m.Path, VideoCodec: m.VideoCodec, AudioCodec: m.AudioCodec}) == media.DirectPlay}
 	if pb.Direct {
 		pb.URL = "/media/" + itoa(m.ID) + "/file"
 	} else {
@@ -114,12 +114,6 @@ func (s *Server) mediaPath(m store.Media) (string, error) {
 		return "", errors.New("media path escapes the media folder")
 	}
 	return p, nil
-}
-
-var videoTypes = map[string]string{
-	".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm",
-	".mkv": "video/x-matroska", ".mov": "video/quicktime", ".avi": "video/x-msvideo",
-	".ts": "video/mp2t", ".wmv": "video/x-ms-wmv",
 }
 
 // mediaFile streams the original file with range-request support.
@@ -144,7 +138,7 @@ func (s *Server) mediaFile(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	if ct, ok := videoTypes[strings.ToLower(path.Ext(m.Path))]; ok {
+	if ct, ok := media.MIMEType(m.Path); ok {
 		w.Header().Set("Content-Type", ct)
 	}
 	http.ServeContent(w, r, "", info.ModTime(), f)

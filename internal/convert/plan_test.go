@@ -8,27 +8,6 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 )
 
-func TestNeedsConversion(t *testing.T) {
-	tests := []struct {
-		file, video, audio string
-		want               bool
-	}{
-		{"a.mp4", "h264", "aac", false},
-		{"a.M4V", "h264", "mp3", false},
-		{"a.mp4", "h264", "", false},
-		{"a.mp4", "hevc", "aac", true},
-		{"a.mp4", "h264", "ac3", true},
-		{"a.mkv", "h264", "aac", true}, // only MP4s are kept
-		{"a.webm", "vp9", "opus", true},
-		{"a.avi", "mpeg4", "mp3", true},
-	}
-	for _, tt := range tests {
-		if got := NeedsConversion(tt.file, tt.video, tt.audio); got != tt.want {
-			t.Errorf("NeedsConversion(%q, %q, %q) = %v, want %v", tt.file, tt.video, tt.audio, got, tt.want)
-		}
-	}
-}
-
 func TestMakePlan(t *testing.T) {
 	src := ffmpeg.Probe{Duration: 60, Streams: []ffmpeg.Stream{
 		{Index: 0, Type: "video", Codec: "h264", PixFmt: "yuv420p"},
