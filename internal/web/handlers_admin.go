@@ -274,7 +274,7 @@ func (s *Server) savePoster(r *http.Request, field string) (string, error) {
 		return "", nil
 	}
 	head := make([]byte, 512)
-	n, _ := io.ReadFull(f, head)
+	n, _ := io.ReadFull(f, head) // a file shorter than 512 bytes is fine: sniff what there is
 	ext, ok := posterTypes[http.DetectContentType(head[:n])]
 	if !ok {
 		return "", errors.New("posters must be JPEG, PNG or WebP images")
@@ -475,7 +475,11 @@ func (s *Server) saveCollection(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil {
-		cats, _ := s.Store.CategoryNames(r.Context())
+		cats, catErr := s.Store.CategoryNames(r.Context())
+		if catErr != nil {
+			s.serverError(w, r, catErr)
+			return
+		}
 		existing.Name, existing.Category, existing.Year, existing.Overview = c.Name, c.Category, c.Year, c.Overview
 		s.render(w, r, http.StatusBadRequest, editCollectionPage(s.page(r, "Edit collection"), existing, cats, s.Meta.Enabled(), capitalize(err.Error())+"."))
 		return

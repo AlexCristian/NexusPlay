@@ -47,7 +47,7 @@ func (p Prober) Probe(ctx context.Context, file string) (ProbeResult, error) {
 		return ProbeResult{}, fmt.Errorf("ffprobe output: %w", err)
 	}
 	r := ProbeResult{Container: parsed.Format.FormatName}
-	r.Duration, _ = strconv.ParseFloat(parsed.Format.Duration, 64)
+	r.Duration, _ = strconv.ParseFloat(parsed.Format.Duration, 64) // "N/A" for some files: 0 means unknown
 	for _, s := range parsed.Streams {
 		switch {
 		case s.CodecType == "video" && r.VideoCodec == "" && s.CodecName != "mjpeg" && s.CodecName != "png":

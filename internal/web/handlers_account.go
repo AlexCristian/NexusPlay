@@ -17,7 +17,13 @@ import (
 // A precomputed hash lets failed logins for unknown emails take as long as
 // real ones, so response times do not reveal which emails are registered.
 var dummyHash = sync.OnceValue(func() string {
-	h, _ := auth.HashPassword("nexusplay-timing-equalizer")
+	h, err := auth.HashPassword("nexusplay-timing-equalizer")
+	if err != nil {
+		// Only a broken system random source fails here. Without this hash,
+		// logins for unknown emails would return faster than real ones and
+		// reveal which emails are registered, so refuse to continue.
+		panic("auth: cannot create the timing-equalizer hash: " + err.Error())
+	}
 	return h
 })
 
@@ -110,8 +116,14 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if needsRehash {
-		if h, err := auth.HashPassword(password); err == nil {
-			_ = s.Store.UpdatePasswordHash(r.Context(), u.ID, h)
+		// Upgrading an old hash is best effort: the password was correct, so
+		// the login succeeds either way, and the next login tries again.
+		h, err := auth.HashPassword(password)
+		if err == nil {
+			err = s.Store.UpdatePasswordHash(r.Context(), u.ID, h)
+		}
+		if err != nil {
+			s.Log.Warn("could not upgrade a password hash", "user", u.ID, "err", err)
 		}
 	}
 	if err := s.startSession(w, r, u.ID); err != nil {
@@ -173,7 +185,11 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil {
-		_ = s.Store.DeleteSession(r.Context(), auth.HashToken(c.Value))
+		// The cookie is cleared below regardless: the user asked to leave. A
+		// session row left behind expires on its own.
+		if err := s.Store.DeleteSession(r.Context(), auth.HashToken(c.Value)); err != nil {
+			s.Log.Warn("could not delete a session on logout", "err", err)
+		}
 	}
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1,
 		HttpOnly: true, Secure: s.Cfg.SecureCookies, SameSite: http.SameSiteLaxMode})

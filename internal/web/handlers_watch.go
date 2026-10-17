@@ -294,7 +294,7 @@ func (s *Server) subtitleReport(w http.ResponseWriter, r *http.Request) {
 		s.errorPage(w, r, http.StatusBadRequest, "Bad request", "Choose a subtitle track first.")
 		return
 	}
-	ms, _ := strconv.ParseInt(r.URL.Query().Get("t"), 10, 64)
+	ms, _ := strconv.ParseInt(r.URL.Query().Get("t"), 10, 64) // missing or malformed: the start of the video
 	track, err := s.Store.SubtitleByID(r.Context(), trackID)
 	if err != nil || track.MediaID != m.ID {
 		s.notFound(w, r)

@@ -108,7 +108,9 @@ func (c *Converter) Run(ctx context.Context) {
 		c.Log.Warn("automatic conversion disabled", "reason", err)
 		return
 	}
-	c.removeLeftovers()
+	if err := c.removeLeftovers(); err != nil {
+		c.Log.Warn("could not remove files left by an interrupted conversion", "err", err)
+	}
 
 	tick := time.NewTicker(time.Minute)
 	defer tick.Stop()
@@ -486,17 +488,21 @@ func (c *Converter) verify(ctx context.Context, file string, source Source, plan
 
 // removeLeftovers deletes half-written files from a conversion that was
 // interrupted (a crash or a power cut).
-func (c *Converter) removeLeftovers() {
-	filepath.WalkDir(c.MediaDir, func(p string, d fs.DirEntry, err error) error {
+func (c *Converter) removeLeftovers() error {
+	var errs []error
+	walkErr := filepath.WalkDir(c.MediaDir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return nil // an unreadable folder holds no leftovers we could remove
 		}
 		if !d.IsDir() && strings.HasPrefix(d.Name(), ".") &&
 			(strings.HasSuffix(d.Name(), tmpSuffix) || strings.HasSuffix(d.Name(), ".srt.part")) {
-			os.Remove(p)
+			if err := os.Remove(p); err != nil {
+				errs = append(errs, err)
+			}
 		}
 		return nil
 	})
+	return errors.Join(append(errs, walkErr)...)
 }
 
 func checkWritable(dir string) error {

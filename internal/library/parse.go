@@ -43,6 +43,7 @@ func ParsePath(rel string) Guess {
 	dir, file := path.Split(rel)
 	name := strings.TrimSuffix(file, path.Ext(file))
 
+	// The Atoi calls below cannot fail: the regular expressions only match digits.
 	var g Guess
 	if m := episodeRe.FindStringSubmatchIndex(name); m != nil {
 		g.Season, _ = strconv.Atoi(name[m[2]:m[3]])

@@ -60,7 +60,7 @@ func ProbeSource(ctx context.Context, ffprobe, file string) (Source, error) {
 		return Source{}, fmt.Errorf("ffprobe output: %w", err)
 	}
 	var src Source
-	src.Duration, _ = strconv.ParseFloat(raw.Format.Duration, 64)
+	src.Duration, _ = strconv.ParseFloat(raw.Format.Duration, 64) // "N/A" for some files: 0 means unknown
 	for _, s := range raw.Streams {
 		src.Streams = append(src.Streams, Stream{
 			Index: s.Index, Type: s.CodecType, Codec: s.CodecName, PixFmt: s.PixFmt, Channels: s.Channels,

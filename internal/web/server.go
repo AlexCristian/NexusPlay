@@ -75,7 +75,7 @@ func viewer(r *http.Request) Viewer {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	static, _ := fs.Sub(staticFiles, "static")
+	static, _ := fs.Sub(staticFiles, "static") // cannot fail: "static" is a valid, embedded path
 	mux.Handle("GET /static/", cacheForever(http.StripPrefix("/static/", http.FileServerFS(static))))
 	mux.HandleFunc("GET /healthz", s.healthz)
 
