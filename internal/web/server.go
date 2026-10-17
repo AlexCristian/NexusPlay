@@ -29,7 +29,9 @@ var staticFiles embed.FS
 
 const sessionCookie = "nexusplay_session"
 
-// Server holds the dependencies of every handler.
+// Server is the web front end. Its fields are the dependencies; Handler
+// hands each feature group (library, playback, subtitles, accounts, admin)
+// only the ones it uses.
 type Server struct {
 	Cfg        config.Config
 	Store      *store.Store
@@ -40,6 +42,8 @@ type Server struct {
 	Sessions   *auth.Sessions
 	Converter  Conversions
 	Log        *slog.Logger
+
+	responder // set by Handler; used by the middleware
 }
 
 // Conversions is the MP4 converter as the control panel sees it.
@@ -63,6 +67,16 @@ func viewer(r *http.Request) Viewer {
 
 // Handler returns the complete HTTP handler.
 func (s *Server) Handler() http.Handler {
+	s.responder = responder{log: s.Log}
+	lib := &libraryHandlers{responder: s.responder, store: s.Store}
+	play := &playbackHandlers{responder: s.responder, store: s.Store, transcodes: s.Transcodes,
+		mediaDir: s.Cfg.MediaDir, posterDir: s.Cfg.PosterDir()}
+	subs := &subtitleHandlers{responder: s.responder, store: s.Store, votesRequired: s.Cfg.VotesRequired}
+	acct := &accountHandlers{responder: s.responder, accounts: s.Accounts, sessions: s.Sessions,
+		secureCookies: s.Cfg.SecureCookies}
+	adm := &adminHandlers{responder: s.responder, store: s.Store, meta: s.Meta, scanner: s.Scanner,
+		conversions: s.Converter, posterDir: s.Cfg.PosterDir()}
+
 	mux := http.NewServeMux()
 
 	static, _ := fs.Sub(staticFiles, "static") // cannot fail: "static" is a valid, embedded path
@@ -70,45 +84,46 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.healthz)
 
 	// Pages anyone may see unless NEXUSPLAY_REQUIRE_LOGIN is set.
-	mux.Handle("GET /{$}", s.browse(s.handle(s.home)))
-	mux.Handle("GET /search", s.browse(s.handle(s.search)))
-	mux.Handle("GET /collections/{id}", s.browse(s.handle(s.collection)))
-	mux.Handle("GET /watch/{id}", s.browse(s.handle(s.watch)))
-	mux.Handle("GET /media/{id}/file", s.browse(s.handle(s.mediaFile)))
-	mux.Handle("GET /media/{id}/hls/{file}", s.browse(s.handle(s.hls)))
-	mux.Handle("GET /subtitles/{id}", s.browse(s.handle(s.subtitleVTT)))
-	mux.Handle("GET /posters/{name}", s.browse(s.handle(s.poster)))
+	mux.Handle("GET /{$}", s.browse(s.handle(lib.home)))
+	mux.Handle("GET /search", s.browse(s.handle(lib.search)))
+	mux.Handle("GET /collections/{id}", s.browse(s.handle(lib.collection)))
+	mux.Handle("GET /watch/{id}", s.browse(s.handle(play.watch)))
+	mux.Handle("GET /media/{id}/file", s.browse(s.handle(play.mediaFile)))
+	mux.Handle("GET /media/{id}/hls/index.m3u8", s.browse(s.handle(play.hlsPlaylist)))
+	mux.Handle("GET /media/{id}/hls/{segment}", s.browse(s.handle(play.hlsSegment)))
+	mux.Handle("GET /subtitles/{id}", s.browse(s.handle(subs.subtitleVTT)))
+	mux.Handle("GET /posters/{name}", s.browse(s.handle(play.poster)))
 
 	// Accounts.
-	mux.HandleFunc("GET /login", s.handle(s.loginPage))
-	mux.HandleFunc("POST /login", s.handle(s.login))
-	mux.HandleFunc("GET /register", s.handle(s.registerPage))
-	mux.HandleFunc("POST /register", s.handle(s.register))
-	mux.HandleFunc("POST /logout", s.handle(s.logout))
+	mux.HandleFunc("GET /login", s.handle(acct.loginPage))
+	mux.HandleFunc("POST /login", s.handle(acct.login))
+	mux.HandleFunc("GET /register", s.handle(acct.registerPage))
+	mux.HandleFunc("POST /register", s.handle(acct.register))
+	mux.HandleFunc("POST /logout", s.handle(acct.logout))
 
 	// Signed-in features.
-	mux.Handle("GET /me/resume", s.member(s.handle(s.resumeList)))
-	mux.Handle("GET /me/notifications", s.member(s.handle(s.notificationList)))
-	mux.Handle("POST /me/progress", s.member(s.handle(s.saveProgress)))
-	mux.Handle("POST /collections/{id}/subscribe", s.member(s.handle(s.toggleSubscription)))
-	mux.Handle("GET /media/{id}/subtitle-report", s.member(s.handle(s.subtitleReport)))
-	mux.Handle("POST /cues/{id}/changes", s.member(s.handle(s.proposeChange)))
-	mux.Handle("POST /changes/{id}/vote", s.member(s.handle(s.voteChange)))
+	mux.Handle("GET /me/resume", s.member(s.handle(lib.resumeList)))
+	mux.Handle("GET /me/notifications", s.member(s.handle(lib.notificationList)))
+	mux.Handle("POST /me/progress", s.member(s.handle(play.saveProgress)))
+	mux.Handle("POST /collections/{id}/subscribe", s.member(s.handle(lib.toggleSubscription)))
+	mux.Handle("GET /media/{id}/subtitle-report", s.member(s.handle(subs.subtitleReport)))
+	mux.Handle("POST /cues/{id}/changes", s.member(s.handle(subs.proposeChange)))
+	mux.Handle("POST /changes/{id}/vote", s.member(s.handle(subs.voteChange)))
 
 	// Administration.
-	mux.Handle("GET /admin", s.admin(s.handle(s.controlPanel)))
-	mux.Handle("POST /admin/scan", s.admin(s.handle(s.scanNow)))
-	mux.Handle("GET /admin/conversions", s.admin(s.handle(s.conversionsPanel)))
-	mux.Handle("POST /admin/media/{id}/retry-conversion", s.admin(s.handle(s.retryConversion)))
-	mux.Handle("GET /admin/media/{id}", s.admin(s.handle(s.editMediaPage)))
-	mux.Handle("POST /admin/media/{id}", s.admin(s.handle(s.saveMedia)))
-	mux.Handle("POST /admin/media/{id}/subtitles", s.admin(s.handle(s.uploadSubtitle)))
-	mux.Handle("POST /admin/subtitles/{id}", s.admin(s.handle(s.saveSubtitle)))
-	mux.Handle("POST /admin/subtitles/{id}/delete", s.admin(s.handle(s.deleteSubtitle)))
-	mux.Handle("POST /admin/collections", s.admin(s.handle(s.createCollection)))
-	mux.Handle("GET /admin/collections/{id}", s.admin(s.handle(s.editCollectionPage)))
-	mux.Handle("POST /admin/collections/{id}", s.admin(s.handle(s.saveCollection)))
-	mux.Handle("POST /admin/collections/{id}/delete", s.admin(s.handle(s.deleteCollection)))
+	mux.Handle("GET /admin", s.admin(s.handle(adm.controlPanel)))
+	mux.Handle("POST /admin/scan", s.admin(s.handle(adm.scanNow)))
+	mux.Handle("GET /admin/conversions", s.admin(s.handle(adm.conversionsPanel)))
+	mux.Handle("POST /admin/media/{id}/retry-conversion", s.admin(s.handle(adm.retryConversion)))
+	mux.Handle("GET /admin/media/{id}", s.admin(s.handle(adm.editMediaPage)))
+	mux.Handle("POST /admin/media/{id}", s.admin(s.handle(adm.saveMedia)))
+	mux.Handle("POST /admin/media/{id}/subtitles", s.admin(s.handle(adm.uploadSubtitle)))
+	mux.Handle("POST /admin/subtitles/{id}", s.admin(s.handle(adm.saveSubtitle)))
+	mux.Handle("POST /admin/subtitles/{id}/delete", s.admin(s.handle(adm.deleteSubtitle)))
+	mux.Handle("POST /admin/collections", s.admin(s.handle(adm.createCollection)))
+	mux.Handle("GET /admin/collections/{id}", s.admin(s.handle(adm.editCollectionPage)))
+	mux.Handle("POST /admin/collections/{id}", s.admin(s.handle(adm.saveCollection)))
+	mux.Handle("POST /admin/collections/{id}/delete", s.admin(s.handle(adm.deleteCollection)))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { s.notFound(w, r) })
 

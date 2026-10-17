@@ -19,7 +19,7 @@ import (
 
 func TestRespondErrorMapping(t *testing.T) {
 	var logs bytes.Buffer
-	s := &Server{Log: slog.New(slog.NewTextHandler(&logs, nil))}
+	s := responder{log: slog.New(slog.NewTextHandler(&logs, nil))}
 	for _, tt := range []struct {
 		name   string
 		err    error
@@ -60,7 +60,7 @@ func TestRespondErrorMapping(t *testing.T) {
 }
 
 func TestRespondFragmentOrPage(t *testing.T) {
-	s := &Server{Log: slog.Default()}
+	s := responder{log: slog.Default()}
 	fragment := templ.Raw("<p>fragment</p>")
 	page := func(p Page, c templ.Component) templ.Component {
 		return templ.Join(templ.Raw("<html>"+p.Title+"</html>"), c)

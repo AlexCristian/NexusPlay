@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -8,6 +9,27 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
+
+// libraryHandlers serve browsing: the home page, search, collections,
+// subscriptions and the viewer's own lists.
+type libraryHandlers struct {
+	responder
+	store libraryStore
+}
+
+// libraryStore is the part of the database the library pages read.
+type libraryStore interface {
+	RecentTiles(ctx context.Context, userID int64, limit int) ([]store.Tile, error)
+	Categories(ctx context.Context, userID int64) ([]store.Category, error)
+	Search(ctx context.Context, userID int64, q string, limit int) ([]store.Tile, error)
+	CollectionByID(ctx context.Context, id int64) (store.Collection, error)
+	CollectionEpisodes(ctx context.Context, collectionID int64) ([]store.Media, error)
+	WatchedIn(ctx context.Context, userID, collectionID int64) (map[int64]bool, error)
+	IsSubscribed(ctx context.Context, userID, collectionID int64) (bool, error)
+	ToggleSubscription(ctx context.Context, userID, collectionID int64) (bool, error)
+	InProgress(ctx context.Context, userID int64, limit int) ([]store.Resume, error)
+	Notifications(ctx context.Context, userID int64, limit int) ([]store.Media, error)
+}
 
 const (
 	recentLimit = 12  // tiles under "Just added"
@@ -18,49 +40,49 @@ const (
 func guessFor(m store.Media) library.Guess { return library.ParsePath(m.Path) }
 
 // home handles GET /: "Just added" and a tab per category.
-func (s *Server) home(w http.ResponseWriter, r *http.Request) error {
-	recent, cats, err := s.libraryData(r)
+func (h *libraryHandlers) home(w http.ResponseWriter, r *http.Request) error {
+	recent, cats, err := h.libraryData(r)
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, homePage(newPage(r, ""), recent, cats))
+	h.render(w, r, http.StatusOK, homePage(newPage(r, ""), recent, cats))
 	return nil
 }
 
-func (s *Server) libraryData(r *http.Request) ([]store.Tile, []store.Category, error) {
+func (h *libraryHandlers) libraryData(r *http.Request) ([]store.Tile, []store.Category, error) {
 	uid := viewer(r).ID()
-	recent, err := s.Store.RecentTiles(r.Context(), uid, recentLimit)
+	recent, err := h.store.RecentTiles(r.Context(), uid, recentLimit)
 	if err != nil {
 		return nil, nil, err
 	}
-	cats, err := s.Store.Categories(r.Context(), uid)
+	cats, err := h.store.Categories(r.Context(), uid)
 	return recent, cats, err
 }
 
 // search handles GET /search?q=. htmx swaps the results into the library
 // panel as the visitor types; an empty query brings the library back.
-func (s *Server) search(w http.ResponseWriter, r *http.Request) error {
+func (h *libraryHandlers) search(w http.ResponseWriter, r *http.Request) error {
 	q := truncate(strings.TrimSpace(r.URL.Query().Get("q")), maxQuery)
 	if q == "" {
 		if !isHTMX(r) {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return nil
 		}
-		recent, cats, err := s.libraryData(r)
+		recent, cats, err := h.libraryData(r)
 		if err != nil {
 			return err
 		}
-		s.render(w, r, http.StatusOK, libraryView(newPage(r, "Search"), recent, cats))
+		h.render(w, r, http.StatusOK, libraryView(newPage(r, "Search"), recent, cats))
 		return nil
 	}
-	tiles, err := s.Store.Search(r.Context(), viewer(r).ID(), q, searchLimit)
+	tiles, err := h.store.Search(r.Context(), viewer(r).ID(), q, searchLimit)
 	if err != nil {
 		return err
 	}
 	if isHTMX(r) {
-		s.render(w, r, http.StatusOK, searchResults(q, tiles))
+		h.render(w, r, http.StatusOK, searchResults(q, tiles))
 	} else {
-		s.render(w, r, http.StatusOK, searchPage(newPage(r, "Search"), q, tiles))
+		h.render(w, r, http.StatusOK, searchPage(newPage(r, "Search"), q, tiles))
 	}
 	return nil
 }
@@ -75,17 +97,17 @@ func truncate(s string, n int) string {
 
 // collection handles GET /collections/{id}: the show's dialog with its
 // seasons, or a full page without htmx.
-func (s *Server) collection(w http.ResponseWriter, r *http.Request) error {
+func (h *libraryHandlers) collection(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r)
 	if err != nil {
 		return err
 	}
 	ctx := r.Context()
-	c, err := s.Store.CollectionByID(ctx, id)
+	c, err := h.store.CollectionByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	eps, err := s.Store.CollectionEpisodes(ctx, id)
+	eps, err := h.store.CollectionEpisodes(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -93,15 +115,15 @@ func (s *Server) collection(w http.ResponseWriter, r *http.Request) error {
 	var subscribed bool
 	watched := map[int64]bool{}
 	if v.User != nil {
-		if subscribed, err = s.Store.IsSubscribed(ctx, v.ID(), id); err != nil {
+		if subscribed, err = h.store.IsSubscribed(ctx, v.ID(), id); err != nil {
 			return err
 		}
-		if watched, err = s.Store.WatchedIn(ctx, v.ID(), id); err != nil {
+		if watched, err = h.store.WatchedIn(ctx, v.ID(), id); err != nil {
 			return err
 		}
 	}
 	dialog := collectionDialog(v, c, groupBySeason(eps), subscribed, watched)
-	return s.respond(w, r, http.StatusOK, c.Name, dialog, collectionPage)
+	return h.respond(w, r, http.StatusOK, c.Name, dialog, collectionPage)
 }
 
 // groupBySeason splits episodes, already sorted by season and episode, into
@@ -120,39 +142,39 @@ func groupBySeason(eps []store.Media) []Season {
 
 // toggleSubscription handles POST /collections/{id}/subscribe and returns
 // the ribbon in its new state.
-func (s *Server) toggleSubscription(w http.ResponseWriter, r *http.Request) error {
+func (h *libraryHandlers) toggleSubscription(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r)
 	if err != nil {
 		return err
 	}
-	if _, err := s.Store.CollectionByID(r.Context(), id); err != nil {
+	if _, err := h.store.CollectionByID(r.Context(), id); err != nil {
 		return err
 	}
-	on, err := s.Store.ToggleSubscription(r.Context(), viewer(r).ID(), id)
+	on, err := h.store.ToggleSubscription(r.Context(), viewer(r).ID(), id)
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, subscribeRibbon(id, on))
+	h.render(w, r, http.StatusOK, subscribeRibbon(id, on))
 	return nil
 }
 
 // resumeList handles GET /me/resume: the "Previously watching" popover.
-func (s *Server) resumeList(w http.ResponseWriter, r *http.Request) error {
-	items, err := s.Store.InProgress(r.Context(), viewer(r).ID(), 10)
+func (h *libraryHandlers) resumeList(w http.ResponseWriter, r *http.Request) error {
+	items, err := h.store.InProgress(r.Context(), viewer(r).ID(), 10)
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, resumeList(items))
+	h.render(w, r, http.StatusOK, resumeList(items))
 	return nil
 }
 
 // notificationList handles GET /me/notifications: new episodes of shows
 // the viewer subscribed to.
-func (s *Server) notificationList(w http.ResponseWriter, r *http.Request) error {
-	items, err := s.Store.Notifications(r.Context(), viewer(r).ID(), 20)
+func (h *libraryHandlers) notificationList(w http.ResponseWriter, r *http.Request) error {
+	items, err := h.store.Notifications(r.Context(), viewer(r).ID(), 20)
 	if err != nil {
 		return err
 	}
-	s.render(w, r, http.StatusOK, notificationList(items))
+	h.render(w, r, http.StatusOK, notificationList(items))
 	return nil
 }

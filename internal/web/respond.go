@@ -2,6 +2,7 @@ package web
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -16,11 +17,17 @@ import (
 // every handler maps errors the same way.
 type handlerFunc func(w http.ResponseWriter, r *http.Request) error
 
+// responder writes responses: pages, fragments and errors. Every handler
+// group embeds one, so they all answer the same way.
+type responder struct {
+	log *slog.Logger
+}
+
 // handle adapts a handlerFunc for the router.
-func (s *Server) handle(fn handlerFunc) http.HandlerFunc {
+func (rs responder) handle(fn handlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := fn(w, r); err != nil {
-			s.respondError(w, r, err)
+			rs.respondError(w, r, err)
 		}
 	}
 }
@@ -49,68 +56,68 @@ func badRequest(msg string) error {
 //	store.ErrDuplicate        409
 //	stream.ErrBusy            503 with Retry-After: 30
 //	anything else             500, logged with the request
-func (s *Server) respondError(w http.ResponseWriter, r *http.Request, err error) {
+func (rs responder) respondError(w http.ResponseWriter, r *http.Request, err error) {
 	var se *statusError
 	var tooBig *http.MaxBytesError
 	switch {
 	case r.Context().Err() != nil:
 	case errors.As(err, &se):
-		s.errorPage(w, r, se.status, se.title, se.msg)
+		rs.errorPage(w, r, se.status, se.title, se.msg)
 	case errors.As(err, &tooBig):
-		s.errorPage(w, r, http.StatusRequestEntityTooLarge, "Too large",
+		rs.errorPage(w, r, http.StatusRequestEntityTooLarge, "Too large",
 			"The upload is too large. The limit is "+strconv.FormatInt(tooBig.Limit>>20, 10)+" MB.")
 	case errors.Is(err, store.ErrNotFound):
-		s.notFound(w, r)
+		rs.notFound(w, r)
 	case errors.Is(err, store.ErrDuplicate):
-		s.errorPage(w, r, http.StatusConflict, "Already exists", "Something with that name already exists.")
+		rs.errorPage(w, r, http.StatusConflict, "Already exists", "Something with that name already exists.")
 	case errors.Is(err, stream.ErrBusy):
 		w.Header().Set("Retry-After", "30")
 		http.Error(w, "The server is busy converting other videos. Try again in a minute.", http.StatusServiceUnavailable)
 	default:
-		s.serverError(w, r, err)
+		rs.serverError(w, r, err)
 	}
 }
 
 // respond writes fragment alone for an htmx request (which swaps it into the
 // current page) and wraps it in page otherwise, so every dialog also works
 // as a standalone URL.
-func (s *Server) respond(w http.ResponseWriter, r *http.Request, status int, title string,
+func (rs responder) respond(w http.ResponseWriter, r *http.Request, status int, title string,
 	fragment templ.Component, page func(Page, templ.Component) templ.Component) error {
 	if isHTMX(r) {
-		s.render(w, r, status, fragment)
+		rs.render(w, r, status, fragment)
 	} else {
-		s.render(w, r, status, page(newPage(r, title), fragment))
+		rs.render(w, r, status, page(newPage(r, title), fragment))
 	}
 	return nil
 }
 
 // render writes a component as an HTML response.
-func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, c templ.Component) {
+func (rs responder) render(w http.ResponseWriter, r *http.Request, status int, c templ.Component) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Vary", "HX-Request")
 	w.WriteHeader(status)
 	if err := c.Render(r.Context(), w); err != nil {
-		s.Log.Error("render", "err", err, "path", r.URL.Path)
+		rs.log.Error("render", "err", err, "path", r.URL.Path)
 	}
 }
 
-func (s *Server) serverError(w http.ResponseWriter, r *http.Request, err error) {
-	s.Log.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
-	s.errorPage(w, r, http.StatusInternalServerError, "Something went wrong", "The server hit an error. Please try again.")
+func (rs responder) serverError(w http.ResponseWriter, r *http.Request, err error) {
+	rs.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
+	rs.errorPage(w, r, http.StatusInternalServerError, "Something went wrong", "The server hit an error. Please try again.")
 }
 
-func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
-	s.errorPage(w, r, http.StatusNotFound, "Not found", "That page or item does not exist.")
+func (rs responder) notFound(w http.ResponseWriter, r *http.Request) {
+	rs.errorPage(w, r, http.StatusNotFound, "Not found", "That page or item does not exist.")
 }
 
 // errorPage shows an error as an alert in the dialog or page that asked
 // (htmx), or as a full page.
-func (s *Server) errorPage(w http.ResponseWriter, r *http.Request, status int, title, msg string) {
+func (rs responder) errorPage(w http.ResponseWriter, r *http.Request, status int, title, msg string) {
 	if isHTMX(r) {
-		s.render(w, r, status, alert("error", msg))
+		rs.render(w, r, status, alert("error", msg))
 		return
 	}
-	s.render(w, r, status, messagePage(newPage(r, title), title, msg))
+	rs.render(w, r, status, messagePage(newPage(r, title), title, msg))
 }
 
 // isHTMX reports whether htmx sent the request to swap part of a page.
