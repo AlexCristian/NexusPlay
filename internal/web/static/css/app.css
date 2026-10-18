@@ -196,9 +196,12 @@ button { font: inherit; }
   grid-template-rows: 0fr;
   transition: grid-template-rows .45s ease, margin-bottom .45s ease;
 }
-.search-drawer.open { grid-template-rows: 1fr; margin-bottom: 24px; }
+.search-drawer.open { grid-template-rows: 1fr; }
 .search-drawer-inner { min-height: 0; overflow: hidden; }
-.search-panel { box-shadow: 0 6px 24px rgba(0, 0, 0, .6); }
+/* While open, the drawer and the page under it read as one container, as
+   in the original: no gap, and no rounded corners where they meet. */
+.search-panel, .search-panel .tile-strip { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.search-drawer.open + .page-cover > :first-child { border-top-left-radius: 0; border-top-right-radius: 0; }
 .page-cover { transition: filter .25s ease; }
 .page-cover.dimmed { filter: brightness(.4); }
 
@@ -255,7 +258,8 @@ button { font: inherit; }
 .empty { padding: 32px 24px; }
 .empty h2 { margin-top: 0; }
 
-.featurette { padding: 20px 24px; }
+.featurette { margin: 0 20px; padding: 20px 4px 24px; border-top: 1px solid #e5e5e5; }
+#library + .featurette { margin-top: 20px; }
 .featurette h2 { font-size: clamp(1.8rem, 5vw, 2.8rem); line-height: 1.1; margin: 0 0 12px; letter-spacing: -.01em; }
 .featurette .muted { color: #999; font-weight: 700; }
 .lead { font-size: 1.15rem; margin: 0; color: #444; }

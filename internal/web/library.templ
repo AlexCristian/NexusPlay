@@ -9,15 +9,17 @@ import (
 
 templ homePage(p Page, recent []store.Tile, cats []store.Category) {
 	@shell(p) {
-		<section class="panel library-panel" id="library">
-			@libraryView(p, recent, cats)
-		</section>
-		<section class="panel featurette">
-			<h2><strong>Nexus Play</strong><span class="muted">, the open-source web media center.</span></h2>
-			<p class="lead">
-				Easily access your media anytime, anywhere. Nexus Play is a lightweight, self-hosted
-				media center: your own personal streaming service, with the benefits of open-source software.
-			</p>
+		<section class="panel library-panel">
+			<div id="library">
+				@libraryView(p, recent, cats)
+			</div>
+			<div class="featurette">
+				<h2><strong>Nexus Play</strong><span class="muted">, the open-source web media center.</span></h2>
+				<p class="lead">
+					Easily access your media anytime, anywhere. Nexus Play is a lightweight, self-hosted
+					media center: your own personal streaming service, with the benefits of open-source software.
+				</p>
+			</div>
 		</section>
 	}
 }
