@@ -35,13 +35,15 @@ const (
 )
 
 // stabilize removes sources of run-to-run noise: transitions, the blinking
-// caret, video frames (hidden, keeping their layout), and fallback system
+// caret, video frames (hidden, keeping their layout), how much of the video
+// the seek bar shows as buffered, and fallback system
 // fonts (monospace and form controls use the bundled Open Sans instead).
 const stabilize = `(() => {
   const s = document.createElement('style');
   s.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; caret-color: transparent !important; }' +
     ' video { visibility: hidden !important; }' +
-    ' .path, code, input, textarea, button, select { font-family: "Open Sans", sans-serif !important; }';
+    ' .path, code, input, textarea, button, select { font-family: "Open Sans", sans-serif !important; }' +
+    ' .rail { --loaded: 0% !important; }';
   document.head.appendChild(s);
   // Lazy images below the fold would never load in a headless screenshot.
   document.querySelectorAll('img[loading="lazy"]').forEach(i => { i.loading = 'eager'; });
@@ -110,9 +112,6 @@ func TestScreens(t *testing.T) {
 			tb.waitJS(`document.getElementById('player').readyState >= 1`, 20*time.Second)
 			tb.eval(`document.getElementById('player').textTracks[0].mode = 'showing'`, nil)
 			tb.waitVisible("#report-subtitle")
-			// The buffered part of the seek bar depends on timing; wait until
-			// the whole (short) video is loaded so it is always full.
-			tb.waitJS(`document.getElementById('ctl-seek').style.getPropertyValue('--loaded') === '100%'`, 20*time.Second)
 		}},
 		{"subtitle-report", viewer, func(tb *tab) {
 			s.proposeCorrection(tb.t, movie, 2000, "alex", "Hello there!")
