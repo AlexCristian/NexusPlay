@@ -50,8 +50,12 @@ const (
 	// French 5.1 AC-3 and English stereo AAC, plus a built-in English subtitle track.
 	multiTrack = "Movies/Multi Language (2018).mkv"
 	// 10-bit H.264 in MP4: looks browser-ready by codec, but no browser decodes it.
-	tenBit     = "Movies/Ten Bit (2021).mp4"
-	fixtureLen = "12" // seconds
+	tenBit = "Movies/Ten Bit (2021).mp4"
+	// Still color bars, so a screenshot of them playing is the same every
+	// time: one that plays directly and one that is converted on the fly.
+	barsMP4     = "Movies/Color Bars (2022).mp4"
+	barsEpisode = "Bars Show (2020)/Season 1/Bars.Show.S01E01.The.Long.Pilot.mkv" // 30 s, converted on the fly
+	fixtureLen  = "12"                                                            // seconds
 )
 
 const subtitleSRT = "1\r\n00:00:01,000 --> 00:00:04,000\r\nHello thre!\r\n\r\n" +
@@ -99,6 +103,10 @@ func makeFixtures(dir string) error {
 			"-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac"}},
 		{episode3, []string{"-f", "lavfi", "-i", "testsrc=size=640x360:rate=25", "-f", "lavfi", "-i", "sine=frequency=770",
 			"-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart"}},
+		{barsMP4, []string{"-f", "lavfi", "-i", "smptebars=size=640x360:rate=25", "-f", "lavfi", "-i", "sine=frequency=440",
+			"-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart"}},
+		{barsEpisode, []string{"-f", "lavfi", "-i", "smptebars=size=640x360:rate=25", "-f", "lavfi", "-i", "sine=frequency=330",
+			"-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac"}},
 		{tenBit, []string{"-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25", "-f", "lavfi", "-i", "sine=frequency=990",
 			"-c:v", "libx264", "-pix_fmt", "yuv420p10le", "-profile:v", "high10", "-c:a", "aac", "-movflags", "+faststart"}},
 	}
@@ -123,7 +131,11 @@ func makeFixtures(dir string) error {
 			return err
 		}
 		args := append([]string{"-loglevel", "error", "-y"}, v.args...)
-		args = append(args, "-t", fixtureLen, "-bitexact", out)
+		length := fixtureLen
+		if v.path == barsEpisode {
+			length = "30"
+		}
+		args = append(args, "-t", length, "-bitexact", out)
 		if b, err := exec.Command("ffmpeg", args...).CombinedOutput(); err != nil {
 			return fmt.Errorf("%s: %v: %s", v.path, err, b)
 		}

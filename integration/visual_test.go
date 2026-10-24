@@ -39,7 +39,9 @@ const (
 // the seek bar shows as buffered, and fallback system
 // fonts (monospace and form controls use the bundled Open Sans instead).
 const stabilize = `(() => {
+  document.querySelectorAll('style[data-stabilize]').forEach(e => e.remove()); // a previous screenshot's
   const s = document.createElement('style');
+  s.dataset.stabilize = '';
   s.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; caret-color: transparent !important; }' +
     ' video { visibility: hidden !important; }' +
     ' .path, code, input, textarea, button, select { font-family: "Open Sans", sans-serif !important; }' +
@@ -205,6 +207,12 @@ func (tb *tab) login(s *server, nick string) {
 
 // screenshot captures the whole page once fonts and images have loaded.
 func (tb *tab) screenshot() []byte {
+	tb.t.Helper()
+	return tb.screenshotWith(stabilize)
+}
+
+// screenshotWith is screenshot with another stabilizing script.
+func (tb *tab) screenshotWith(stabilize string) []byte {
 	tb.t.Helper()
 	tb.eval(stabilize, nil)
 	tb.waitJS(`document.fonts.status === 'loaded' && [...document.images].every(i => i.complete)`, 10*time.Second)

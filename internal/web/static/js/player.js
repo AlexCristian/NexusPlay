@@ -12,12 +12,16 @@
   var resumeAt = parseFloat(video.dataset.resume) || 0;
   var signedIn = video.dataset.signedIn === "true";
   var status = document.getElementById("player-status");
+  var spinner = document.getElementById("player-spinner");
   var topBar = document.getElementById("top-bar");
   var reportButton = document.getElementById("report-subtitle");
 
+  // showStatus puts an error over the video; "" clears it. Loading is shown
+  // by the spinner, never by text.
   function showStatus(text) {
     status.textContent = text;
     status.hidden = !text;
+    if (text) spinner.hidden = true;
   }
 
   // The session's CSRF token. The server puts it in <body hx-headers> so htmx
@@ -57,7 +61,6 @@
   }
 
   function startHLS() {
-    showStatus("Preparing video…");
     // Prefer hls.js wherever Media Source Extensions exist. Recent Chrome also
     // claims native HLS support, but its native player fails on a playlist
     // that ffmpeg is still writing; native HLS is the fallback for iOS.
@@ -65,7 +68,7 @@
       nativeHLS();
       return;
     }
-    loadScript("/static/vendor/hls.light.min.js").then(function () {
+    loadScript(video.dataset.hlsScript).then(function () {
       if (!window.Hls || !window.Hls.isSupported()) {
         nativeHLS();
         return;
@@ -103,6 +106,17 @@
   }
 
   video.addEventListener("loadeddata", function () { showStatus(""); });
+
+  // The spinner shows while the viewer is waiting for video: after asking
+  // to play (or seeking) until frames arrive. Until then the play button
+  // shows; iOS loads nothing before the first tap.
+  function wait(on) { spinner.hidden = !on || !status.hidden; }
+  video.addEventListener("play", function () { wait(video.readyState < 3); });
+  video.addEventListener("waiting", function () { wait(!video.paused); });
+  video.addEventListener("seeking", function () { wait(!video.paused); });
+  ["playing", "canplay", "seeked", "pause", "ended", "error"].forEach(function (ev) {
+    video.addEventListener(ev, function () { wait(false); });
+  });
   video.addEventListener("error", function () {
     if (video.error) showStatus("This video could not be played.");
   });
@@ -199,7 +213,7 @@
   video.addEventListener("click", togglePlay);
   bigPlay.addEventListener("click", togglePlay);
   document.getElementById("ctl-play").addEventListener("click", togglePlay);
-  ["play", "pause", "ended"].forEach(function (ev) { video.addEventListener(ev, showPlaying); });
+  ["play", "playing", "pause", "ended", "emptied"].forEach(function (ev) { video.addEventListener(ev, showPlaying); });
   ["timeupdate", "durationchange", "progress", "loadedmetadata"].forEach(function (ev) { video.addEventListener(ev, showTime); });
   video.addEventListener("volumechange", showVolume);
 

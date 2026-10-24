@@ -41,7 +41,7 @@ func csrfHeaders(v Viewer) string {
 // posterURL is where a poster file is served, or the placeholder image.
 func posterURL(name string) string {
 	if name == "" {
-		return "/static/img/no-poster.svg"
+		return asset("/static/img/no-poster.svg")
 	}
 	return "/posters/" + name
 }

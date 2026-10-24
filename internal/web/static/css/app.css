@@ -126,10 +126,17 @@ button { font: inherit; }
   text-decoration: none;
   background: none;
   border: 0;
-  padding: 8px 0;
+  padding: 0;
   cursor: pointer;
+  /* Every item is a box of the same height with its text or icon centred,
+     so text and icons line up (the log-out button sits in a form). */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  line-height: 1;
 }
-.brand { display: inline-flex; align-items: center; gap: 8px; }
+.top-bar .inline-form { display: flex; }
+.brand { gap: 8px; }
 .brand .icon { width: .8em; height: .8em; fill: currentColor; }
 .top-text { cursor: default; }
 .label-short { display: none; }
@@ -382,6 +389,21 @@ button { font: inherit; }
 .player-container:fullscreen { display: flex; flex-direction: column; border-radius: 0; }
 .player-container:fullscreen .player { flex: 1; aspect-ratio: auto; min-height: 0; }
 
+.player-spinner {
+  position: absolute;
+  left: 50%;
+  top: calc(50% - var(--bar) / 2);
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, .25);
+  border-top-color: var(--red);
+  animation: spin .9s linear infinite;
+  pointer-events: none;
+}
+@keyframes spin { to { rotate: 360deg; } }
+
 .big-play {
   position: absolute;
   left: 50%;
@@ -516,7 +538,7 @@ button { font: inherit; }
 .watch-poster:hover img { transform: none; }
 .meta-text { min-width: 0; padding-bottom: 20px; }
 .meta-text h1 { margin: 0; font-size: clamp(1.4rem, 4vw, 2.2rem); line-height: 1.15; font-weight: 700; }
-.meta-text h1 .muted { color: #999; }
+.episode-title { display: block; color: #999; font-size: .8em; margin-top: 2px; }
 .meta-sub { margin: 10px 0 8px; font-weight: 700; font-size: 1.1rem; color: #fff; }
 .meta-text .overview { color: #bbb; }
 
@@ -637,12 +659,13 @@ code { font-size: .9em; background: #f1f1f1; padding: 1px 4px; border-radius: 3p
 
 @media (max-width: 600px) {
   .page { padding-top: 24px; }
-  /* Short labels and no greeting, so the bar takes at most two short rows. */
-  .top-bar-inner { gap: 0 18px; }
-  .brand, .top-link { font-size: .95rem; padding: 6px 0; white-space: nowrap; }
+  /* Icons instead of labels and no greeting, so the bar is one line. */
+  .top-bar-inner { gap: 0 20px; flex-wrap: nowrap; }
+  .brand, .top-link { font-size: .95rem; white-space: nowrap; }
   .top-text { display: none; }
   .label-long { display: none; }
-  .label-short { display: inline; }
+  .label-short { display: inline-flex; }
+  .label-short .icon { width: 20px; height: 20px; display: block; }
   .tiles { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 16px; }
   .tile-title { font-size: 1rem; }
   .tile-strip { padding: 16px; }

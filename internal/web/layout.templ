@@ -13,10 +13,10 @@ templ layout(p Page) {
 			} else {
 				<title>Nexus Play</title>
 			}
-			<link rel="icon" href="/static/img/icon.svg" type="image/svg+xml"/>
-			<link rel="stylesheet" href="/static/css/app.css"/>
-			<script src="/static/vendor/htmx.min.js" defer></script>
-			<script src="/static/js/app.js" defer></script>
+			<link rel="icon" href={ asset("/static/img/icon.svg") } type="image/svg+xml"/>
+			<link rel="stylesheet" href={ asset("/static/css/app.css") }/>
+			<script src={ asset("/static/vendor/htmx.min.js") } defer></script>
+			<script src={ asset("/static/js/app.js") } defer></script>
 		</head>
 		{ children... }
 	</html>
@@ -78,15 +78,15 @@ templ topBar(p Page) {
 				Nexus Play
 			</a>
 			if p.V.User != nil {
-				<button type="button" class="top-link" popovertarget="resume-pop" hx-get="/me/resume" hx-target="#resume-pop-body" hx-trigger="click">
-					<span class="label-long">Previously watching</span><span class="label-short">Resume</span>
+				<button type="button" class="top-link" aria-label="Previously watching" title="Previously watching" popovertarget="resume-pop" hx-get="/me/resume" hx-target="#resume-pop-body" hx-trigger="click">
+					<span class="label-long">Previously watching</span><span class="label-short">@icon("history")</span>
 				</button>
 				<div id="resume-pop" class="popover" popover>
 					<h2 class="popover-title">Resume paused media</h2>
 					<div id="resume-pop-body"></div>
 				</div>
-				<button type="button" class="top-link" popovertarget="notif-pop" hx-get="/me/notifications" hx-target="#notif-pop-body" hx-trigger="click">
-					<span class="label-long">My subscriptions</span><span class="label-short">Subscriptions</span>
+				<button type="button" class="top-link" aria-label="My subscriptions" title="My subscriptions" popovertarget="notif-pop" hx-get="/me/notifications" hx-target="#notif-pop-body" hx-trigger="click">
+					<span class="label-long">My subscriptions</span><span class="label-short">@icon("bell")</span>
 				</button>
 				<div id="notif-pop" class="popover" popover>
 					<h2 class="popover-title">New in your subscriptions</h2>
@@ -94,12 +94,12 @@ templ topBar(p Page) {
 				</div>
 				<span class="spacer"></span>
 				if p.V.IsAdmin() {
-					<a class="top-link" href="/admin"><span class="label-long">Control panel</span><span class="label-short">Admin</span></a>
+					<a class="top-link" href="/admin" aria-label="Control panel" title="Control panel"><span class="label-long">Control panel</span><span class="label-short">@icon("settings")</span></a>
 				}
 				<span class="top-text">Welcome, { p.V.User.Nickname }</span>
 				<form method="post" action="/logout" class="inline-form">
 					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
-					<button type="submit" class="top-link">Log out</button>
+					<button type="submit" class="top-link" aria-label="Log out" title="Log out"><span class="label-long">Log out</span><span class="label-short">@icon("log-out")</span></button>
 				</form>
 			} else {
 				<span class="spacer"></span>

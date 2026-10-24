@@ -94,7 +94,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
 	static, _ := fs.Sub(staticFiles, "static") // cannot fail: "static" is a valid, embedded path
-	mux.Handle("GET /static/", cacheForADay(http.StripPrefix("/static/", http.FileServerFS(static))))
+	mux.Handle("GET /static/", cacheStatic(http.StripPrefix("/static/", http.FileServerFS(static))))
 	mux.HandleFunc("GET /healthz", s.healthz)
 
 	// Pages anyone may see unless NEXUSPLAY_REQUIRE_LOGIN is set.
@@ -355,16 +355,6 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "same-origin")
 		h.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; media-src 'self' blob:; "+
 			"worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
-		next.ServeHTTP(w, r)
-	})
-}
-
-// cacheForADay lets browsers keep static files for a day. The files are
-// embedded in the binary, so they change only with an upgrade; a day bounds
-// how long a browser can show old CSS or scripts after one.
-func cacheForADay(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=86400")
 		next.ServeHTTP(w, r)
 	})
 }
