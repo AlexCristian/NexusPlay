@@ -5,8 +5,13 @@
   var modal = document.getElementById("modal");
   var modalBody = document.getElementById("modal-body");
 
+  // The dialog itself takes focus, not its first button: a focused close
+  // button shows a focus ring as soon as the dialog opens.
   function openModal() {
-    if (modal && !modal.open) modal.showModal();
+    if (modal && !modal.open) {
+      modal.showModal();
+      modal.focus();
+    }
   }
 
   // Anything htmx swaps into the modal body opens the modal.

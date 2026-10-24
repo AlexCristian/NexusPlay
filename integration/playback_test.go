@@ -103,6 +103,13 @@ func TestPlaybackScreens(t *testing.T) {
 		playUntil(tb, 2)
 		assertClearWhilePlaying(t, tb)
 		assertStillConverting(t, tb)
+		// While playing, the top bar is dimmed but solid: the page must not
+		// show through it when scrolled.
+		var bg string
+		tb.eval(`getComputedStyle(document.getElementById('top-bar')).backgroundColor`, &bg)
+		if !strings.HasPrefix(bg, "rgb(") {
+			t.Errorf("top bar while playing = %s, want a solid color", bg)
+		}
 		if got := tb.text("#ctl-duration"); got != "00:30" {
 			t.Errorf("length shown while converting = %s, want the whole 00:30", got)
 		}

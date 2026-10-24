@@ -105,12 +105,10 @@ type Playback struct {
 	URL    string // the file or the HLS playlist
 }
 
-// episodeLabel is the line under an episode's title: "Season 3, episode 5".
+// episodeLabel is an episode's short number, "S3E4", shown before its title.
+// Season 0 holds specials.
 func episodeLabel(m store.Media) string {
-	if m.Season == 0 {
-		return "Specials, episode " + strconv.Itoa(m.Episode)
-	}
-	return "Season " + strconv.Itoa(m.Season) + ", episode " + strconv.Itoa(m.Episode)
+	return "S" + strconv.Itoa(m.Season) + "E" + strconv.Itoa(m.Episode)
 }
 
 // fmtSeconds formats a resume position for player.js.

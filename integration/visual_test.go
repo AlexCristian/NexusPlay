@@ -181,6 +181,20 @@ func TestScreens(t *testing.T) {
 		phone.click(`.tab[data-tab="tab-1"]`)
 		phone.click("#tab-1 .tile")
 		phone.waitVisible("#modal[open] .episodes")
+		// The season tabs scroll right up to the dialog's edge, and opening
+		// the dialog focuses the dialog, not its close button (which then
+		// showed a focus ring).
+		var gap float64
+		phone.eval(`document.getElementById('modal').getBoundingClientRect().right -
+			document.querySelector('#modal .season-tabs').getBoundingClientRect().right`, &gap)
+		if gap > 1 {
+			t.Errorf("season tabs end %.0fpx before the dialog's edge", gap)
+		}
+		var focused string
+		phone.eval(`document.activeElement.id || document.activeElement.className`, &focused)
+		if focused != "modal" {
+			t.Errorf("focus on open = %q, want the dialog", focused)
+		}
 		compareScreenshot(t, "collection-dialog-phone", phone.screenshot())
 	})
 	// An episode's page on a phone, signed in as the administrator (the

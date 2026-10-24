@@ -302,7 +302,7 @@ func shellWithSearch(p Page, results templ.Component) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div></main><footer class=\"footer\">Built on Nexus Play, an open-source web media center. <a href=\"https://github.com/AlexCristian/NexusPlay\">Source code</a></footer><dialog id=\"modal\" class=\"modal\" aria-labelledby=\"modal-title\"><button type=\"button\" class=\"modal-close\" data-close-modal aria-label=\"Close\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div></main><footer class=\"footer\">Built on Nexus Play, an open-source web media center. <a href=\"https://github.com/AlexCristian/NexusPlay\">Source code</a></footer><dialog id=\"modal\" class=\"modal\" aria-labelledby=\"modal-title\" tabindex=\"-1\"><button type=\"button\" class=\"modal-close\" data-close-modal aria-label=\"Close\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

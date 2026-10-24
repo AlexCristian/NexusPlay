@@ -107,7 +107,7 @@ button { font: inherit; }
   z-index: 10;
   transition: background-color .4s, opacity .4s;
 }
-.top-bar.playing { background: rgba(20, 0, 0, .85); }
+.top-bar.playing { background: #1d0400; }
 .top-bar.playing .top-link, .top-bar.playing .brand, .top-bar.playing .top-text { color: rgba(255, 255, 255, .45); }
 .top-bar-inner {
   max-width: 960px;
@@ -288,6 +288,7 @@ button { font: inherit; }
   box-shadow: 0 20px 60px rgba(0, 0, 0, .7);
   overflow: auto;
 }
+.modal:focus { outline: none; }
 .modal::backdrop { background: rgba(0, 0, 0, .7); }
 .modal-close {
   position: absolute;
@@ -312,10 +313,12 @@ button { font: inherit; }
 .collection-header { display: flex; background: #222; color: #fff; }
 .poster-wrapper { position: relative; flex: none; width: 140px; }
 .poster-wrapper img { display: block; width: 140px; aspect-ratio: 2 / 3; height: auto; object-fit: cover; }
-.collection-meta { padding: 24px 48px 8px 20px; display: flex; flex-direction: column; min-width: 0; }
+.collection-meta { flex: 1; padding: 24px 48px 8px 20px; display: flex; flex-direction: column; min-width: 0; }
 .collection-meta h2 { margin: 0; font-size: clamp(1.4rem, 4vw, 2rem); line-height: 1.1; }
 .collection-sub { margin: 6px 0 0; font-weight: 700; font-size: 1.1rem; }
-.season-tabs { margin-top: auto; display: flex; gap: 4px 12px; overflow-x: auto; padding-top: 16px; }
+.season-tabs { margin: auto -48px 0 0; padding: 16px 48px 0 0; display: flex; gap: 4px 12px; overflow-x: auto; scrollbar-width: none; }
+.season-tabs::-webkit-scrollbar { display: none; }
+.season-tab { flex: none; }
 .season-tab {
   background: none;
   border: 0;
@@ -671,6 +674,7 @@ code { font-size: .9em; background: #f1f1f1; padding: 1px 4px; border-radius: 3p
   .tile-strip { padding: 16px; }
   .poster-wrapper, .poster-wrapper img { width: 100px; }
   .collection-meta { padding: 16px 44px 8px 14px; }
+  .season-tabs { margin-right: -44px; padding-right: 20px; }
   .edit-layout { flex-direction: column; }
   .metadata { gap: 20px; }
   .watch-poster img { width: 80px; }

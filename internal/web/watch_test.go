@@ -25,8 +25,7 @@ func TestWatchEpisodeMarkup(t *testing.T) {
 	}
 	for _, want := range []string{
 		`data-duration="2672.3"`,
-		`<h1>Star Trek: The Next Generation<span class="episode-title">Who Watches the Watchers</span></h1>`,
-		`Season 3, episode 4`,
+		`<h1>Star Trek: The Next Generation<span class="episode-title">S3E4: Who Watches the Watchers</span></h1>`,
 		`id="player-spinner" role="status" aria-label="Loading" hidden`,
 		`id="player-status" class="player-status" role="alert" hidden`,
 		`id="controls" hidden`,
@@ -35,7 +34,7 @@ func TestWatchEpisodeMarkup(t *testing.T) {
 			t.Errorf("page lacks %s", want)
 		}
 	}
-	if strings.Contains(page, "Preparing") || strings.Contains(page, "Generation-") || strings.Contains(page, " - Who") {
+	if strings.Contains(page, "Preparing") || strings.Contains(page, "Generation-") || strings.Contains(page, " - Who") || strings.Contains(page, "Season 3, episode 4") {
 		t.Error("page has the old status text or hyphenated title")
 	}
 }
