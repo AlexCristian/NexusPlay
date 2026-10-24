@@ -141,6 +141,7 @@ type MediaForm struct {
 	MetaEnabled    bool
 	Error          string
 	Saved          bool
+	Refreshed      bool // details were just fetched again from TMDB
 }
 
 // ownPoster is m's own poster, or "" when it shows its collection's. Only

@@ -88,7 +88,7 @@ func (s *Server) Handler() http.Handler {
 	subs := &subtitleHandlers{responder: s.responder, store: s.Store, votesRequired: s.Cfg.VotesRequired}
 	acct := &accountHandlers{responder: s.responder, accounts: s.Accounts, sessions: s.Sessions,
 		secureCookies: s.Cfg.SecureCookies}
-	adm := &adminHandlers{responder: s.responder, store: s.Store, meta: s.Meta, scanner: s.Scanner,
+	adm := &adminHandlers{responder: s.responder, store: s.Store, meta: s.Meta, scanner: s.Scanner, refresher: s.Scanner,
 		conversions: s.Converter, posterDir: s.Cfg.PosterDir()}
 
 	mux := http.NewServeMux()
@@ -131,6 +131,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /admin/media/{id}/retry-conversion", s.admin(s.handle(adm.retryConversion)))
 	mux.Handle("GET /admin/media/{id}", s.admin(s.handle(adm.editMediaPage)))
 	mux.Handle("POST /admin/media/{id}", s.admin(s.handle(adm.saveMedia)))
+	mux.Handle("POST /admin/media/{id}/refresh-metadata", s.admin(s.handle(adm.refreshMetadata)))
 	mux.Handle("POST /admin/media/{id}/subtitles", s.admin(s.handle(adm.uploadSubtitle)))
 	mux.Handle("POST /admin/subtitles/{id}", s.admin(s.handle(adm.saveSubtitle)))
 	mux.Handle("POST /admin/subtitles/{id}/delete", s.admin(s.handle(adm.deleteSubtitle)))

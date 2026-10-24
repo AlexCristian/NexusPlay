@@ -496,3 +496,18 @@ func TestRegistrationClosedAtLimit(t *testing.T) {
 		t.Errorf("register past the limit: %d, want 403", resp.StatusCode)
 	}
 }
+
+// "Refresh metadata" without an API key explains itself on the edit page.
+func TestRefreshMetadataWithoutKey(t *testing.T) {
+	e := newEnv(t, nil)
+	admin := e.client()
+	admin.register("alex")
+	id, _, _ := e.store.InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "m.mp4", Title: "M", VideoCodec: "h264"})
+	resp, body := admin.do("POST", "/admin/media/"+itoa(id)+"/refresh-metadata", url.Values{"csrf_token": {admin.csrf}}, nil)
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(body, "Metadata lookups are off") {
+		t.Errorf("refresh without a key: %d", resp.StatusCode)
+	}
+	if resp, _ := admin.do("POST", "/admin/media/9999/refresh-metadata", url.Values{"csrf_token": {admin.csrf}}, nil); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown media: %d", resp.StatusCode)
+	}
+}

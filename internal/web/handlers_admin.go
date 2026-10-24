@@ -22,6 +22,7 @@ type adminHandlers struct {
 	responder
 	store       adminStore
 	meta        metadataLookup
+	refresher   metadataRefresher
 	scanner     scanTrigger
 	conversions Conversions
 	posterDir   string
@@ -52,6 +53,13 @@ type adminStore interface {
 type metadataLookup interface {
 	Enabled() bool
 	Show(ctx context.Context, name, year string) (metadata.Info, error)
+	Movie(ctx context.Context, title, year string) (metadata.Info, error)
+	Collection(ctx context.Context, name string) (metadata.Info, error)
+}
+
+// metadataRefresher looks one media item up again (library.Scanner).
+type metadataRefresher interface {
+	RefreshMetadata(ctx context.Context, id int64) error
 }
 
 // scanTrigger starts a library scan (library.Scanner).
@@ -188,6 +196,7 @@ func (h *adminHandlers) editMediaPage(w http.ResponseWriter, r *http.Request) er
 		return err
 	}
 	f.Saved = r.URL.Query().Get("saved") == "1"
+	f.Refreshed = r.URL.Query().Get("refreshed") == "1"
 	h.render(w, r, http.StatusOK, editMediaPage(newPage(r, "Edit "+m.Title), f))
 	return nil
 }
@@ -219,7 +228,7 @@ func (h *adminHandlers) saveMedia(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return h.showMediaFormError(w, r, m, err)
 	}
-	if err := h.applyMediaInput(r.Context(), m.ID, in); err != nil {
+	if err := h.applyMediaInput(r.Context(), m, in); err != nil {
 		return err
 	}
 	if in.publish {
@@ -232,10 +241,10 @@ func (h *adminHandlers) saveMedia(w http.ResponseWriter, r *http.Request) error 
 
 // applyMediaInput saves a decoded edit form: it finds or creates the
 // collection, stores the poster, then updates the media.
-func (h *adminHandlers) applyMediaInput(ctx context.Context, id int64, in mediaInput) error {
+func (h *adminHandlers) applyMediaInput(ctx context.Context, m store.Media, in mediaInput) error {
 	u := in.update
 	if in.collection != "" {
-		c, err := h.findOrCreateCollection(ctx, in.collection, u.Category, u.Year)
+		c, err := h.findOrCreateCollection(ctx, in.collection, u.Category, showYearGuess(m, in.collection))
 		if err != nil {
 			return err
 		}
@@ -245,7 +254,20 @@ func (h *adminHandlers) applyMediaInput(ctx context.Context, id int64, in mediaI
 	if u.Poster, err = h.savePoster(in.poster); err != nil {
 		return err
 	}
-	return h.store.UpdateMedia(ctx, id, u, in.publish)
+	return h.store.UpdateMedia(ctx, m.ID, u, in.publish)
+}
+
+// showYearGuess is the year a new collection for m starts with: the year in
+// the show's folder name ("Star Trek: Deep Space Nine (1993)/..."), if the
+// file is an episode of that show. Never the media's own year, which for an
+// episode is the year it aired, not the year the show began; without a
+// folder year, TMDB fills the year in.
+func showYearGuess(m store.Media, collection string) string {
+	g := guessFor(m)
+	if g.IsEpisode() && strings.EqualFold(g.Show, collection) {
+		return g.Year
+	}
+	return ""
 }
 
 // findOrCreateCollection returns the named collection, creating it (with
@@ -258,7 +280,6 @@ func (h *adminHandlers) findOrCreateCollection(ctx context.Context, name, catego
 	if category == "" {
 		category = "TV Shows"
 	}
-	// For an episode, the year guessed from "Show (2019)/..." is the show's year.
 	c = store.Collection{Name: name, Category: category, Year: year}
 	h.fillFromTMDB(ctx, &c)
 	if c.ID, err = h.store.CreateCollection(ctx, c); errors.Is(err, store.ErrDuplicate) {
@@ -283,6 +304,37 @@ func (h *adminHandlers) fillCollectionUpdate(ctx context.Context, existing store
 	}
 }
 
+// lookupCollection finds a collection on TMDB. A "Movies" collection is a
+// series of films, so it is searched as a TMDB collection and then as a
+// film; anything else is searched as a TV show first, then the same way.
+func (h *adminHandlers) lookupCollection(ctx context.Context, name, category string) (metadata.Info, error) {
+	films := func() (metadata.Info, error) {
+		info, err := h.meta.Collection(ctx, name)
+		if errors.Is(err, metadata.ErrNoMatch) {
+			info, err = h.meta.Movie(ctx, name, "")
+			info.Year = "" // the first film's year is not the collection's
+		}
+		return info, err
+	}
+	if isFilmCategory(category) {
+		return films()
+	}
+	info, err := h.meta.Show(ctx, name, "")
+	if errors.Is(err, metadata.ErrNoMatch) {
+		return films()
+	}
+	return info, err
+}
+
+// isFilmCategory reports whether a category holds films rather than shows.
+func isFilmCategory(category string) bool {
+	switch strings.ToLower(strings.TrimSpace(category)) {
+	case "movies", "movie", "films", "film":
+		return true
+	}
+	return false
+}
+
 // fillFromTMDB fills a collection's empty fields from TMDB, when lookups
 // are on. A failed lookup is logged and leaves c unchanged.
 func (h *adminHandlers) fillFromTMDB(ctx context.Context, c *store.Collection) {
@@ -291,7 +343,7 @@ func (h *adminHandlers) fillFromTMDB(ctx context.Context, c *store.Collection) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	info, err := h.meta.Show(ctx, c.Name, "")
+	info, err := h.lookupCollection(ctx, c.Name, c.Category)
 	if err != nil {
 		if !errors.Is(err, metadata.ErrNoMatch) {
 			h.log.Warn("collection lookup failed", "name", c.Name, "err", err)
@@ -334,6 +386,31 @@ func (h *adminHandlers) savePoster(p *posterUpload) (string, error) {
 		return "", err
 	}
 	return name, out.Close()
+}
+
+// refreshMetadata handles POST /admin/media/{id}/refresh-metadata: look the
+// item up on TMDB again and take its title, year, description and poster,
+// even if it is published. Problems are shown on the edit page.
+func (h *adminHandlers) refreshMetadata(w http.ResponseWriter, r *http.Request) error {
+	m, err := h.mediaFromPath(r)
+	if err != nil {
+		return err
+	}
+	err = h.refresher.RefreshMetadata(r.Context(), m.ID)
+	switch {
+	case errors.Is(err, metadata.ErrDisabled):
+		err = formErr("Metadata lookups are off. Set NEXUSPLAY_TMDB_API_KEY to use them.")
+	case errors.Is(err, metadata.ErrNoMatch):
+		err = formErr("TMDB has nothing for this item. Check its title, collection, season and episode, save, and try again.")
+	case err != nil && !errors.Is(err, store.ErrNotFound) && r.Context().Err() == nil:
+		h.log.Warn("metadata refresh failed", "media", m.ID, "err", err)
+		err = formErr("The lookup failed: " + err.Error() + ". Try again in a minute.")
+	}
+	if err != nil {
+		return h.showMediaFormError(w, r, m, err)
+	}
+	http.Redirect(w, r, "/admin/media/"+itoa(m.ID)+"?refreshed=1", http.StatusSeeOther)
+	return nil
 }
 
 // uploadSubtitle handles POST /admin/media/{id}/subtitles: an SRT or

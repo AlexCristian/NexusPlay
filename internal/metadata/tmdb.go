@@ -75,7 +75,18 @@ type Client struct {
 	lookups singleflight.Group
 	mu      sync.Mutex
 	shows   map[string]showEntry
+	seasons map[string]seasonEntry
+	now     func() time.Time
 }
+
+// seasonEntry is a cached season episode list. Seasons of running shows
+// gain episodes, so entries expire after seasonTTL.
+type seasonEntry struct {
+	episodes []Episode
+	fetched  time.Time
+}
+
+const seasonTTL = time.Hour
 
 type showEntry struct {
 	info Info
@@ -92,6 +103,8 @@ func New(cfg Config, log *slog.Logger, opts ...Option) *Client {
 		baseURL:   "https://api.themoviedb.org/3",
 		imageURL:  "https://image.tmdb.org/t/p/w342",
 		shows:     map[string]showEntry{},
+		seasons:   map[string]seasonEntry{},
+		now:       time.Now,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -192,6 +205,71 @@ func (c *Client) Episode(ctx context.Context, showID, season, episode int) (Info
 		return Info{}, err
 	}
 	return Info{Title: res.Name, Year: yearOf(res.AirDate), Overview: res.Overview}, nil
+}
+
+// Collection searches for a collection of films, such as "Star Trek" or
+// "The Matrix Collection". TMDB collections have no year. It returns
+// ErrNoMatch when TMDB knows no such collection.
+func (c *Client) Collection(ctx context.Context, name string) (Info, error) {
+	var res struct {
+		Results []struct {
+			ID         int    `json:"id"`
+			Name       string `json:"name"`
+			Overview   string `json:"overview"`
+			PosterPath string `json:"poster_path"`
+		} `json:"results"`
+	}
+	if err := c.get(ctx, "/search/collection", url.Values{"query": {name}}, &res); err != nil {
+		return Info{}, err
+	}
+	if len(res.Results) == 0 {
+		return Info{}, ErrNoMatch
+	}
+	r := res.Results[0]
+	info := Info{ID: r.ID, Title: r.Name, Overview: r.Overview}
+	info.Poster = c.posterOrEmpty(ctx, r.PosterPath, "collection-"+strconv.Itoa(r.ID))
+	return info, nil
+}
+
+// Episode is one entry of a season's episode list.
+type Episode struct {
+	Number int
+	Info
+}
+
+// Season lists the episodes of one season of a show found with Show, in
+// TMDB's numbering. Lists are cached for an hour, so matching a whole
+// season's files by title costs one request. The results have no posters.
+func (c *Client) Season(ctx context.Context, showID, season int) ([]Episode, error) {
+	key := fmt.Sprintf("%d/%d", showID, season)
+	c.mu.Lock()
+	e, ok := c.seasons[key]
+	c.mu.Unlock()
+	if ok && c.now().Sub(e.fetched) < seasonTTL {
+		return e.episodes, nil
+	}
+	v, err, _ := c.lookups.Do("season:"+key, func() (any, error) {
+		var res struct {
+			Episodes []struct {
+				Number   int    `json:"episode_number"`
+				Name     string `json:"name"`
+				AirDate  string `json:"air_date"`
+				Overview string `json:"overview"`
+			} `json:"episodes"`
+		}
+		if err := c.get(ctx, fmt.Sprintf("/tv/%d/season/%d", showID, season), url.Values{}, &res); err != nil {
+			return []Episode(nil), err
+		}
+		eps := make([]Episode, len(res.Episodes))
+		for i, r := range res.Episodes {
+			eps[i] = Episode{Number: r.Number, Info: Info{Title: r.Name, Year: yearOf(r.AirDate), Overview: r.Overview}}
+		}
+		c.mu.Lock()
+		c.seasons[key] = seasonEntry{episodes: eps, fetched: c.now()}
+		c.mu.Unlock()
+		return eps, nil
+	})
+	return v.([]Episode), err
 }
 
 // get calls the TMDB API and decodes the JSON response into out. A 404 is

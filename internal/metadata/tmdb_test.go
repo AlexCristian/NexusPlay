@@ -20,6 +20,7 @@ import (
 type fakeTMDB struct {
 	srv         *httptest.Server
 	searches    atomic.Int32
+	seasons     atomic.Int32
 	posterFails bool
 	lastAuth    atomic.Value // string: "key" or "bearer"
 }
@@ -45,6 +46,16 @@ func newFake(t *testing.T) *fakeTMDB {
 	})
 	mux.HandleFunc("/api/tv/1399/season/1/episode/2", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"name": "Some of the Things That Molecules Do", "air_date": "2014-03-16"}`)
+	})
+	mux.HandleFunc("/api/tv/1399/season/1", func(w http.ResponseWriter, r *http.Request) {
+		f.seasons.Add(1)
+		io.WriteString(w, `{"episodes": [
+			{"episode_number": 1, "name": "Standing Up in the Milky Way", "air_date": "2014-03-09", "overview": "One."},
+			{"episode_number": 2, "name": "Some of the Things That Molecules Do", "air_date": "2014-03-16", "overview": "Two."}]}`)
+	})
+	mux.HandleFunc("/api/search/collection", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"results": [{"id": 115575, "name": "Star Trek: The Original Series Collection",
+			"overview": "Films.", "poster_path": "/st.jpg"}]}`)
 	})
 	mux.HandleFunc("/img/", func(w http.ResponseWriter, r *http.Request) {
 		if f.posterFails {
@@ -170,5 +181,40 @@ func TestShowLookupsCoalesce(t *testing.T) {
 	ep, err := c.Episode(context.Background(), 1399, 1, 2)
 	if err != nil || ep.Title != "Some of the Things That Molecules Do" || ep.Year != "2014" {
 		t.Errorf("Episode = %+v, %v", ep, err)
+	}
+}
+
+// A season's episode list is fetched once and then served from the cache
+// until it expires.
+func TestSeasonIsCached(t *testing.T) {
+	f := newFake(t)
+	c, _ := f.client(t, "key")
+	clock := time.Now()
+	c.now = func() time.Time { return clock }
+	for i := 0; i < 3; i++ {
+		eps, err := c.Season(context.Background(), 1399, 1)
+		if err != nil || len(eps) != 2 || eps[1].Number != 2 || eps[1].Title != "Some of the Things That Molecules Do" || eps[1].Year != "2014" {
+			t.Fatalf("Season = %+v, %v", eps, err)
+		}
+	}
+	if n := f.seasons.Load(); n != 1 {
+		t.Errorf("fetched the season %d times, want 1", n)
+	}
+	clock = clock.Add(2 * seasonTTL)
+	c.Season(context.Background(), 1399, 1)
+	if n := f.seasons.Load(); n != 2 {
+		t.Errorf("after expiry: fetched %d times, want 2", n)
+	}
+}
+
+func TestCollectionLookup(t *testing.T) {
+	f := newFake(t)
+	c, dir := f.client(t, "key")
+	info, err := c.Collection(context.Background(), "Star Trek")
+	if err != nil || info.Title != "Star Trek: The Original Series Collection" || info.Year != "" || info.Poster == "" {
+		t.Fatalf("Collection = %+v, %v", info, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, info.Poster)); err != nil {
+		t.Errorf("poster not saved: %v", err)
 	}
 }

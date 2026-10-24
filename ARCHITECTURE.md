@@ -48,6 +48,12 @@ a package depends on what it uses rather than on whole components.
 5. **Enrich.** With a TMDB key, the title, year, overview and poster are
    looked up. Only unpublished media is updated, and only with what the
    lookup found, so an administrator's edits are never overwritten.
+   Episodes are matched by the title in the file name when there is one,
+   because TMDB's numbering can differ from the file's (a two-part pilot
+   in one file). Unpublished media still missing a poster or description
+   is looked up again, 25 items per scan and each at most hourly, so files
+   scanned before a key was set, or whose lookup failed, catch up. "Refresh
+   metadata" on the edit page looks up any item again, published or not.
 6. **Sidecars.** `Movie.en.srt` next to `Movie.mkv` is imported as a
    subtitle track, once (tracks are keyed by their source file).
 7. **Convert.** If `media.NeedsConversion` says so, the converter remuxes

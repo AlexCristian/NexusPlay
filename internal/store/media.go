@@ -91,20 +91,59 @@ type ScannedMetadata struct {
 	Poster                string // file name in the poster directory
 }
 
-// SetScannedMetadata fills in details found by a metadata lookup. It only
-// touches unpublished media, so an administrator's edits are never
-// overwritten, and only fields the lookup found: here an empty string means
-// "the lookup found nothing", so it keeps the current value.
+// SetScannedMetadata fills in details found by a metadata lookup and
+// records that the lookup happened. It only touches unpublished media, so an
+// administrator's edits are never overwritten, and only fields the lookup
+// found: here an empty string means "the lookup found nothing", so it keeps
+// the current value.
 func (s *Store) SetScannedMetadata(ctx context.Context, id int64, md ScannedMetadata) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE media SET
 			title = CASE WHEN ? <> '' THEN ? ELSE title END,
 			year = CASE WHEN ? <> '' THEN ? ELSE year END,
 			overview = CASE WHEN ? <> '' THEN ? ELSE overview END,
-			poster = CASE WHEN ? <> '' THEN ? ELSE poster END
+			poster = CASE WHEN ? <> '' THEN ? ELSE poster END,
+			metadata_checked_at = ?
 		WHERE id = ? AND published = 0`,
-		md.Title, md.Title, md.Year, md.Year, md.Overview, md.Overview, md.Poster, md.Poster, id)
+		md.Title, md.Title, md.Year, md.Year, md.Overview, md.Overview, md.Poster, md.Poster, s.unix(), id)
 	return err
+}
+
+// ReplaceMetadata is SetScannedMetadata for an administrator's explicit
+// "Refresh metadata": it applies to published media too. It returns
+// ErrNotFound if the media does not exist.
+func (s *Store) ReplaceMetadata(ctx context.Context, id int64, md ScannedMetadata) error {
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE media SET
+			title = CASE WHEN ? <> '' THEN ? ELSE title END,
+			year = CASE WHEN ? <> '' THEN ? ELSE year END,
+			overview = CASE WHEN ? <> '' THEN ? ELSE overview END,
+			poster = CASE WHEN ? <> '' THEN ? ELSE poster END,
+			metadata_checked_at = ?
+		WHERE id = ?`,
+		md.Title, md.Title, md.Year, md.Year, md.Overview, md.Overview, md.Poster, md.Poster, s.unix(), id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err == nil && n == 0 {
+		err = ErrNotFound
+	}
+	return err
+}
+
+// MarkMetadataChecked records a lookup that found nothing to save.
+func (s *Store) MarkMetadataChecked(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE media SET metadata_checked_at = ? WHERE id = ?`, s.unix(), id)
+	return err
+}
+
+// MediaNeedingMetadata lists unpublished media with no poster or no
+// description of its own whose last lookup was before checkedBefore,
+// least recently checked first, at most limit of them.
+func (s *Store) MediaNeedingMetadata(ctx context.Context, checkedBefore time.Time, limit int) ([]Media, error) {
+	return s.queryMedia(ctx, `WHERE m.published = 0 AND (m.poster = '' OR m.overview = '')
+		AND m.metadata_checked_at < ? ORDER BY m.metadata_checked_at, m.id LIMIT ?`, checkedBefore.Unix(), limit)
 }
 
 // H264MissingPixFmt returns H.264 media whose pixel format has not been

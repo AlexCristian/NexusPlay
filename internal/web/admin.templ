@@ -178,6 +178,9 @@ templ editMediaPage(p Page, f MediaForm) {
 			if f.Saved {
 				@alert("success", "Saved.")
 			}
+			if f.Refreshed {
+				@alert("success", "Details refreshed from TMDB.")
+			}
 			<div class="edit-layout">
 				<img class="edit-poster" src={ posterURL(f.Media.Poster) } alt="" width="140" height="210"/>
 				<form class="form-grid" method="post" action={ templ.SafeURL("/admin/media/" + itoa(f.Media.ID)) } enctype="multipart/form-data">
@@ -219,6 +222,15 @@ templ editMediaPage(p Page, f MediaForm) {
 						} else {
 							<button type="submit" name="publish" value="1" class="button">Save and publish</button>
 							<button type="submit" class="button button-quiet">Save without publishing</button>
+						}
+						if f.MetaEnabled {
+							<button
+								type="submit"
+								class="button button-quiet"
+								formaction={ templ.SafeURL("/admin/media/" + itoa(f.Media.ID) + "/refresh-metadata") }
+								formnovalidate
+								title="Look this item up on TMDB again and replace its title, year, description and poster. Unsaved changes on this page are discarded."
+							>Refresh metadata</button>
 						}
 					</div>
 				</form>

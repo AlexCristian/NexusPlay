@@ -26,6 +26,10 @@ type Store interface {
 	MediaPaths(ctx context.Context) (map[string]int64, error)
 	InsertScannedMedia(ctx context.Context, m store.ScannedMedia) (id int64, inserted bool, err error)
 	SetScannedMetadata(ctx context.Context, id int64, md store.ScannedMetadata) error
+	ReplaceMetadata(ctx context.Context, id int64, md store.ScannedMetadata) error
+	MarkMetadataChecked(ctx context.Context, id int64) error
+	MediaNeedingMetadata(ctx context.Context, checkedBefore time.Time, limit int) ([]store.Media, error)
+	MediaByID(ctx context.Context, id int64) (store.Media, error)
 	DeleteMedia(ctx context.Context, id int64) error
 	SubtitleSources(ctx context.Context) (map[string]bool, error)
 	AddSubtitle(ctx context.Context, t store.NewSubtitle) (id int64, inserted bool, err error)
@@ -44,6 +48,7 @@ type Metadata interface {
 	Movie(ctx context.Context, title, year string) (metadata.Info, error)
 	Show(ctx context.Context, name, year string) (metadata.Info, error)
 	Episode(ctx context.Context, showID, season, episode int) (metadata.Info, error)
+	Season(ctx context.Context, showID, season int) ([]metadata.Episode, error)
 }
 
 // Deps are the scanner's collaborators.
@@ -250,6 +255,7 @@ func (s *Scanner) scanAll(ctx context.Context) (Result, []string, error) {
 	for _, a := range added {
 		s.lookupMetadata(ctx, a.id, a.guess)
 	}
+	s.retryMetadata(ctx)
 	res.Subtitles = s.importAllSidecars(ctx, tree, known)
 	s.backfillPixFmt(ctx, tree.videos)
 	return res, tree.dirs, nil
@@ -452,25 +458,105 @@ func underAny(p string, roots []string) bool {
 	return false
 }
 
-// lookupMetadata enriches a newly added item from TMDB. It is optional:
+// Metadata retries: unpublished media still missing a poster or a
+// description is looked up again, at most metadataRetryBatch items per scan
+// and each at most once per metadataRetryAfter. That covers files scanned
+// before an API key was set and lookups that failed for a passing reason.
+const (
+	metadataRetryAfter = time.Hour
+	metadataRetryBatch = 25
+)
+
+// lookupMetadata enriches an unpublished item from TMDB. It is optional:
 // failures are logged and the file-name guess stays.
 func (s *Scanner) lookupMetadata(ctx context.Context, id int64, g Guess) {
 	if s.deps.Meta == nil {
 		return
 	}
+	md, err := s.metadataFor(ctx, g)
+	switch {
+	case errors.Is(err, metadata.ErrDisabled):
+		return // not a lookup: try again once a key is set
+	case errors.Is(err, metadata.ErrNoMatch):
+		err = s.deps.Store.MarkMetadataChecked(ctx, id)
+	case err != nil:
+		s.deps.Log.Warn("metadata lookup failed; it is retried later", "title", g.Title, "err", err)
+		err = s.deps.Store.MarkMetadataChecked(ctx, id)
+	default:
+		err = s.deps.Store.SetScannedMetadata(ctx, id, md)
+	}
+	if err != nil {
+		s.deps.Log.Warn("saving metadata failed", "media", id, "err", err)
+	}
+}
+
+// retryMetadata looks up again unpublished media that is still missing a
+// poster or description (see metadataRetryAfter).
+func (s *Scanner) retryMetadata(ctx context.Context) {
+	if s.deps.Meta == nil {
+		return
+	}
+	list, err := s.deps.Store.MediaNeedingMetadata(ctx, s.now().Add(-metadataRetryAfter), metadataRetryBatch)
+	if err != nil {
+		s.deps.Log.Warn("listing media without metadata", "err", err)
+		return
+	}
+	for _, m := range list {
+		if ctx.Err() != nil {
+			return
+		}
+		s.lookupMetadata(ctx, m.ID, guessForMedia(m))
+	}
+}
+
+// RefreshMetadata looks a media item up on TMDB again and saves what it
+// finds, published or not: the control panel's "Refresh metadata". It uses
+// the item's current collection, season and episode, which an
+// administrator may have corrected. It returns metadata.ErrNoMatch when
+// TMDB has nothing and metadata.ErrDisabled without an API key.
+func (s *Scanner) RefreshMetadata(ctx context.Context, id int64) error {
+	if s.deps.Meta == nil {
+		return metadata.ErrDisabled
+	}
+	m, err := s.deps.Store.MediaByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	md, err := s.metadataFor(ctx, guessForMedia(m))
+	if err != nil {
+		return err
+	}
+	return s.deps.Store.ReplaceMetadata(ctx, id, md)
+}
+
+// guessForMedia is what to look a stored item up by: the guess from its
+// file name, with the collection, season and episode from the database.
+func guessForMedia(m store.Media) Guess {
+	g := ParsePath(m.Path)
+	if !g.IsEpisode() && (m.CollectionName == "" || (m.Season == 0 && m.Episode == 0)) {
+		return g // a film, possibly in a collection of films
+	}
+	if m.CollectionName != "" {
+		if !strings.EqualFold(g.Show, m.CollectionName) {
+			g.Year = "" // the year was a film's or another show's; TMDB knows the show's
+		}
+		g.Show = m.CollectionName
+	}
+	if m.Season > 0 || m.Episode > 0 {
+		g.Season, g.Episode = m.Season, m.Episode
+	}
+	return g
+}
+
+// metadataFor looks g up, within 30 seconds.
+func (s *Scanner) metadataFor(ctx context.Context, g Guess) (store.ScannedMetadata, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	info, err := s.findMetadata(ctx, g)
 	if err != nil {
-		if !errors.Is(err, metadata.ErrNoMatch) && !errors.Is(err, metadata.ErrDisabled) {
-			s.deps.Log.Warn("metadata lookup failed", "title", g.Title, "err", err)
-		}
-		return
+		return store.ScannedMetadata{}, err
 	}
-	md := store.ScannedMetadata{Title: info.Title, Year: info.Year, Overview: info.Overview, Poster: info.Poster}
-	if err := s.deps.Store.SetScannedMetadata(ctx, id, md); err != nil {
-		s.deps.Log.Warn("saving metadata failed", "err", err)
-	}
+	return store.ScannedMetadata{Title: info.Title, Year: info.Year, Overview: info.Overview, Poster: info.Poster}, nil
 }
 
 // findMetadata looks up a film, or an episode with its show's poster.
@@ -482,12 +568,37 @@ func (s *Scanner) findMetadata(ctx context.Context, g Guess) (metadata.Info, err
 	if err != nil {
 		return metadata.Info{}, err
 	}
-	ep, err := s.deps.Meta.Episode(ctx, show.ID, g.Season, g.Episode)
+	ep, err := s.findEpisode(ctx, show.ID, g)
 	if err != nil {
 		return metadata.Info{}, err
 	}
 	ep.Poster = show.Poster
 	return ep, nil
+}
+
+// findEpisode finds g's episode of a show: by the title in the file name
+// when there is one, since TMDB's episode numbers can differ from the
+// file's (see match.go), and otherwise by number.
+func (s *Scanner) findEpisode(ctx context.Context, showID int, g Guess) (metadata.Info, error) {
+	title := fileEpisodeTitle(g)
+	if title == "" {
+		return s.deps.Meta.Episode(ctx, showID, g.Season, g.Episode)
+	}
+	eps, err := s.deps.Meta.Season(ctx, showID, g.Season)
+	if err != nil {
+		return metadata.Info{}, err
+	}
+	if e, ok := episodeByTitle(eps, title, g.Episode); ok {
+		if e.Number != g.Episode {
+			s.deps.Log.Debug("episode matched by title", "show", g.Show, "season", g.Season,
+				"file_episode", g.Episode, "tmdb_episode", e.Number, "title", e.Title)
+		}
+		return e.Info, nil
+	}
+	if e, ok := episodeByNumber(eps, g.Episode); ok {
+		return e.Info, nil
+	}
+	return metadata.Info{}, metadata.ErrNoMatch
 }
 
 // importAllSidecars imports subtitle files next to every known video.
