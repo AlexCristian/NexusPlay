@@ -61,6 +61,10 @@
 
 * { box-sizing: border-box; }
 
+/* The hidden attribute always hides, even on elements whose rules set a
+   display (the player's play button and control bar, for example). */
+[hidden] { display: none !important; }
+
 html { min-height: 100%; }
 
 body {
@@ -128,6 +132,7 @@ button { font: inherit; }
 .brand { display: inline-flex; align-items: center; gap: 8px; }
 .brand .icon { width: .8em; height: .8em; fill: currentColor; }
 .top-text { cursor: default; }
+.label-short { display: none; }
 .top-link:hover, .brand:hover { color: rgba(255, 255, 255, .8); }
 .spacer { flex: 1; }
 .inline-form { display: inline; margin: 0; }
@@ -395,7 +400,9 @@ button { font: inherit; }
   transition: background .2s, color .2s;
 }
 .big-play .icon { width: 28px; height: 28px; fill: currentColor; stroke: none; margin-left: 4px; }
-.big-play:hover { background: rgba(194, 31, 0, .75); color: #fff; }
+@media (hover: hover) {
+  .big-play:hover { background: rgba(194, 31, 0, .75); color: #fff; }
+}
 
 .controls {
   height: var(--bar);
@@ -494,7 +501,7 @@ button { font: inherit; }
 .player-action[hidden] { display: none; }
 .player-action .icon { width: 12px; height: 12px; }
 .player-action:hover { color: #fff; background: linear-gradient(#5a5c5d, #3b3d3d); }
-.metadata { display: flex; gap: 30px; align-items: center; padding-top: 24px; }
+.metadata { display: flex; gap: 30px; align-items: flex-start; padding-top: 24px; }
 .watch-poster { flex: none; }
 .watch-poster img {
   width: 120px;
@@ -630,8 +637,12 @@ code { font-size: .9em; background: #f1f1f1; padding: 1px 4px; border-radius: 3p
 
 @media (max-width: 600px) {
   .page { padding-top: 24px; }
-  .top-bar-inner { gap: 4px 16px; }
-  .brand, .top-link, .top-text { font-size: .95rem; padding: 6px 0; }
+  /* Short labels and no greeting, so the bar takes at most two short rows. */
+  .top-bar-inner { gap: 0 18px; }
+  .brand, .top-link { font-size: .95rem; padding: 6px 0; white-space: nowrap; }
+  .top-text { display: none; }
+  .label-long { display: none; }
+  .label-short { display: inline; }
   .tiles { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 16px; }
   .tile-title { font-size: 1rem; }
   .tile-strip { padding: 16px; }

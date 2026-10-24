@@ -79,14 +79,14 @@ templ topBar(p Page) {
 			</a>
 			if p.V.User != nil {
 				<button type="button" class="top-link" popovertarget="resume-pop" hx-get="/me/resume" hx-target="#resume-pop-body" hx-trigger="click">
-					Previously watching
+					<span class="label-long">Previously watching</span><span class="label-short">Resume</span>
 				</button>
 				<div id="resume-pop" class="popover" popover>
 					<h2 class="popover-title">Resume paused media</h2>
 					<div id="resume-pop-body"></div>
 				</div>
 				<button type="button" class="top-link" popovertarget="notif-pop" hx-get="/me/notifications" hx-target="#notif-pop-body" hx-trigger="click">
-					My subscriptions
+					<span class="label-long">My subscriptions</span><span class="label-short">Subscriptions</span>
 				</button>
 				<div id="notif-pop" class="popover" popover>
 					<h2 class="popover-title">New in your subscriptions</h2>
@@ -94,7 +94,7 @@ templ topBar(p Page) {
 				</div>
 				<span class="spacer"></span>
 				if p.V.IsAdmin() {
-					<a class="top-link" href="/admin">Control panel</a>
+					<a class="top-link" href="/admin"><span class="label-long">Control panel</span><span class="label-short">Admin</span></a>
 				}
 				<span class="top-text">Welcome, { p.V.User.Nickname }</span>
 				<form method="post" action="/logout" class="inline-form">

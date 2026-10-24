@@ -181,6 +181,16 @@ func TestScreens(t *testing.T) {
 		phone.waitVisible("#modal[open] .episodes")
 		compareScreenshot(t, "collection-dialog-phone", phone.screenshot())
 	})
+	// An episode's page on a phone, signed in as the administrator (the
+	// longest top bar).
+	t.Run("watch-episode-phone", func(t *testing.T) {
+		adminPhone := b.newTab(390, 844)
+		adminPhone.t = t
+		adminPhone.login(s, "alex")
+		adminPhone.navigate(fmt.Sprintf("%s/watch/%d", s.URL, s.mediaID(episode1)))
+		adminPhone.waitJS(`document.getElementById('player').readyState >= 1`, 20*time.Second)
+		compareScreenshot(t, "watch-episode-phone", adminPhone.screenshot())
+	})
 }
 
 // login signs a tab in through the login page.
@@ -190,7 +200,7 @@ func (tb *tab) login(s *server, nick string) {
 	tb.fill("input[name=email]", nick+"@example.com")
 	tb.fill("input[name=password]", "integration-pass")
 	tb.click("form button[type=submit]")
-	tb.waitVisible(".top-bar .top-text")
+	tb.waitVisible(`.top-bar form[action="/logout"] button`)
 }
 
 // screenshot captures the whole page once fonts and images have loaded.

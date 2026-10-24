@@ -20,6 +20,7 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 				data-src={ pb.URL }
 				data-hls={ strconv.FormatBool(!pb.Direct) }
 				data-resume={ fmtSeconds(resumeAt) }
+				data-duration={ fmtSeconds(m.Duration) }
 				data-signed-in={ strconv.FormatBool(p.V.User != nil) }
 			>
 				for _, s := range subs {
@@ -51,7 +52,7 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 						<img src={ posterURL(m.Poster) } alt={ m.CollectionName } width="120" height="180"/>
 					</a>
 					<div class="meta-text">
-						<h1>{ m.CollectionName }<span class="muted"> - { m.Title }</span></h1>
+						<h1>{ m.CollectionName }<span class="muted">{ " - " + m.Title }</span></h1>
 						<p class="meta-sub">{ episodeLabel(m) }</p>
 						if m.Overview != "" {
 							<p class="overview">{ m.Overview }</p>

@@ -306,12 +306,12 @@ func topBar(p Page) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if p.V.User != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<button type=\"button\" class=\"top-link\" popovertarget=\"resume-pop\" hx-get=\"/me/resume\" hx-target=\"#resume-pop-body\" hx-trigger=\"click\">Previously watching</button><div id=\"resume-pop\" class=\"popover\" popover><h2 class=\"popover-title\">Resume paused media</h2><div id=\"resume-pop-body\"></div></div><button type=\"button\" class=\"top-link\" popovertarget=\"notif-pop\" hx-get=\"/me/notifications\" hx-target=\"#notif-pop-body\" hx-trigger=\"click\">My subscriptions</button><div id=\"notif-pop\" class=\"popover\" popover><h2 class=\"popover-title\">New in your subscriptions</h2><div id=\"notif-pop-body\"></div></div><span class=\"spacer\"></span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<button type=\"button\" class=\"top-link\" popovertarget=\"resume-pop\" hx-get=\"/me/resume\" hx-target=\"#resume-pop-body\" hx-trigger=\"click\"><span class=\"label-long\">Previously watching</span><span class=\"label-short\">Resume</span></button><div id=\"resume-pop\" class=\"popover\" popover><h2 class=\"popover-title\">Resume paused media</h2><div id=\"resume-pop-body\"></div></div><button type=\"button\" class=\"top-link\" popovertarget=\"notif-pop\" hx-get=\"/me/notifications\" hx-target=\"#notif-pop-body\" hx-trigger=\"click\"><span class=\"label-long\">My subscriptions</span><span class=\"label-short\">Subscriptions</span></button><div id=\"notif-pop\" class=\"popover\" popover><h2 class=\"popover-title\">New in your subscriptions</h2><div id=\"notif-pop-body\"></div></div><span class=\"spacer\"></span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.V.IsAdmin() {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<a class=\"top-link\" href=\"/admin\">Control panel</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<a class=\"top-link\" href=\"/admin\"><span class=\"label-long\">Control panel</span><span class=\"label-short\">Admin</span></a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

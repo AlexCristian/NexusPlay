@@ -137,6 +137,16 @@
   var captionsButton = document.getElementById("ctl-captions");
   var captionsMenu = document.getElementById("captions-menu");
   var seeking = false;
+  // The length from the server. While a file is converted on the fly, the
+  // browser only knows the part converted so far, so the server's length is
+  // what the time and the seek bar show.
+  var knownDuration = parseFloat(video.dataset.duration) || 0;
+
+  function totalDuration() {
+    var d = video.duration;
+    if (isFinite(d) && d > 0 && d >= knownDuration - 1) return d;
+    return knownDuration || (isFinite(d) ? d : 0);
+  }
 
   function clock(sec) {
     if (!isFinite(sec) || sec < 0) sec = 0;
@@ -156,7 +166,7 @@
   }
 
   function showTime() {
-    var d = video.duration;
+    var d = totalDuration();
     timeNow.textContent = clock(video.currentTime);
     timeTotal.textContent = clock(d);
     if (!seeking && isFinite(d) && d > 0) seek.value = String(Math.round(video.currentTime / d * 1000));
@@ -196,11 +206,15 @@
   seek.addEventListener("input", function () {
     seeking = true;
     seek.style.setProperty("--fill", (seek.value / 10) + "%");
-    if (isFinite(video.duration)) timeNow.textContent = clock(seek.value / 1000 * video.duration);
+    timeNow.textContent = clock(seek.value / 1000 * totalDuration());
   });
   seek.addEventListener("change", function () {
-    if (isFinite(video.duration)) video.currentTime = seek.value / 1000 * video.duration;
+    var target = seek.value / 1000 * totalDuration();
+    // Not converted that far yet: go as far as there is.
+    if (isFinite(video.duration) && target > video.duration - 1) target = Math.max(0, video.duration - 1);
+    video.currentTime = target;
     seeking = false;
+    showTime();
   });
 
   volume.addEventListener("input", function () {

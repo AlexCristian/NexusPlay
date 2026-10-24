@@ -300,10 +300,11 @@ func TestBrowserJourney(t *testing.T) {
 	admin.waitJS(`!document.getElementById('player').controls && !document.getElementById('controls').hidden`, 5*time.Second)
 	admin.click("#big-play")
 	admin.waitJS(`document.getElementById('player').currentTime > 0.5`, 10*time.Second)
-	admin.waitJS(`document.getElementById('top-bar').classList.contains('playing') && document.getElementById('big-play').hidden`, 5*time.Second)
+	// Hidden for real, not just marked hidden (a CSS display rule once won).
+	admin.waitJS(`document.getElementById('top-bar').classList.contains('playing') && getComputedStyle(document.getElementById('big-play')).display === 'none'`, 5*time.Second)
 	admin.waitJS(`document.getElementById('ctl-time').textContent !== '00:00' && document.getElementById('ctl-duration').textContent === '00:12'`, 5*time.Second)
 	admin.click("#ctl-play")
-	admin.waitJS(`document.getElementById('player').paused && !document.getElementById('big-play').hidden`, 5*time.Second)
+	admin.waitJS(`document.getElementById('player').paused && getComputedStyle(document.getElementById('big-play')).display !== 'none'`, 5*time.Second)
 
 	// Subtitle correction: pick the English track from the subtitles menu,
 	// go to the first line, report it.
@@ -348,7 +349,7 @@ func TestBrowserJourney(t *testing.T) {
 	viewer.fill("input[name=email]", "sam@example.com")
 	viewer.fill("input[name=password]", "integration-pass")
 	viewer.click("form button[type=submit]")
-	viewer.waitVisible(`.top-bar .top-text`)
+	viewer.waitVisible(`.top-bar form[action="/logout"] button`)
 	if viewer.count(`.top-bar a[href="/admin"]`) != 0 {
 		t.Error("the second account must not be an administrator")
 	}
@@ -406,7 +407,7 @@ func TestSearchAndLogout(t *testing.T) {
 	tb.waitJS(`(document.querySelector('#auth-form .alert-error')||{textContent:''}).textContent.includes('Wrong')`, 5*time.Second)
 	tb.fill("input[name=password]", "integration-pass")
 	tb.click("form button[type=submit]")
-	tb.waitVisible(".top-bar .top-text")
+	tb.waitVisible(`.top-bar form[action="/logout"] button`)
 
 	// Typing opens the search drawer over the page and dims the page;
 	// a query with no results, and Escape, close it again.
@@ -461,6 +462,18 @@ func TestTranscodedVideoPlaysWhileConverting(t *testing.T) {
 	}
 	tb.eval(`document.getElementById('player').play()`, nil)
 	tb.waitJS(`document.getElementById('player').currentTime > 1`, 20*time.Second)
+	// While ffmpeg is still writing, the browser knows only part of the
+	// length; the controls show the whole length from the server.
+	var browserLen, shown float64
+	tb.eval(`document.getElementById('player').duration`, &browserLen)
+	tb.eval(`(t => +t[0] * 60 + +t[1])(document.getElementById('ctl-duration').textContent.split(':'))`, &shown)
+	m, err := s.App.Store.MediaByID(context.Background(), s.mediaID(movieAVI))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := m.Duration; shown < want-1 || shown > want+1 {
+		t.Errorf("controls show a length of %.0fs (browser knows %.1fs), want the file's %.0fs", shown, browserLen, want)
+	}
 	var errMsg string
 	tb.eval(`(document.getElementById('player').error || {message: ''}).message`, &errMsg)
 	if errMsg != "" {
