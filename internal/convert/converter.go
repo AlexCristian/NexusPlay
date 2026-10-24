@@ -84,6 +84,15 @@ type job struct {
 	done     float64 // seconds converted so far
 }
 
+// percent is how far the job has got, 0 to 99 (100 only once it is done).
+// The caller holds the converter's mutex.
+func (j *job) percent() int {
+	if j.duration <= 0 {
+		return 0
+	}
+	return int(math.Min(99, j.done/j.duration*100))
+}
+
 // New returns a converter. Call Run to start working through the queue.
 func New(d Deps, c Config) *Converter {
 	if c.Max < 1 {
@@ -223,11 +232,7 @@ func (c *Converter) Status(ctx context.Context) (Status, error) {
 	c.mu.Lock()
 	st := Status{Unavailable: c.unavailable}
 	for _, j := range c.active {
-		pct := 0
-		if j.duration > 0 {
-			pct = int(math.Min(99, j.done/j.duration*100))
-		}
-		st.Active = append(st.Active, JobStatus{Media: j.media, Percent: pct})
+		st.Active = append(st.Active, JobStatus{Media: j.media, Percent: j.percent()})
 	}
 	c.mu.Unlock()
 	if st.Unavailable != "" {
@@ -258,7 +263,8 @@ func (c *Converter) runJob(ctx context.Context, j *job) {
 	newPath, err := c.convert(ctx, j)
 	switch {
 	case ctx.Err() != nil:
-		c.deps.Log.Info("conversion stopped by shutdown; it will restart", "path", m.Path)
+		c.deps.Log.Info("conversion stopped by shutdown; it starts over after the restart",
+			"path", m.Path, "progress", fmt.Sprintf("%d%%", c.percent(j)))
 	case errors.Is(err, ErrSourceChanged):
 		c.deps.Log.Info("conversion discarded; the file changed while converting", "path", m.Path)
 	case errors.Is(err, ErrNoSpace):
@@ -277,6 +283,12 @@ func (c *Converter) runJob(ctx context.Context, j *job) {
 			c.deps.Library.Trigger() // imports the extracted subtitles
 		}
 	}
+}
+
+func (c *Converter) percent(j *job) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return j.percent()
 }
 
 func (c *Converter) setProgress(j *job, seconds float64) {

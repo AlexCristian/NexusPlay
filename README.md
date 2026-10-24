@@ -113,6 +113,19 @@ it first with `mkdir data`. The named volume is created owned by UID 1000 and wo
 writable. If you prefer Nexus Play never to change your media folder, mount it with `:ro`
 instead; conversion then switches itself off and the control panel says so.
 
+**Synology: shared folders and ACLs.** On a Synology, write access to a shared folder usually
+comes from an ACL entry for the `administrators` group (GID 101), not from the owner bits that
+`ls -ln` shows. With only `user: "1026:100"` the container then fails at start with
+`mkdir /data/posters: permission denied`. Add the group to the container as well:
+
+```yaml
+    user: "1026:100"
+    group_add: ["101"]
+```
+
+`ls -ln` printing a `+` after the permissions, as in `drwxrwxrwx+`, means the folder has an
+ACL. Without that `+`, the owner bits decide and `group_add` is not needed.
+
 **4. Start it, and later update it, with the same command:**
 
 ```sh
@@ -122,6 +135,13 @@ docker compose pull && docker compose up -d
 `pull` downloads the newest image for the tag in the compose file; `up -d` recreates the
 container only if the image changed. Your database and settings live in the data volume and
 survive updates. To remove old images afterwards: `docker image prune`.
+
+A restart stops any conversion that is running, and it starts again from the beginning
+afterwards (the file being converted is never at risk). Changing containers (MKV with H.264 to
+MP4) takes seconds, but re-encoding a long video can take a while on a NAS CPU, about 12
+minutes for an episode on a 4-core model. If you update automatically, for example with
+Watchtower, schedule updates for a time when no new files arrive. The control panel shows
+what is converting and how far along it is.
 
 **5. If `pull` says "denied" or "unauthorized".** Packages on ghcr.io start out private. Either:
 

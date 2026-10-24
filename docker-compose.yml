@@ -17,6 +17,9 @@ services:
     # the data volume below to a folder that user owns, e.g. ./data:/data, since
     # the named volume is created owned by UID 1000.
     # user: "1026:100"
+    # On Synology, write access often comes from an ACL for the administrators
+    # group (GID 101); if starting fails with "permission denied", add it:
+    # group_add: ["101"]
     ports:
       - "8080:8080"
     volumes:
