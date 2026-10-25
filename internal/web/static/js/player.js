@@ -132,9 +132,17 @@
   });
 
   // Dim the top bar while playing, as the original player did.
-  video.addEventListener("play", function () { topBar.classList.add("playing"); });
-  video.addEventListener("pause", function () { topBar.classList.remove("playing"); });
-  video.addEventListener("ended", function () { topBar.classList.remove("playing"); });
+  // The browser's own bar (the iPhone status bar area) follows, through
+  // theme-color, so it matches the top bar instead of fading separately.
+  var themeColor = document.querySelector('meta[name="theme-color"]');
+  var idleColor = themeColor ? themeColor.content : "";
+  function setPlayingBar(playing) {
+    topBar.classList.toggle("playing", playing);
+    if (themeColor) themeColor.content = playing ? "#191919" : idleColor;
+  }
+  video.addEventListener("play", function () { setPlayingBar(true); });
+  video.addEventListener("pause", function () { setPlayingBar(false); });
+  video.addEventListener("ended", function () { setPlayingBar(false); });
 
   // Controls ----------------------------------------------------------------
   //

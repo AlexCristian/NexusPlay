@@ -118,14 +118,21 @@ func TestPlaybackScreens(t *testing.T) {
 		assertStillConverting(t, tb)
 		// While playing, the top bar is the original's solid dark gray with
 		// solid red links and icons (nothing see-through).
-		var bar struct{ Bg, Link, Icon string }
+		// It switches without a fade, and the browser's own bar follows it
+		// (theme-color), so iOS shows no mismatched bands.
+		var bar struct{ Bg, Link, Icon, Fade, Theme string }
 		tb.eval(`(() => {
 			const st = e => getComputedStyle(e);
 			const icon = document.querySelector('#top-bar .label-short .icon');
 			return {bg: st(document.getElementById('top-bar')).backgroundColor,
 				link: st(document.querySelector('#top-bar .brand')).color,
-				icon: st(icon).color + ' ' + st(icon).opacity};
+				icon: st(icon).color + ' ' + st(icon).opacity,
+				fade: st(document.getElementById('top-bar')).transitionDuration,
+				theme: document.querySelector('meta[name="theme-color"]').content};
 		})()`, &bar)
+		if bar.Fade != "0s" || bar.Theme != "#191919" {
+			t.Errorf("top bar while playing: transition %s, theme-color %s; want no transition and #191919", bar.Fade, bar.Theme)
+		}
 		if bar.Bg != "rgb(25, 25, 25)" || bar.Link != "rgb(190, 30, 0)" || bar.Icon != "rgb(190, 30, 0) 1" {
 			t.Errorf("top bar while playing: background %s, links %s, icons %s; want rgb(25, 25, 25) with rgb(190, 30, 0)",
 				bar.Bg, bar.Link, bar.Icon)
@@ -142,6 +149,11 @@ func TestPlaybackScreens(t *testing.T) {
 		compareScreenshot(t, "playback-converting-phone-playing", tb.screenshotWith(playingStabilize))
 		pauseAt(tb, 3)
 		assertStillConverting(t, tb)
+		var theme string
+		tb.eval(`document.querySelector('meta[name="theme-color"]').content`, &theme)
+		if theme != "#c21f00" {
+			t.Errorf("theme-color after pausing = %s, want the red #c21f00", theme)
+		}
 		// At 3 of 30 seconds the seek bar is a tenth full, not a share of
 		// the part converted so far.
 		var fill string

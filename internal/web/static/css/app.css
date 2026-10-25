@@ -105,7 +105,10 @@ button { font: inherit; }
   position: sticky;
   top: 0;
   z-index: 10;
-  transition: background-color .4s, opacity .4s;
+  /* No fade between red and the playing gray: iOS Safari tints the
+     status bar from the page's color on its own schedule, so during a fade
+     the two showed as mismatched bands. The page also declares the color
+     (theme-color), which player.js keeps up to date. */
 }
 /* While a video plays the bar turns dark gray with red links, as in the
    original, so it does not draw the eye from the picture. */
