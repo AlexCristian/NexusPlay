@@ -65,7 +65,7 @@
    display (the player's play button and control bar, for example). */
 [hidden] { display: none !important; }
 
-html { min-height: 100%; }
+html { min-height: 100%; background-color: #02040c; }
 
 body {
   margin: 0;
@@ -76,7 +76,23 @@ body {
   font-size: 16px;
   line-height: 1.5;
   color: #fff;
-  background-color: #02040c;
+  /* No background here: it would paint over the starfield layer below.
+     The dark base color is on html. */
+}
+
+/* The starfield is its own fixed layer, the height of the largest viewport
+   (Safari's toolbars hidden). iOS Safari ignores background-attachment:
+   fixed, so a body background ended where the page did and left a flat
+   band below, under Safari's toolbar. */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100lvh;
+  z-index: -1;
+  pointer-events: none;
   /* A starfield drawn in CSS: scattered stars over a deep blue glow. */
   background-image:
     radial-gradient(1px 1px at 20px 30px, #fff, transparent),
@@ -90,7 +106,6 @@ body {
     radial-gradient(ellipse at 85% 75%, rgba(20, 60, 140, .5), transparent 60%),
     radial-gradient(ellipse at 50% 120%, rgba(10, 30, 90, .7), transparent 70%);
   background-size: 360px 280px, 360px 280px, 360px 280px, 360px 280px, 360px 280px, 360px 280px, 360px 280px, 100% 100%, 100% 100%, 100% 100%;
-  background-attachment: fixed;
 }
 
 a { color: #6cc4ff; }

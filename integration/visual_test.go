@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -186,6 +187,26 @@ func TestScreens(t *testing.T) {
 
 	// Phone width.
 	phone := b.newTab(390, 844)
+	// The starfield is a fixed layer covering the whole (largest) viewport,
+	// not a fixed body background, which iOS Safari ignores and which then
+	// stopped where the page did.
+	t.Run("background-covers-viewport", func(t *testing.T) {
+		phone.t = t
+		phone.navigate(s.URL + "/login")
+		var bg struct {
+			Position, Image, BodyAttachment, BodyImage string
+			Height, Viewport                           float64
+		}
+		phone.eval(`(() => { const b = getComputedStyle(document.body, '::before'), body = getComputedStyle(document.body);
+			return {position: b.position, image: b.backgroundImage.slice(0, 15), height: parseFloat(b.height),
+				viewport: innerHeight, bodyAttachment: body.backgroundAttachment, bodyImage: body.backgroundImage}; })()`, &bg)
+		if bg.Position != "fixed" || !strings.HasPrefix(bg.Image, "radial-gradient") || bg.Height < bg.Viewport {
+			t.Errorf("starfield layer: position %s, image %q, height %.0f for a %.0fpx viewport", bg.Position, bg.Image, bg.Height, bg.Viewport)
+		}
+		if bg.BodyImage != "none" || bg.BodyAttachment == "fixed" {
+			t.Errorf("body still has its own background (%s, %s)", bg.BodyImage, bg.BodyAttachment)
+		}
+	})
 	t.Run("home-phone", func(t *testing.T) {
 		phone.t = t
 		phone.navigate(s.URL)
