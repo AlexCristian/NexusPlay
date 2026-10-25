@@ -283,12 +283,29 @@ button { font: inherit; }
   border-radius: var(--radius);
   width: min(560px, calc(100vw - 32px));
   max-height: calc(100vh - 64px);
-  background: #fff;
+  /* No background of its own: the content paints it. Otherwise the white
+     shows through at the rounded corners, along the antialiased edge of
+     the dark header clipped on top of it. */
+  background: transparent;
   color: var(--ink);
   box-shadow: 0 20px 60px rgba(0, 0, 0, .7);
   overflow: auto;
 }
 .modal:focus { outline: none; }
+/* Rounded corners where two colors meet (a red or dark header over a white
+   body): the outer box paints no background, and each part rounds its own
+   corners. If the white were painted underneath the header, it would show
+   through along the header's antialiased curve as a thin light fringe. */
+#modal-body:has(> .alert) { background: #fff; } /* an error on its own */
+.collection-page, .auth-panel { background: transparent; }
+.modal-heading, .collection-header { border-radius: var(--radius) var(--radius) 0 0; }
+.collection-header { overflow: hidden; } /* rounds the poster's corner too */
+.collection-body, .auth-body, .report-body { border-radius: 0 0 var(--radius) var(--radius); }
+.collection-body, .auth-body { background: #fff; }
+/* The library box ends in the dark tile strip when nothing follows it (the
+   search page): the white goes on the tab row instead. */
+.library-panel:not(:has(.featurette)) { background: transparent; }
+.library-panel:not(:has(.featurette)) .tab-list { background: #fff; border-radius: var(--radius) var(--radius) 0 0; }
 .modal::backdrop { background: rgba(0, 0, 0, .7); }
 .modal-close {
   position: absolute;

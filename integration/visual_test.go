@@ -53,6 +53,16 @@ const stabilize = `(() => {
   return true;
 })()`
 
+// roundedParts names, for some screens, a rounded box whose corners join a
+// colored header to a body of another color: the place a light fringe shows.
+var roundedParts = map[string]string{
+	"collection-dialog":            "#modal",
+	"collection-dialog-subscribed": "#modal",
+	"register-dialog":              "#modal",
+	"subtitle-report":              "#modal",
+	"login-page":                   ".auth-panel",
+}
+
 func TestScreens(t *testing.T) {
 	s := startServer(t, serverOpts{media: allFixtures})
 	s.waitForMedia(5)
@@ -143,7 +153,11 @@ func TestScreens(t *testing.T) {
 		t.Run(sc.name, func(t *testing.T) {
 			sc.tab.t = t
 			sc.load(sc.tab)
-			compareScreenshot(t, sc.name, sc.tab.screenshot())
+			shot := sc.tab.screenshot()
+			compareScreenshot(t, sc.name, shot)
+			if corner, ok := roundedParts[sc.name]; ok {
+				assertCleanCorners(t, sc.tab, shot, corner)
+			}
 		})
 	}
 
@@ -444,4 +458,52 @@ func TestLongSeasonList(t *testing.T) {
 		return row.scrollLeft + row.clientWidth >= row.scrollWidth - 1 && last.right <= box.right && last.left >= row.getBoundingClientRect().left;
 	})()`, 5*time.Second)
 	compareScreenshot(t, "collection-dialog-seasons-phone", tb.screenshot())
+}
+
+// assertCleanCorners checks the four rounded corners of the element sel in
+// a screenshot: no pixel may be brighter than both the element's color just
+// inside the corner and the page's color just outside it. A brighter pixel
+// is a light fringe: a background under a darker part showing through the
+// antialiased curve.
+func assertCleanCorners(t *testing.T, tb *tab, shot []byte, sel string) {
+	t.Helper()
+	var r struct{ Left, Top, Right, Bottom, TL, TR, BL, BR float64 }
+	tb.eval(fmt.Sprintf(`(e => { const b = e.getBoundingClientRect(), st = getComputedStyle(e);
+		return {left: b.left, top: b.top, right: b.right, bottom: b.bottom,
+			tl: parseFloat(st.borderTopLeftRadius), tr: parseFloat(st.borderTopRightRadius),
+			bl: parseFloat(st.borderBottomLeftRadius), br: parseFloat(st.borderBottomRightRadius)}; })(document.querySelector(%q))`, sel), &r)
+	img, err := png.Decode(bytes.NewReader(shot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	light := func(x, y int) int {
+		cr, cg, cb, _ := img.At(x, y).RGBA()
+		return int((cr + cg + cb) / 3 >> 8)
+	}
+	if max(r.TL, r.TR, r.BL, r.BR) < 2 {
+		t.Fatalf("%s has no rounded corners", sel)
+	}
+	l, tp, rt, bt := int(r.Left), int(r.Top), int(r.Right)-1, int(r.Bottom)-1
+	for _, c := range []struct {
+		name   string
+		x, y   int // the corner pixel
+		dx, dy int // pointing inwards
+		radius float64
+	}{{"top left", l, tp, 1, 1, r.TL}, {"top right", rt, tp, -1, 1, r.TR}, {"bottom left", l, bt, 1, -1, r.BL}, {"bottom right", rt, bt, -1, -1, r.BR}} {
+		rad := int(c.radius)
+		if rad < 2 {
+			continue // a square corner
+		}
+		inside := light(c.x+c.dx*rad, c.y+c.dy*rad)
+		outside := light(c.x-c.dx*2, c.y-c.dy*2)
+		limit := max(inside, outside) + 12
+		for i := 0; i < rad; i++ {
+			for j := 0; j < rad; j++ {
+				if v := light(c.x+c.dx*i, c.y+c.dy*j); v > limit {
+					t.Errorf("%s: light fringe at its %s corner: brightness %d, inside %d, outside %d", sel, c.name, v, inside, outside)
+					return
+				}
+			}
+		}
+	}
 }

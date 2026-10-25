@@ -427,6 +427,9 @@ func TestSearchAndLogout(t *testing.T) {
 	tb.waitJS(`!document.querySelector('#search-drawer.open') && document.querySelector('input[name=q]').value === ''`, 5*time.Second)
 
 	// Without JavaScript, /search is the home page with the drawer open.
+	// There the library box ends in its dark strip, so check its corners.
+	tb.navigate(s.URL + "/search?q=old")
+	assertCleanCorners(t, tb, tb.screenshot(), "#page-cover .library-panel")
 	tb.navigate(s.URL + "/search?q=nothing-matches")
 	if got := tb.text("#search-results .message p"); got != "Nothing matches your search." {
 		t.Errorf("no-results message = %q", got)
