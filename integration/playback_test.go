@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
 // Screenshots of video actually playing, with the frames visible: still
@@ -39,6 +42,16 @@ func TestPlaybackScreens(t *testing.T) {
 	s.waitForMedia(2)
 	s.publishAll()
 	s.register("alex")
+	// A synopsis under the episode's title, as TMDB provides.
+	ctx := context.Background()
+	ep, err := s.App.Store.MediaByID(ctx, s.mediaID(barsEpisode))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.App.Store.UpdateMedia(ctx, ep.ID, store.MediaUpdate{Title: ep.Title, CollectionID: ep.CollectionID,
+		Season: ep.Season, Episode: ep.Episode, Overview: "Seven colored bars and a tone, for thirty seconds."}, true); err != nil {
+		t.Fatal(err)
+	}
 	b := newBrowser(t)
 
 	// Plays the video from the start and waits until it is past at.
@@ -112,6 +125,12 @@ func TestPlaybackScreens(t *testing.T) {
 		}
 		if got := tb.text("#ctl-duration"); got != "00:30" {
 			t.Errorf("length shown while converting = %s, want the whole 00:30", got)
+		}
+		var gap float64
+		tb.eval(`document.querySelector('.meta-text .overview').getBoundingClientRect().top -
+			document.querySelector('.meta-text h1').getBoundingClientRect().bottom`, &gap)
+		if gap < 10 {
+			t.Errorf("synopsis starts %.0fpx under the episode title, want some space", gap)
 		}
 		compareScreenshot(t, "playback-converting-phone-playing", tb.screenshotWith(playingStabilize))
 		pauseAt(tb, 3)

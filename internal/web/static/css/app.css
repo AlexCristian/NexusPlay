@@ -569,7 +569,7 @@ button { font: inherit; }
 .meta-text h1 { margin: 0; font-size: clamp(1.4rem, 4vw, 2.2rem); line-height: 1.15; font-weight: 700; }
 .episode-title { display: block; color: #999; font-size: .8em; margin-top: 2px; }
 .meta-sub { margin: 10px 0 8px; font-weight: 700; font-size: 1.1rem; color: #fff; }
-.meta-text .overview { color: #bbb; }
+.meta-text .overview { color: #bbb; margin-top: 14px; }
 
 /* Subtitle report */
 /* Subtitle report: rows about 450 px wide, each a dark strip with the line
