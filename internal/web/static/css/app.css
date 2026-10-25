@@ -108,7 +108,18 @@ body::before {
   background-size: 360px 280px, 360px 280px, 360px 280px, 360px 280px, 360px 280px, 360px 280px, 360px 280px, 100% 100%, 100% 100%, 100% 100%;
 }
 
-a { color: #6cc4ff; }
+/* Long words and URLs wrap instead of pushing boxes wider. Table cells
+   need "anywhere", which also lets a column shrink below its longest word. */
+body { overflow-wrap: break-word; }
+td, th, .original-sub, .changed-sub > span, .meta-text h1, .overview, .collection-meta h2 { overflow-wrap: anywhere; }
+
+a { color: #6cc4ff; } /* on the dark starfield */
+/* On white panels, dialogs and popovers the light blue measured 1.9:1;
+   this one is 5.6:1 on white. */
+/* Plain text links only (no class), at the lowest specificity, so tiles,
+   buttons and list rows keep their own colors. */
+:where(.panel, .modal, .popover, .auth) a:where(:not([class])) { color: #0b66a3; }
+:where(.panel, .modal, .popover, .auth) a:where(:not([class])):hover { color: #084f80; }
 img { max-width: 100%; }
 button { font: inherit; }
 
@@ -157,6 +168,8 @@ button { font: inherit; }
   line-height: 1;
 }
 .top-bar .inline-form { display: flex; }
+/* A long nickname ends in an ellipsis rather than widening the bar. */
+.top-text { max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; line-height: 44px; }
 .brand { gap: 8px; }
 .brand .icon { width: .8em; height: .8em; fill: currentColor; }
 .top-text { cursor: default; }
@@ -169,18 +182,31 @@ button { font: inherit; }
 .popover {
   margin: 0;
   inset: auto;
+  /* app.js places it under its button; these are the fallbacks. */
   top: 52px;
   left: 50%;
   translate: -50% 0;
-  width: min(360px, calc(100vw - 32px));
-  max-height: 70vh;
-  overflow: auto;
+  width: min(360px, calc(100vw - 16px));
+  overflow: visible; /* the arrow sits just outside; the list scrolls instead */
   padding: 12px;
   border: 0;
   border-radius: var(--radius);
   background: #fff;
   color: var(--ink);
   box-shadow: 0 8px 30px rgba(0, 0, 0, .5);
+}
+.popover[style*="left"] { translate: none; }
+.popover > div { max-height: 60vh; overflow: auto; }
+/* The arrow points at the button that opened the popover. */
+.popover::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: calc(var(--arrow-x, 50%) - 7px);
+  border: 7px solid transparent;
+  border-top: 0;
+  border-bottom-color: #fff;
+  filter: drop-shadow(0 -1px 0 rgba(0, 0, 0, .12));
 }
 .popover-title { font-size: 14px; text-align: center; margin: 0 0 8px; }
 .popover-empty { font-size: 14px; color: #666; margin: 4px; text-align: center; }
@@ -342,21 +368,23 @@ button { font: inherit; }
 .modal::backdrop { background: rgba(0, 0, 0, .7); }
 .modal-close {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   z-index: 2;
-  background: none;
+  /* A dark circle behind a white ×, so it reads on the red heading, the
+     dark collection header and an error dialog's white body alike. */
+  background: rgba(0, 0, 0, .45);
   color: #fff;
-  opacity: .55;
   border: 0;
-  width: 28px;
-  height: 28px;
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   cursor: pointer;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5));
+  transition: background-color .15s;
 }
-.modal-close:hover { opacity: 1; }
+.modal-close:hover { background: rgba(0, 0, 0, .7); }
 .modal-heading { margin: 0; padding: 12px 56px 12px 16px; background: var(--red); color: #fff; font-size: 1.2rem; }
 
 /* Collection dialog */
@@ -560,7 +588,7 @@ button { font: inherit; }
 .captions-menu button[aria-checked="true"]::before { content: "✓ "; }
 
 /* Under the player: the poster, skewed with a reflection, and the title. */
-.video-content { position: relative; background: var(--dark); color: #fff; border-radius: 0 0 var(--radius) var(--radius); box-shadow: inset 0 0 1000px #000, 0 2px 4px #000; padding: 6px 30px 30px; }
+.video-content { position: relative; overflow: hidden; /* clips the poster's reflection, as the original did */ background: var(--dark); color: #fff; border-radius: 0 0 var(--radius) var(--radius); box-shadow: inset 0 0 1000px #000, 0 2px 4px #000; padding: 6px 30px 30px; }
 .player-actions { position: absolute; top: 0; right: 10px; display: flex; gap: 10px; }
 .player-action {
   width: 22px;
@@ -641,6 +669,12 @@ button { font: inherit; }
 .vote-box .icon { width: 13px; height: 13px; }
 .vote-box:hover:not(:disabled) { background: var(--red-bright); }
 .vote-box.voted, .vote-box:disabled { background: #555; cursor: default; }
+/* Messages: tinted boxes with a colored edge, so an error never reads as
+   ordinary text and errors, successes and notes look different. */
+.alert { padding: 10px 14px; border-radius: 6px; border: 1px solid; border-left-width: 4px; margin: 0 0 12px; font-size: .95rem; line-height: 1.4; }
+.alert-error { background: #fdecea; border-color: #f0b8ae; border-left-color: var(--red); color: #7a1a08; }
+.alert-success { background: #eef7e0; border-color: #c9e3a3; border-left-color: #5f9a00; color: #34540a; }
+.alert-info { background: #e8f3fb; border-color: #b8d8ee; border-left-color: #1f7fbf; color: #0d4566; }
 .report-body .alert { margin-top: 8px; }
 .collection-body > .alert, #modal-body > .alert { margin: 48px 16px 16px; }
 
@@ -713,15 +747,39 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visib
 .danger-zone { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e3e3e3; }
 code { font-size: .9em; background: #f1f1f1; padding: 1px 4px; border-radius: 3px; }
 
-@media (max-width: 600px) {
-  .page { padding-top: 24px; }
-  /* Icons instead of labels and no greeting, so the bar is one line. */
+/* iOS Safari zooms into any field whose text is under 16px. */
+@media (max-width: 600px), (pointer: coarse) {
+  /* !important: the field rules elsewhere are more specific, and this
+     must win over all of them on touch screens. */
+  input, textarea, select { font-size: 16px !important; }
+}
+
+/* 5. Below 800px the bar uses icons; the greeting shows only where it fits
+   on one row, and a long nickname is shortened. */
+@media (max-width: 800px) {
   .top-bar-inner { gap: 0 20px; flex-wrap: nowrap; }
-  .brand, .top-link { font-size: .95rem; white-space: nowrap; }
-  .top-text { display: none; }
+  .brand, .top-link { white-space: nowrap; }
   .label-long { display: none; }
   .label-short { display: inline-flex; }
   .label-short .icon { width: 20px; height: 20px; display: block; }
+}
+@media (max-width: 1000px) { .top-text { display: none; } }
+
+/* 4. On a short landscape screen the player fits under the top bar, with
+   its control bar, and the search row above it steps aside. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .player { max-height: calc(100dvh - 44px - var(--bar, 30px)); }
+  .page:has(.player-container) { padding-top: 0; }
+  .page:has(.player-container) .above-panel { display: none; }
+}
+
+@media (max-width: 600px) {
+  .page { padding-top: 24px; }
+  .brand, .top-link { font-size: .95rem; }
+  /* 13. Library tabs stay on one row and scroll sideways. */
+  .tab-list { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 0 18px; }
+  .tab-list::-webkit-scrollbar { display: none; }
+  .tab { flex: none; white-space: nowrap; font-size: 1.6rem; }
   .tiles { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 16px; }
   .tile-title { font-size: 1rem; }
   .tile-strip { padding: 16px; }

@@ -55,6 +55,23 @@
     setDrawer(false);
   });
 
+  // Popovers ("Previously watching", "My subscriptions") open under the
+  // button that opened them, kept on screen, with the arrow pointing at it.
+  document.querySelectorAll(".popover[popover]").forEach(function (pop) {
+    pop.addEventListener("beforetoggle", function (e) {
+      if (e.newState !== "open") return;
+      var btn = document.querySelector('[popovertarget="' + pop.id + '"]');
+      if (!btn) return;
+      var r = btn.getBoundingClientRect();
+      var width = Math.min(360, window.innerWidth - 16);
+      var left = Math.max(8, Math.min(r.left + r.width / 2 - width / 2, window.innerWidth - width - 8));
+      pop.style.width = width + "px";
+      pop.style.left = left + "px";
+      pop.style.top = (r.bottom + 8) + "px";
+      pop.style.setProperty("--arrow-x", (r.left + r.width / 2 - left) + "px");
+    });
+  });
+
   // Tabs: a [data-tabs] container with [data-tab] buttons naming panel ids.
   document.addEventListener("click", function (e) {
     var tab = e.target.closest("[data-tab]");
@@ -69,9 +86,10 @@
     });
     // A long row of seasons scrolls sideways; the chosen one moves to the
     // middle, so the seasons next to it come into view (as in the original).
-    if (group.scrollWidth > group.clientWidth) {
-      var left = tab.offsetLeft - group.offsetLeft - (group.clientWidth - tab.offsetWidth) / 2;
-      group.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+    var row = tab.parentElement;
+    if (row.scrollWidth > row.clientWidth) {
+      var left = tab.offsetLeft - row.offsetLeft - (row.clientWidth - tab.offsetWidth) / 2;
+      row.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
     }
   });
 
@@ -79,6 +97,33 @@
   document.addEventListener("submit", function (e) {
     var msg = e.target.dataset && e.target.dataset.confirm;
     if (msg && !window.confirm(msg)) e.preventDefault();
+  });
+
+  // A request that never reached the server (offline, server restarting):
+  // say so where the answer would have gone, instead of doing nothing.
+  function showFailure(target, msg) {
+    if (!target) return;
+    var div = document.createElement("div");
+    div.className = "alert alert-error";
+    div.setAttribute("role", "alert");
+    div.textContent = msg;
+    if (target === modalBody) {
+      modalBody.replaceChildren(div);
+      openModal();
+    } else if (target === results) {
+      var panel = document.createElement("section");
+      panel.className = "panel message search-panel";
+      panel.appendChild(div);
+      results.replaceChildren(panel);
+      setDrawer(true);
+    } else {
+      target.replaceChildren(div);
+    }
+  }
+  ["htmx:sendError", "htmx:timeout"].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      showFailure(e.detail.target, "Couldn’t reach the server. Check your connection and try again.");
+    });
   });
 
   // Errors from htmx requests: show a readable message instead of failing silently.
