@@ -227,7 +227,7 @@ func TestPolish(t *testing.T) {
 		tb.navigate(s.URL + "/collections/" + fmt.Sprint(coll))
 		var h struct {
 			Lines, Poster float64
-			Clipped      bool
+			Clipped       bool
 		}
 		tb.eval(`(() => { const t = document.querySelector('.collection-meta h2'), st = getComputedStyle(t);
 			return {lines: t.getBoundingClientRect().height / parseFloat(st.lineHeight), clipped: t.scrollWidth > t.clientWidth,
