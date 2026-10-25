@@ -29,13 +29,19 @@ type Guess struct {
 	Show    string // set for TV episodes
 	Season  int
 	Episode int
+	// EpisodeEnd is the last episode in a file that holds several, such as
+	// 2 for "S01E01E02" (a two-part pilot); 0 for a single episode.
+	EpisodeEnd int
 }
 
 // IsEpisode reports whether the path looked like a TV episode.
 func (g Guess) IsEpisode() bool { return g.Show != "" }
 
 var (
-	episodeRe = regexp.MustCompile(`(?i)(?:^|[\s._\-\[(])s(\d{1,2})[\s._\-]*e(\d{1,3})(?:[\s._\-]*e\d{1,3})*`)
+	// The last group holds more episode numbers of a file with several:
+	// "S01E01E02", "S01E01-E02" or "S01E01-02".
+	episodeRe = regexp.MustCompile(`(?i)(?:^|[\s._\-\[(])s(\d{1,2})[\s._\-]*e(\d{1,3})((?:[\s._\-]*e\d{1,3}|-\d{1,3}\b)*)`)
+	digitsRe  = regexp.MustCompile(`\d+`)
 	crossRe   = regexp.MustCompile(`(?i)(?:^|[\s._\-])(\d{1,2})x(\d{2,3})(?:$|[\s._\-])`)
 	yearRe    = regexp.MustCompile(`(?:^|[\s.(\[_\-])((?:19|20)\d{2})(?:$|[\s.)\]_\-])`)
 	seasonDir = regexp.MustCompile(`(?i)^(?:season|series|s)[\s._\-]*(\d{1,2})$`)
@@ -62,6 +68,7 @@ type episodeMatch struct {
 	title   string // text after it, without release tags; may be empty
 	season  int
 	episode int
+	end     int // the last episode of a multi-episode file, or 0
 }
 
 // episodePatterns recognise "S02E03" (and "S02E03E04") and "2x03".
@@ -78,12 +85,20 @@ func matchEpisode(name string) (episodeMatch, bool) {
 		// Atoi cannot fail: the patterns only capture digits.
 		season, _ := strconv.Atoi(name[m[2]:m[3]])
 		episode, _ := strconv.Atoi(name[m[4]:m[5]])
-		return episodeMatch{
+		ep := episodeMatch{
 			show:    clean(name[:m[0]]),
 			title:   clean(junkRe.ReplaceAllString(name[m[1]:], "")),
 			season:  season,
 			episode: episode,
-		}, true
+		}
+		if len(m) > 7 && m[6] >= 0 {
+			if more := digitsRe.FindAllString(name[m[6]:m[7]], -1); len(more) > 0 {
+				if last, _ := strconv.Atoi(more[len(more)-1]); last > episode {
+					ep.end = last
+				}
+			}
+		}
+		return ep, true
 	}
 	return episodeMatch{}, false
 }
@@ -115,7 +130,7 @@ func parseMovie(name string) Guess {
 // show name comes from the file name, or else from the nearest folder; the
 // year from either, when they name the same show.
 func episodeGuess(ep episodeMatch, dir string) Guess {
-	g := Guess{Title: ep.title, Season: ep.season, Episode: ep.episode}
+	g := Guess{Title: ep.title, Season: ep.season, Episode: ep.episode, EpisodeEnd: ep.end}
 	folder, folderSeason := showFromDirs(dir)
 	if g.Season == 0 { // "S00E05" is a special; a "Season 2" folder knows better
 		g.Season = folderSeason

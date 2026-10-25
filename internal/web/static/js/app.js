@@ -67,6 +67,12 @@
       var panel = scope.querySelector("#" + CSS.escape(t.dataset.tab));
       if (panel) panel.hidden = !selected;
     });
+    // A long row of seasons scrolls sideways; the chosen one moves to the
+    // middle, so the seasons next to it come into view (as in the original).
+    if (group.scrollWidth > group.clientWidth) {
+      var left = tab.offsetLeft - group.offsetLeft - (group.clientWidth - tab.offsetWidth) / 2;
+      group.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+    }
   });
 
   // Forms with data-confirm ask before submitting.

@@ -80,3 +80,22 @@ func TestTopBarLinksHaveNames(t *testing.T) {
 		}
 	}
 }
+
+func TestEpisodeNumbers(t *testing.T) {
+	for _, tc := range []struct {
+		path            string
+		season, episode int
+		want            string
+	}{
+		{"TNG/Season 1/TNG S01E01E02 Encounter at Farpoint.mkv", 1, 1, "S1E1–2"},
+		{"TNG/Season 1/TNG S01E03 The Naked Now.mkv", 1, 3, "S1E3"},
+		// Renumbered by an administrator: the file name's range no longer applies.
+		{"TNG/Season 1/TNG S01E01E02 Encounter at Farpoint.mkv", 1, 7, "S1E7"},
+		{"Movies/Alien (1979).mp4", 0, 0, "S0E0"},
+	} {
+		m := store.Media{Path: tc.path, Season: tc.season, Episode: tc.episode}
+		if got := episodeLabel(m); got != tc.want {
+			t.Errorf("episodeLabel(%s, S%dE%d) = %q, want %q", tc.path, tc.season, tc.episode, got, tc.want)
+		}
+	}
+}

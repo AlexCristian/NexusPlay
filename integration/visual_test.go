@@ -17,6 +17,7 @@ import (
 
 	"github.com/chromedp/chromedp"
 
+	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
@@ -388,4 +389,59 @@ func (s *server) proposeCorrection(t *testing.T, mediaID, ms int64, nick, text s
 	if _, err := st.ProposeChange(ctx, cue.ID, u.ID, text, 4); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// A show with more seasons than fit across a phone: the season row scrolls
+// sideways up to the dialog's edge, and picking a season scrolls it into
+// the middle. Double episodes show as a range ("1–2").
+func TestLongSeasonList(t *testing.T) {
+	s := startServer(t, serverOpts{})
+	ctx := context.Background()
+	st := s.App.Store
+	coll, err := st.CreateCollection(ctx, store.Collection{Name: "Long Show", Category: "TV Shows", Year: "1987"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for season := 1; season <= 7; season++ {
+		eps := []string{"S%02dE01.mkv", "S%02dE02.mkv"}
+		if season == 1 {
+			eps = []string{"S%02dE01E02 Encounter.mkv", "S%02dE03 The Naked Now.mkv"}
+		}
+		for _, name := range eps {
+			path := fmt.Sprintf("Long Show/Season %d/Long Show "+name, season, season)
+			g := library.ParsePath(path)
+			id, _, err := st.InsertScannedMedia(ctx, store.ScannedMedia{Path: path, Title: g.Title, Season: g.Season, Episode: g.Episode, VideoCodec: "h264"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			u := store.MediaUpdate{Title: g.Title, CollectionID: coll, Season: g.Season, Episode: g.Episode}
+			if err := st.UpdateMedia(ctx, id, u, true); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	b := newBrowser(t)
+	tb := b.newTab(390, 844)
+	tb.navigate(s.URL)
+	tb.waitHTMX("#library .tile")
+	tb.click("#library .tile")
+	tb.waitVisible("#modal[open] .episodes")
+
+	if got := tb.text("#modal .tab-panel:not([hidden]) tbody tr:first-child td:first-child"); got != "1–2" {
+		t.Errorf("double episode numbered %q, want 1–2", got)
+	}
+	var overflow bool
+	tb.eval(`(r => r.scrollWidth > r.clientWidth)(document.querySelector('#modal .season-tabs'))`, &overflow)
+	if !overflow {
+		t.Fatal("seven seasons fit on one phone row; the test needs a row that scrolls")
+	}
+	tb.click(`#modal .season-tab:last-child`)
+	// Smooth scrolling: wait until it settles with the last season in view.
+	tb.waitJS(`(() => {
+		const row = document.querySelector('#modal .season-tabs');
+		const last = row.lastElementChild.getBoundingClientRect();
+		const box = document.getElementById('modal').getBoundingClientRect();
+		return row.scrollLeft + row.clientWidth >= row.scrollWidth - 1 && last.right <= box.right && last.left >= row.getBoundingClientRect().left;
+	})()`, 5*time.Second)
+	compareScreenshot(t, "collection-dialog-seasons-phone", tb.screenshot())
 }

@@ -105,10 +105,22 @@ type Playback struct {
 	URL    string // the file or the HLS playlist
 }
 
-// episodeLabel is an episode's short number, "S3E4", shown before its title.
-// Season 0 holds specials.
+// episodeNumbers is an episode's number, or its range for a file holding
+// several ("1–2" for a two-part pilot in one file). The range comes from the
+// file name, and only while the stored number still matches it: a number
+// an administrator changed is shown as it is.
+func episodeNumbers(m store.Media) string {
+	n := strconv.Itoa(m.Episode)
+	if g := guessFor(m); g.EpisodeEnd > m.Episode && g.Episode == m.Episode && g.Season == m.Season {
+		n += "–" + strconv.Itoa(g.EpisodeEnd)
+	}
+	return n
+}
+
+// episodeLabel is an episode's short number, "S3E4" or "S1E1–2", shown
+// before its title. Season 0 holds specials.
 func episodeLabel(m store.Media) string {
-	return "S" + strconv.Itoa(m.Season) + "E" + strconv.Itoa(m.Episode)
+	return "S" + strconv.Itoa(m.Season) + "E" + episodeNumbers(m)
 }
 
 // fmtSeconds formats a resume position for player.js.

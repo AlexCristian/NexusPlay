@@ -152,7 +152,7 @@ templ collectionDialog(v Viewer, c store.Collection, seasons []Season, subscribe
 						<tbody>
 							for _, e := range s.Episodes {
 								<tr>
-									<td>{ strconv.Itoa(e.Episode) }</td>
+									<td>{ episodeNumbers(e) }</td>
 									<td>
 										<a href={ watchURL(e.ID) }>{ e.Title }</a>
 										if watched[e.ID] {
