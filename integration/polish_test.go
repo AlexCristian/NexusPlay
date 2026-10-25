@@ -174,6 +174,69 @@ func TestPolish(t *testing.T) {
 		}
 	})
 
+	t.Run("subtitles are a padded box above the control bar", func(t *testing.T) {
+		tb := b.newTab(1200, 900)
+		tb.t = t
+		tb.navigate(fmt.Sprintf("%s/watch/%d", s.URL, s.mediaID(movieMP4)))
+		tb.waitJS(`document.getElementById('player').readyState >= 1 && !document.getElementById('controls').hidden`, 20*time.Second)
+		tb.click("#ctl-captions")
+		tb.click(`#captions-menu button:nth-child(2)`)
+		tb.eval(`document.getElementById('player').currentTime = 2`, nil)
+		tb.waitJS(`document.querySelector('#cues span')`, 5*time.Second)
+		var c struct {
+			Text, Radius, Padding string
+			Gap                   float64
+		}
+		tb.eval(`(() => { const sp = document.querySelector('#cues span'), st = getComputedStyle(sp);
+			return {text: sp.textContent, radius: st.borderTopLeftRadius, padding: st.padding,
+				gap: document.getElementById('controls').getBoundingClientRect().top - sp.getBoundingClientRect().bottom}; })()`, &c)
+		if c.Text != "Hello thre!" || c.Radius != "4px" || c.Padding != "5px 7px" || c.Gap < 12 {
+			t.Errorf("subtitle %q: radius %s, padding %s, %.0fpx above the controls; want 4px, 5px 7px, about 15px",
+				c.Text, c.Radius, c.Padding, c.Gap)
+		}
+		compareScreenshot(t, "subtitles-on", tb.screenshot())
+	})
+
+	t.Run("light surfaces use light native controls", func(t *testing.T) {
+		tb := b.newTab(1200, 900)
+		tb.t = t
+		tb.login(s, "alex")
+		tb.navigate(fmt.Sprintf("%s/admin/media/%d", s.URL, s.mediaID(movieMP4)))
+		var schemes []string
+		tb.eval(`['.panel', '.search input', 'input[type=file]'].map(q => getComputedStyle(document.querySelector(q)).colorScheme)`, &schemes)
+		for _, sc := range schemes {
+			if sc != "light" {
+				t.Errorf("color schemes of panel, search box and file input = %v, want light", schemes)
+				break
+			}
+		}
+	})
+
+	t.Run("a long show title stays one line and the poster keeps its size", func(t *testing.T) {
+		coll := ep.CollectionID
+		c, err := s.App.Store.CollectionByID(ctx, coll)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.App.Store.UpdateCollection(ctx, coll, store.CollectionUpdate{Name: "A Show With a Title Long Enough to Need Several Lines on a Phone",
+			Category: c.Category, Year: c.Year, Overview: c.Overview}); err != nil {
+			t.Fatal(err)
+		}
+		tb := b.newTab(390, 844)
+		tb.t = t
+		tb.navigate(s.URL + "/collections/" + fmt.Sprint(coll))
+		var h struct {
+			Lines, Poster float64
+			Clipped      bool
+		}
+		tb.eval(`(() => { const t = document.querySelector('.collection-meta h2'), st = getComputedStyle(t);
+			return {lines: t.getBoundingClientRect().height / parseFloat(st.lineHeight), clipped: t.scrollWidth > t.clientWidth,
+				poster: document.querySelector('.poster-wrapper img').getBoundingClientRect().width}; })()`, &h)
+		if h.Lines > 1.1 || !h.Clipped || h.Poster < 99 {
+			t.Errorf("title is %.1f lines (clipped %v), poster %.0fpx wide; want one line ending in an ellipsis and a 100px poster", h.Lines, h.Clipped, h.Poster)
+		}
+	})
+
 	t.Run("popovers open under their button", func(t *testing.T) {
 		tb := b.newTab(1200, 900)
 		tb.t = t

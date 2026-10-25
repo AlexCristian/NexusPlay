@@ -213,7 +213,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</video><button type=\"button\" class=\"big-play\" id=\"big-play\" aria-label=\"Play\" hidden>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</video><div class=\"cues\" id=\"cues\"></div><button type=\"button\" class=\"big-play\" id=\"big-play\" aria-label=\"Play\" hidden>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -246,7 +246,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 					var templ_7745c5c3_Var15 templ.SafeURL
 					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/media/" + itoa(m.ID)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 42, Col: 81}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 43, Col: 81}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 					if templ_7745c5c3_Err != nil {
@@ -290,7 +290,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 				var templ_7745c5c3_Var16 templ.SafeURL
 				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(collectionURL(m.CollectionID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 53, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 54, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 				if templ_7745c5c3_Err != nil {
@@ -303,7 +303,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 				var templ_7745c5c3_Var17 string
 				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(collectionURL(m.CollectionID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 53, Col: 100}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 54, Col: 100}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 				if templ_7745c5c3_Err != nil {
@@ -316,7 +316,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 				var templ_7745c5c3_Var18 string
 				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue("All episodes of " + m.CollectionName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 53, Col: 193}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 54, Col: 193}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 				if templ_7745c5c3_Err != nil {
@@ -329,7 +329,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 				var templ_7745c5c3_Var19 string
 				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(posterURL(m.Poster))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 54, Col: 36}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 55, Col: 36}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 				if templ_7745c5c3_Err != nil {
@@ -342,7 +342,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 				var templ_7745c5c3_Var20 string
 				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(m.CollectionName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 54, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 55, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 				if templ_7745c5c3_Err != nil {
@@ -355,7 +355,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 				var templ_7745c5c3_Var21 string
 				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(m.CollectionName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 57, Col: 28}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 58, Col: 28}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 				if templ_7745c5c3_Err != nil {
@@ -368,7 +368,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 				var templ_7745c5c3_Var22 string
 				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(episodeLabel(m) + ": " + m.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 57, Col: 92}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 58, Col: 92}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 				if templ_7745c5c3_Err != nil {
@@ -386,7 +386,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 					var templ_7745c5c3_Var23 string
 					templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(m.Overview)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 59, Col: 39}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 60, Col: 39}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 					if templ_7745c5c3_Err != nil {
@@ -409,7 +409,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 				var templ_7745c5c3_Var24 string
 				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(posterURL(m.Poster))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 64, Col: 36}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 65, Col: 36}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 				if templ_7745c5c3_Err != nil {
@@ -422,7 +422,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(m.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 67, Col: 19}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 68, Col: 19}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
@@ -440,7 +440,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 					var templ_7745c5c3_Var26 string
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(m.Year)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 69, Col: 47}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 70, Col: 47}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 					if templ_7745c5c3_Err != nil {
@@ -459,7 +459,7 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 					var templ_7745c5c3_Var27 string
 					templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(m.Overview)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 72, Col: 39}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 73, Col: 39}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 					if templ_7745c5c3_Err != nil {
@@ -620,7 +620,7 @@ func subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []
 				var templ_7745c5c3_Var30 string
 				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(c.OriginalText)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 125, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 126, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 				if templ_7745c5c3_Err != nil {
@@ -633,7 +633,7 @@ func subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []
 				var templ_7745c5c3_Var31 string
 				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(c.ProposedText)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 127, Col: 30}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 128, Col: 30}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 				if templ_7745c5c3_Err != nil {
@@ -668,7 +668,7 @@ func subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []
 				var templ_7745c5c3_Var34 string
 				templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue("/changes/" + itoa(c.ID) + "/vote")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 131, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 132, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 				if templ_7745c5c3_Err != nil {
@@ -691,7 +691,7 @@ func subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []
 				var templ_7745c5c3_Var35 string
 				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(c.Votes))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 137, Col: 58}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 138, Col: 58}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 				if templ_7745c5c3_Err != nil {
@@ -727,7 +727,7 @@ func subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []
 		var templ_7745c5c3_Var36 templ.SafeURL
 		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/cues/" + itoa(cue.ID) + "/changes"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 151, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 152, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 		if templ_7745c5c3_Err != nil {
@@ -740,7 +740,7 @@ func subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue("/cues/" + itoa(cue.ID) + "/changes")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 152, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 153, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 		if templ_7745c5c3_Err != nil {
@@ -753,7 +753,7 @@ func subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []
 		var templ_7745c5c3_Var38 string
 		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrf)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 156, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 157, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
@@ -766,7 +766,7 @@ func subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(cue.Text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 157, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 158, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 		if templ_7745c5c3_Err != nil {
@@ -779,7 +779,7 @@ func subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue("Corrected line (" + track.Label + ", " + cueTime(cue.StartMS) + ")")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 159, Col: 142}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 160, Col: 142}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 		if templ_7745c5c3_Err != nil {
@@ -792,7 +792,7 @@ func subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(cue.Text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 159, Col: 155}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 160, Col: 155}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 		if templ_7745c5c3_Err != nil {

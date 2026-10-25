@@ -61,6 +61,11 @@
 
 * { box-sizing: border-box; }
 
+/* The page is dark, but white panels, dialogs, popovers and the search box
+   are light: their native controls (checkboxes, file pickers, the search
+   box's clear button) must draw in the light scheme there. */
+.panel, .modal, .popover, .search { color-scheme: light; }
+
 /* The hidden attribute always hides, even on elements whose rules set a
    display (the player's play button and control bar, for example). */
 [hidden] { display: none !important; }
@@ -392,7 +397,7 @@ button { font: inherit; }
 .poster-wrapper { position: relative; flex: none; width: 140px; }
 .poster-wrapper img { display: block; width: 140px; aspect-ratio: 2 / 3; height: auto; object-fit: cover; }
 .collection-meta { flex: 1; padding: 24px 48px 8px 20px; display: flex; flex-direction: column; min-width: 0; }
-.collection-meta h2 { margin: 0; font-size: clamp(1.4rem, 4vw, 2rem); line-height: 1.1; }
+.collection-meta h2 { margin: 0; font-size: clamp(1.4rem, 4vw, 2rem); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .collection-sub { margin: 6px 0 0; font-weight: 700; font-size: 1.1rem; }
 /* The row reaches out to the poster on the left and the dialog's edge on
    the right, so scrolled seasons run to both; padding of the same width
@@ -468,7 +473,13 @@ button { font: inherit; }
    volume, and a round translucent play button. */
 .player-container { --bar: 30px; background: #000; border-radius: var(--radius) var(--radius) 0 0; overflow: hidden; position: relative; }
 .player { width: 100%; aspect-ratio: 16 / 9; display: block; background: #000; }
-.player::cue { font-family: var(--font); font-size: 1.1em; color: #fff; background: rgba(58, 60, 61, .8); }
+.player::cue { font-family: var(--font); font-size: 1.1em; color: #fff; background: rgba(58, 60, 61, .8); } /* iPhone native fullscreen only */
+/* Subtitles, drawn by player.js: a padded, rounded box 15px above the
+   control bar, sized with the player, as in the original. */
+.player-container { container-type: inline-size; }
+.cues { position: absolute; left: 5%; right: 5%; bottom: calc(var(--bar) + 15px); display: grid; gap: 4px; justify-items: center; text-align: center; pointer-events: none; }
+.cues span { display: inline-block; padding: 5px 7px; border-radius: 4px; background: rgba(58, 60, 61, .8); color: #fff; font-size: clamp(14px, 3cqi, 30px); line-height: 1.35; white-space: pre-line; overflow-wrap: anywhere; }
+.player-container:fullscreen .cues { bottom: calc(var(--bar) + 4%); }
 .player-status { position: absolute; inset: auto 0 40% 0; margin: 0; text-align: center; color: #fff; text-shadow: 0 1px 3px #000; pointer-events: none; }
 .player-container:fullscreen { display: flex; flex-direction: column; border-radius: 0; }
 .player-container:fullscreen .player { flex: 1; aspect-ratio: auto; min-height: 0; }

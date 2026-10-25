@@ -122,7 +122,7 @@ templ collectionDialog(v Viewer, c store.Collection, seasons []Season, subscribe
 				}
 			</div>
 			<div class="collection-meta">
-				<h2 id="modal-title">{ c.Name }</h2>
+				<h2 id="modal-title" title={ c.Name }>{ c.Name }</h2>
 				<p class="collection-sub">{ seasonSummary(c, seasons) }</p>
 				if len(seasons) > 0 {
 					<div class="season-tabs" role="tablist" data-tabs data-tabs-scope=".collection">

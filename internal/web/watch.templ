@@ -28,6 +28,7 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 					<track kind="subtitles" id={ "sub-" + itoa(s.ID) } src={ "/subtitles/" + itoa(s.ID) } srclang={ s.Language } label={ s.Label }/>
 				}
 			</video>
+			<div class="cues" id="cues"></div>
 			<button type="button" class="big-play" id="big-play" aria-label="Play" hidden>
 				@icon("play")
 			</button>

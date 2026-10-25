@@ -310,7 +310,7 @@ func TestBrowserJourney(t *testing.T) {
 	// go to the first line, report it.
 	admin.click("#ctl-captions")
 	admin.click(`#captions-menu button:nth-child(2)`)
-	admin.waitJS(`document.getElementById('player').textTracks[0].mode === 'showing' && document.getElementById('captions-menu').hidden`, 5*time.Second)
+	admin.waitJS(`document.getElementById('player-container').dataset.subtitles === document.getElementById('player').textTracks[0].id && document.getElementById('captions-menu').hidden`, 5*time.Second)
 	admin.eval(`document.getElementById('player').currentTime = 2`, nil)
 	admin.waitVisible("#report-subtitle")
 	admin.click("#report-subtitle")

@@ -268,14 +268,58 @@
     else if (e.key === "f") { document.getElementById("ctl-fullscreen").click(); }
   });
 
-  // The subtitles menu lists "Off" and each track; picking one shows it.
+  // Subtitles ---------------------------------------------------------------
+  //
+  // The player draws subtitles itself (#cues), in a padded, rounded box
+  // above the control bar as in the original: the browser's own rendering
+  // cannot be padded, rounded or lifted. The chosen track is kept in
+  // "hidden" mode, which loads its cues without the browser drawing them.
+  // iPhone's native fullscreen shows only the browser's subtitles, so the
+  // track switches to "showing" there and back afterwards.
+  var cuesBox = document.getElementById("cues");
+  var activeTrack = null;
+  var nativeFullscreen = false;
+
   function subtitleTracks() {
     return Array.prototype.filter.call(video.textTracks, function (t) { return t.id.indexOf("sub-") === 0; });
   }
 
+  function renderCues() {
+    cuesBox.replaceChildren();
+    if (!activeTrack || nativeFullscreen || !activeTrack.activeCues) return;
+    Array.prototype.forEach.call(activeTrack.activeCues, function (cue) {
+      var line = document.createElement("div");
+      var box = document.createElement("span");
+      box.appendChild(cue.getCueAsHTML()); // a safe fragment: text and <i>/<b> only
+      line.appendChild(box);
+      cuesBox.appendChild(line);
+    });
+  }
+
+  function setSubtitles(track) {
+    activeTrack = track;
+    subtitleTracks().forEach(function (t) {
+      t.mode = t !== track ? "disabled" : (nativeFullscreen ? "showing" : "hidden");
+      t.oncuechange = t === track ? renderCues : null;
+    });
+    container.dataset.subtitles = track ? track.id : "";
+    if (captionsButton) captionsButton.classList.toggle("on", !!track);
+    renderCues();
+    if (typeof updateReport === "function") updateReport();
+  }
+
+  // A track turned on some other way (the browser's own menu) is adopted.
+  video.textTracks.addEventListener("change", function () {
+    if (nativeFullscreen) return;
+    var shown = subtitleTracks().filter(function (t) { return t.mode === "showing"; })[0];
+    if (shown) setSubtitles(shown);
+  });
+  video.addEventListener("webkitbeginfullscreen", function () { nativeFullscreen = true; setSubtitles(activeTrack); });
+  video.addEventListener("webkitendfullscreen", function () { nativeFullscreen = false; setSubtitles(activeTrack); });
+
   function buildCaptionsMenu() {
     var tracks = subtitleTracks();
-    var showing = tracks.filter(function (t) { return t.mode === "showing"; })[0] || null;
+    var showing = activeTrack;
     var items = [{ label: "Off", track: null }].concat(tracks.map(function (t) { return { label: t.label || t.language, track: t }; }));
     captionsMenu.replaceChildren.apply(captionsMenu, items.map(function (item) {
       var b = document.createElement("button");
@@ -284,7 +328,7 @@
       b.setAttribute("aria-checked", String(item.track === showing));
       b.textContent = item.label;
       b.addEventListener("click", function () {
-        tracks.forEach(function (t) { t.mode = t === item.track ? "showing" : "disabled"; });
+        setSubtitles(item.track);
         closeCaptionsMenu();
       });
       return b;
@@ -306,9 +350,6 @@
     });
     document.addEventListener("click", function (e) {
       if (!captionsMenu.hidden && !captionsMenu.contains(e.target)) closeCaptionsMenu();
-    });
-    video.textTracks.addEventListener("change", function () {
-      captionsButton.classList.toggle("on", subtitleTracks().some(function (t) { return t.mode === "showing"; }));
     });
   }
 
@@ -346,19 +387,14 @@
 
   // Subtitle corrections ----------------------------------------------------
 
-  function showingTrack() {
-    for (var i = 0; i < video.textTracks.length; i++) {
-      var t = video.textTracks[i];
-      if (t.mode === "showing" && t.id.indexOf("sub-") === 0) return t;
-    }
-    return null;
+  function showingTrack() { return activeTrack; }
+
+  function updateReport() {
+    if (reportButton) reportButton.hidden = !activeTrack;
   }
+  updateReport();
 
   if (reportButton) {
-    var updateReport = function () { reportButton.hidden = !showingTrack(); };
-    video.textTracks.addEventListener("change", updateReport);
-    updateReport();
-
     reportButton.addEventListener("click", function () {
       var track = showingTrack();
       if (!track) return;
