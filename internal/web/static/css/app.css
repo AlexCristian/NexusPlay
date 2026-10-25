@@ -317,7 +317,13 @@ button { font: inherit; }
    scrolled away or covered. */
 .modal[open] { display: flex; flex-direction: column; }
 #modal-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.modal-heading, .collection-header { position: sticky; top: 0; z-index: 1; }
+.modal-heading, .collection-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* Cast onto the content scrolling under it. */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .35), 0 6px 14px rgba(0, 0, 0, .25);
+}
 .modal:focus { outline: none; }
 /* Rounded corners where two colors meet (a red or dark header over a white
    body): the outer box paints no background, and each part rounds its own

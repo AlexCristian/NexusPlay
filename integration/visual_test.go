@@ -509,6 +509,13 @@ func TestLongSeasonList(t *testing.T) {
 	if !stuck.CloseOnTop {
 		t.Error("after scrolling, something covers the close button")
 	}
+	// The header casts a shadow onto the table scrolling under it: the row
+	// just below the header is darker than the table further down.
+	var shadow string
+	tb.eval(`getComputedStyle(document.querySelector('#modal .collection-header')).boxShadow`, &shadow)
+	if shadow == "none" {
+		t.Error("the sticky header casts no shadow")
+	}
 	tb.run(chromedp.MouseEvent(input.MouseMoved, 1, 1)) // no row under the pointer, no hover highlight
 	compareScreenshot(t, "collection-dialog-scrolled-phone", tb.screenshot())
 	tb.eval(`document.getElementById('modal-body').scrollTop = 0`, nil)
