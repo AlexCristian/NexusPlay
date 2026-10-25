@@ -107,8 +107,11 @@ button { font: inherit; }
   z-index: 10;
   transition: background-color .4s, opacity .4s;
 }
-.top-bar.playing { background: #1d0400; }
-.top-bar.playing .top-link, .top-bar.playing .brand, .top-bar.playing .top-text { color: rgba(255, 255, 255, .45); }
+/* While a video plays the bar turns dark gray with red links, as in the
+   original, so it does not draw the eye from the picture. */
+.top-bar.playing { background: rgb(25, 25, 25); }
+.top-bar.playing .top-link, .top-bar.playing .brand, .top-bar.playing .top-text { color: rgb(190, 30, 0); }
+.top-bar.playing .top-link:hover, .top-bar.playing .brand:hover { color: rgb(231, 55, 0); }
 .top-bar-inner {
   max-width: 960px;
   margin: 0 auto;

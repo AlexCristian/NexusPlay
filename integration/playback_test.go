@@ -116,12 +116,19 @@ func TestPlaybackScreens(t *testing.T) {
 		playUntil(tb, 2)
 		assertClearWhilePlaying(t, tb)
 		assertStillConverting(t, tb)
-		// While playing, the top bar is dimmed but solid: the page must not
-		// show through it when scrolled.
-		var bg string
-		tb.eval(`getComputedStyle(document.getElementById('top-bar')).backgroundColor`, &bg)
-		if !strings.HasPrefix(bg, "rgb(") {
-			t.Errorf("top bar while playing = %s, want a solid color", bg)
+		// While playing, the top bar is the original's solid dark gray with
+		// solid red links and icons (nothing see-through).
+		var bar struct{ Bg, Link, Icon string }
+		tb.eval(`(() => {
+			const st = e => getComputedStyle(e);
+			const icon = document.querySelector('#top-bar .label-short .icon');
+			return {bg: st(document.getElementById('top-bar')).backgroundColor,
+				link: st(document.querySelector('#top-bar .brand')).color,
+				icon: st(icon).color + ' ' + st(icon).opacity};
+		})()`, &bar)
+		if bar.Bg != "rgb(25, 25, 25)" || bar.Link != "rgb(190, 30, 0)" || bar.Icon != "rgb(190, 30, 0) 1" {
+			t.Errorf("top bar while playing: background %s, links %s, icons %s; want rgb(25, 25, 25) with rgb(190, 30, 0)",
+				bar.Bg, bar.Link, bar.Icon)
 		}
 		if got := tb.text("#ctl-duration"); got != "00:30" {
 			t.Errorf("length shown while converting = %s, want the whole 00:30", got)
