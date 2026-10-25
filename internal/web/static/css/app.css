@@ -333,7 +333,10 @@ button { font: inherit; }
 .collection-meta { flex: 1; padding: 24px 48px 8px 20px; display: flex; flex-direction: column; min-width: 0; }
 .collection-meta h2 { margin: 0; font-size: clamp(1.4rem, 4vw, 2rem); line-height: 1.1; }
 .collection-sub { margin: 6px 0 0; font-weight: 700; font-size: 1.1rem; }
-.season-tabs { margin: auto -48px 0 0; padding: 16px 48px 0 0; display: flex; gap: 4px 12px; overflow-x: auto; scrollbar-width: none; }
+/* The row reaches out to the poster on the left and the dialog's edge on
+   the right, so scrolled seasons run to both; padding of the same width
+   keeps the first season in line with the title until then. */
+.season-tabs { margin: auto -48px 0 -20px; padding: 16px 48px 0 20px; display: flex; gap: 4px 12px; overflow-x: auto; scrollbar-width: none; }
 .season-tabs::-webkit-scrollbar { display: none; }
 .season-tab { flex: none; }
 .season-tab {
@@ -691,7 +694,7 @@ code { font-size: .9em; background: #f1f1f1; padding: 1px 4px; border-radius: 3p
   .tile-strip { padding: 16px; }
   .poster-wrapper, .poster-wrapper img { width: 100px; }
   .collection-meta { padding: 16px 44px 8px 14px; }
-  .season-tabs { margin-right: -44px; padding-right: 20px; }
+  .season-tabs { margin-right: -44px; padding-right: 20px; margin-left: -14px; padding-left: 14px; }
   .edit-layout { flex-direction: column; }
   .metadata { gap: 20px; }
   .watch-poster img { width: 80px; }

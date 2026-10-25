@@ -449,6 +449,20 @@ func TestLongSeasonList(t *testing.T) {
 	if !overflow {
 		t.Fatal("seven seasons fit on one phone row; the test needs a row that scrolls")
 	}
+	// At rest the first season lines up with the title; the row itself
+	// starts at the poster's edge, so scrolled seasons run up to it.
+	var edges struct{ Poster, Row, Title, First float64 }
+	tb.eval(`({
+		poster: document.querySelector('#modal .poster-wrapper').getBoundingClientRect().right,
+		row: document.querySelector('#modal .season-tabs').getBoundingClientRect().left,
+		title: document.querySelector('#modal .collection-meta h2').getBoundingClientRect().left,
+		first: document.querySelector('#modal .season-tab').getBoundingClientRect().left})`, &edges)
+	if d := edges.Row - edges.Poster; d < -1 || d > 1 {
+		t.Errorf("season row starts %.0fpx from the poster's edge", d)
+	}
+	if d := edges.First - edges.Title; d < -1 || d > 1 {
+		t.Errorf("first season is %.0fpx off the title's left edge", d)
+	}
 	tb.click(`#modal .season-tab:last-child`)
 	// Smooth scrolling: wait until it settles with the last season in view.
 	tb.waitJS(`(() => {
