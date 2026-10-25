@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
 
 	"github.com/AlexCristian/NexusPlay/internal/library"
@@ -418,8 +419,11 @@ func TestLongSeasonList(t *testing.T) {
 	}
 	for season := 1; season <= 7; season++ {
 		eps := []string{"S%02dE01.mkv", "S%02dE02.mkv"}
-		if season == 1 {
+		if season == 1 { // long enough to scroll the dialog
 			eps = []string{"S%02dE01E02 Encounter.mkv", "S%02dE03 The Naked Now.mkv"}
+			for e := 4; e <= 26; e++ {
+				eps = append(eps, "S%02d"+fmt.Sprintf("E%02d.mkv", e))
+			}
 		}
 		for _, name := range eps {
 			path := fmt.Sprintf("Long Show/Season %d/Long Show "+name, season, season)
@@ -463,6 +467,31 @@ func TestLongSeasonList(t *testing.T) {
 	if d := edges.First - edges.Title; d < -1 || d > 1 {
 		t.Errorf("first season is %.0fpx off the title's left edge", d)
 	}
+	// Scrolling the episode list keeps the poster, the title and the close
+	// button where they are, uncovered.
+	tb.eval(`(b => b.scrollTop = b.scrollHeight)(document.getElementById('modal-body'))`, nil)
+	tb.waitJS(`document.getElementById('modal-body').scrollTop > 200`, 5*time.Second)
+	var stuck struct {
+		HeaderOff  float64
+		CloseOnTop bool
+	}
+	tb.eval(`(() => {
+		const m = document.getElementById('modal').getBoundingClientRect();
+		const h = document.querySelector('#modal .collection-header').getBoundingClientRect();
+		const c = document.querySelector('#modal .modal-close').getBoundingClientRect();
+		const top = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
+		return {headerOff: h.top - m.top, closeOnTop: !!top.closest('.modal-close')};
+	})()`, &stuck)
+	if stuck.HeaderOff < -1 || stuck.HeaderOff > 1 {
+		t.Errorf("after scrolling, the header is %.0fpx from the dialog's top", stuck.HeaderOff)
+	}
+	if !stuck.CloseOnTop {
+		t.Error("after scrolling, something covers the close button")
+	}
+	tb.run(chromedp.MouseEvent(input.MouseMoved, 1, 1)) // no row under the pointer, no hover highlight
+	compareScreenshot(t, "collection-dialog-scrolled-phone", tb.screenshot())
+	tb.eval(`document.getElementById('modal-body').scrollTop = 0`, nil)
+
 	tb.click(`#modal .season-tab:last-child`)
 	// Smooth scrolling: wait until it settles with the last season in view.
 	tb.waitJS(`(() => {

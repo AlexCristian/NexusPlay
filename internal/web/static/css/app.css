@@ -289,8 +289,14 @@ button { font: inherit; }
   background: transparent;
   color: var(--ink);
   box-shadow: 0 20px 60px rgba(0, 0, 0, .7);
-  overflow: auto;
+  overflow: hidden;
 }
+/* The dialog stays put and only its content scrolls, under a header that
+   sticks to the top: the close button, positioned on the dialog, is never
+   scrolled away or covered. */
+.modal[open] { display: flex; flex-direction: column; }
+#modal-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.modal-heading, .collection-header { position: sticky; top: 0; z-index: 1; }
 .modal:focus { outline: none; }
 /* Rounded corners where two colors meet (a red or dark header over a white
    body): the outer box paints no background, and each part rounds its own
