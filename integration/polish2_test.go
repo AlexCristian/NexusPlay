@@ -200,6 +200,17 @@ func TestPolishRound2(t *testing.T) {
 		if got := tb.text("#resume-pop-body small"); got != "0:05 of 0:12" {
 			t.Errorf("resume position reads %q, want 0:05 of 0:12", got)
 		}
+		// A row's hover background runs from one edge of the popover to
+		// the other, not inside a margin.
+		var edges struct{ Pop, Row [2]float64 }
+		tb.eval(`(() => {
+			const box = e => { const r = e.getBoundingClientRect(); return [r.left, r.right]; };
+			return {pop: box(document.getElementById('resume-pop')),
+				row: box(document.querySelector('#resume-pop-body .mini-list a'))};
+		})()`, &edges)
+		if edges.Row != edges.Pop {
+			t.Errorf("resume row spans %v, popover %v; want edge to edge", edges.Row, edges.Pop)
+		}
 		tb.eval(`document.getElementById('resume-pop').hidePopover()`, nil)
 		// 37: switching tabs animates the strip's height and fades the panel.
 		var animating bool

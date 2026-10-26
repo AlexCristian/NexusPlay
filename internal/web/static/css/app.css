@@ -193,7 +193,8 @@ button { font: inherit; }
   translate: -50% 0;
   width: min(360px, calc(100vw - 16px));
   overflow: visible; /* the arrow sits just outside; the list scrolls instead */
-  padding: 12px;
+  /* No side padding: a row's hover background runs from edge to edge. */
+  padding: 12px 0;
   border: 0;
   border-radius: var(--radius);
   background: #fff;
@@ -213,11 +214,11 @@ button { font: inherit; }
   border-bottom-color: #fff;
   filter: drop-shadow(0 -1px 0 rgba(0, 0, 0, .12));
 }
-.popover-title { font-size: 14px; text-align: center; margin: 0 0 8px; }
-.popover-empty { font-size: 14px; color: #666; margin: 4px; text-align: center; }
+.popover-title { font-size: 14px; text-align: center; margin: 0 0 8px; padding: 0 12px; }
+.popover-empty { font-size: 14px; color: #666; margin: 4px 16px; text-align: center; }
 .mini-list { list-style: none; margin: 0; padding: 0; }
 .mini-list li + li { border-top: 1px solid #e6e6e6; }
-.mini-list a { display: flex; gap: 12px; align-items: center; padding: 8px 4px; color: var(--ink); text-decoration: none; }
+.mini-list a { display: flex; gap: 12px; align-items: center; padding: 8px 16px; color: var(--ink); text-decoration: none; }
 .mini-list a:hover { background: #f3f3f3; }
 .mini-list img { border-radius: 4px; object-fit: cover; }
 .mini-list small { display: flex; align-items: center; gap: 4px; color: #777; }
@@ -938,3 +939,7 @@ textarea.grow { field-sizing: content; resize: none; min-height: 2.4em; }
 .range-fields { display: flex; gap: 8px; align-items: center; font-weight: 400; }
 .range-fields input { width: 7em; }
 .field-group small { font-weight: 400; }
+
+/* player.js shows this for a moment after the top bar changes color, so
+   Safari takes the new color for its own bar (see retintBrowserBar). */
+.retint-probe { position: fixed; top: 0; left: 0; width: 1px; height: 1px; visibility: hidden; pointer-events: none; }

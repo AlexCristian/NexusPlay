@@ -113,9 +113,19 @@ func TestPlaybackScreens(t *testing.T) {
 		if len(shown) > 0 {
 			t.Errorf("shown over the video before playing: %v", shown)
 		}
+		// Count fixed elements put on the page: Safari takes a new color
+		// for its own bar only when one appears or disappears.
+		tb.eval(`window.fixedAdded = 0; new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
+			if (n.nodeType === 1 && getComputedStyle(n).position === 'fixed') window.fixedAdded++;
+		}))).observe(document.body, {childList: true})`, nil)
 		playUntil(tb, 2)
 		assertClearWhilePlaying(t, tb)
 		assertStillConverting(t, tb)
+		var added int
+		tb.eval(`window.fixedAdded`, &added)
+		if added == 0 {
+			t.Errorf("no fixed element shown when the top bar turned dark: Safari keeps its bar red")
+		}
 		// While playing, the top bar is the original's solid dark gray with
 		// solid red links and icons (nothing see-through).
 		// It switches without a fade, and the browser's own bar follows it
@@ -153,6 +163,12 @@ func TestPlaybackScreens(t *testing.T) {
 		tb.eval(`document.querySelector('meta[name="theme-color"]').content`, &theme)
 		if theme != "#c21f00" {
 			t.Errorf("theme-color after pausing = %s, want the red #c21f00", theme)
+		}
+		var after struct{ Added, Left int }
+		tb.eval(`({added: window.fixedAdded, left: document.querySelectorAll('.retint-probe').length})`, &after)
+		if after.Added <= added || after.Left != 0 {
+			t.Errorf("after pausing: %d fixed elements shown (%d before), %d left on the page; want a new one, since removed",
+				after.Added, added, after.Left)
 		}
 		// At 3 of 30 seconds the seek bar is a tenth full, not a share of
 		// the part converted so far.

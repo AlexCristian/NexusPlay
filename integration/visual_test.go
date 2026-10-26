@@ -141,6 +141,8 @@ func TestScreens(t *testing.T) {
 			tb.click(`button[popovertarget="resume-pop"]`)
 			// The subtitle-report screen paused the movie at 0:02, which saved progress.
 			tb.waitVisible("#resume-pop-body li")
+			// The pointer on the row: its highlight runs edge to edge.
+			tb.run(chromedp.MouseEvent(input.MouseMoved, 400, 115))
 		}},
 		{"control-panel", admin, func(tb *tab) { tb.navigate(s.URL + "/admin") }},
 		{"review-media", admin, func(tb *tab) {

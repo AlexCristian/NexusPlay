@@ -139,6 +139,23 @@
   function setPlayingBar(playing) {
     topBar.classList.toggle("playing", playing);
     if (themeColor) themeColor.content = playing ? "#191919" : idleColor;
+    retintBrowserBar();
+  }
+
+  // Safari 26 ignores theme-color and paints its own bar in the color of
+  // the sticky top bar, but it only looks again when a fixed or sticky
+  // element appears or disappears (opening a popover, say). So after the
+  // top bar changes color, a fixed element shown for a moment makes it
+  // look: otherwise a popover opened while playing left Safari's bar dark
+  // after pausing.
+  function retintBrowserBar() {
+    var probe = document.createElement("div");
+    probe.className = "retint-probe";
+    probe.setAttribute("aria-hidden", "true");
+    document.body.appendChild(probe);
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { probe.remove(); });
+    });
   }
   video.addEventListener("play", function () { setPlayingBar(true); });
   video.addEventListener("pause", function () { setPlayingBar(false); });
