@@ -41,7 +41,7 @@ func decodeMediaForm(r *http.Request) (mediaInput, error) {
 	}
 	in := mediaInput{
 		update: store.MediaUpdate{
-			Title:    strings.TrimSpace(r.FormValue("title")),
+			Title:    oneLine(r.FormValue("title")),
 			Year:     strings.TrimSpace(r.FormValue("year")),
 			Overview: strings.TrimSpace(r.FormValue("overview")),
 			Category: strings.TrimSpace(r.FormValue("category")),
@@ -55,6 +55,15 @@ func decodeMediaForm(r *http.Request) (mediaInput, error) {
 	}
 	if in.update.Episode, ok = formCount(r, "episode"); !ok {
 		return in, formErr("Episode must be a number.")
+	}
+	if in.update.EpisodeEnd, ok = formCount(r, "episode_end"); !ok {
+		return in, formErr("The last episode must be a number.")
+	}
+	if in.update.EpisodeEnd == in.update.Episode {
+		in.update.EpisodeEnd = 0 // "1 to 1" is one episode
+	}
+	if in.update.EpisodeEnd != 0 && in.update.EpisodeEnd < in.update.Episode {
+		return in, formErr("The last episode must come after the first.")
 	}
 	if in.update.Title == "" {
 		return in, formErr("The title cannot be empty.")
@@ -78,7 +87,7 @@ func decodeCollectionForm(r *http.Request) (collectionInput, error) {
 	}
 	in := collectionInput{
 		update: store.CollectionUpdate{
-			Name:     strings.TrimSpace(r.FormValue("name")),
+			Name:     oneLine(r.FormValue("name")),
 			Category: strings.TrimSpace(r.FormValue("category")),
 			Year:     strings.TrimSpace(r.FormValue("year")),
 			Overview: strings.TrimSpace(r.FormValue("overview")),
@@ -158,6 +167,10 @@ func decodePoster(r *http.Request) (upload *posterUpload, remove bool, err error
 	}
 	return &posterUpload{file: fh, ext: ext}, false, nil
 }
+
+// oneLine trims s and joins its lines and runs of spaces with single spaces:
+// titles are edited in a growing text area, where Enter adds a line break.
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // formCount reads an optional whole number that cannot be negative, such
 // as a season. A blank field is 0.

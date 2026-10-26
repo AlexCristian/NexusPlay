@@ -83,19 +83,42 @@ func TestTopBarLinksHaveNames(t *testing.T) {
 
 func TestEpisodeNumbers(t *testing.T) {
 	for _, tc := range []struct {
-		path            string
-		season, episode int
-		want            string
+		season, episode, end int
+		want                 string
 	}{
-		{"TNG/Season 1/TNG S01E01E02 Encounter at Farpoint.mkv", 1, 1, "S1E1–2"},
-		{"TNG/Season 1/TNG S01E03 The Naked Now.mkv", 1, 3, "S1E3"},
-		// Renumbered by an administrator: the file name's range no longer applies.
-		{"TNG/Season 1/TNG S01E01E02 Encounter at Farpoint.mkv", 1, 7, "S1E7"},
-		{"Movies/Alien (1979).mp4", 0, 0, "S0E0"},
+		{1, 1, 2, "S1E1–2"},
+		{1, 3, 0, "S1E3"},
+		{3, 4, 0, "S3E4"},
+		{0, 3, 0, "Special 3"},
+		{0, 1, 2, "Special 1–2"},
 	} {
-		m := store.Media{Path: tc.path, Season: tc.season, Episode: tc.episode}
+		m := store.Media{Season: tc.season, Episode: tc.episode, EpisodeEnd: tc.end}
 		if got := episodeLabel(m); got != tc.want {
-			t.Errorf("episodeLabel(%s, S%dE%d) = %q, want %q", tc.path, tc.season, tc.episode, got, tc.want)
+			t.Errorf("episodeLabel(S%dE%d, end %d) = %q, want %q", tc.season, tc.episode, tc.end, got, tc.want)
+		}
+	}
+	m := store.Media{Title: "Encounter at Farpoint", CollectionName: "TNG", Season: 1, Episode: 1, EpisodeEnd: 2}
+	if got := displayTitle(m); got != "TNG · S1E1–2 · Encounter at Farpoint" {
+		t.Errorf("displayTitle = %q", got)
+	}
+}
+
+func TestFormatting(t *testing.T) {
+	for _, tc := range []struct {
+		got, want string
+	}{
+		{duration(8), "8 s"}, {duration(2532), "42 min"}, {duration(3600), "1 h"}, {duration(3900), "1 h 5 min"},
+		{clock(5), "0:05"}, {clock(2530), "42:10"}, {clock(3723), "1:02:03"},
+		{percent(5, 8), "62.5%"}, {percent(9, 8), "100.0%"}, {percent(1, 0), "0%"},
+		{fileSize(840 << 10), "840 KB"}, {fileSize(1258291), "1.2 MB"}, {fileSize(4692251771), "4.37 GB"},
+		{blankZero(0), ""}, {blankZero(7), "7"},
+		{subscriptionCount(1), "your 1 subscription"}, {subscriptionCount(3), "your 3 subscriptions"},
+		{sentence("you have already voted on this line"), "You have already voted on this line."},
+		{seasonSummary(store.Collection{Year: "1987"}, []Season{{Number: 0}, {Number: 1}, {Number: 2}}), "2 Seasons, 1987"},
+		{seasonSummary(store.Collection{}, []Season{{Number: 0}}), "Specials"},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("got %q, want %q", tc.got, tc.want)
 		}
 	}
 }

@@ -457,3 +457,42 @@ func TestPosterNames(t *testing.T) {
 		t.Errorf("PosterNames = %v, %v", got, err)
 	}
 }
+
+// The episode range is stored with the episode, can be edited, and the
+// backfill fills it only while the number still matches the file name.
+func TestEpisodeEnd(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	id, _, err := s.InsertScannedMedia(ctx, ScannedMedia{Path: "a.mkv", Title: "A", Season: 1, Episode: 1, EpisodeEnd: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := s.MediaByID(ctx, id); m.EpisodeEnd != 2 {
+		t.Errorf("EpisodeEnd after insert = %d", m.EpisodeEnd)
+	}
+	s.UpdateMedia(ctx, id, MediaUpdate{Title: "A", Season: 1, Episode: 5}, false)
+	s.SetEpisodeEnd(ctx, id, 1, 2) // renumbered: the file name's range no longer applies
+	if m, _ := s.MediaByID(ctx, id); m.EpisodeEnd != 0 || m.Episode != 5 {
+		t.Errorf("after renumbering and backfill: episode %d, end %d; want 5 and 0", m.Episode, m.EpisodeEnd)
+	}
+	other := mustMedia(t, s, "b.mkv")
+	s.UpdateMedia(ctx, other, MediaUpdate{Title: "B", Season: 1, Episode: 1}, false)
+	s.SetEpisodeEnd(ctx, other, 1, 2)
+	if m, _ := s.MediaByID(ctx, other); m.EpisodeEnd != 2 {
+		t.Errorf("backfill: end %d, want 2", m.EpisodeEnd)
+	}
+}
+
+func TestSubscriptionCount(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	u := mustUser(t, s, "a@example.com", "a")
+	c, _ := s.CreateCollection(ctx, Collection{Name: "Show", Category: "TV Shows"})
+	if n, _ := s.SubscriptionCount(ctx, u.ID); n != 0 {
+		t.Errorf("count = %d", n)
+	}
+	s.ToggleSubscription(ctx, u.ID, c)
+	if n, _ := s.SubscriptionCount(ctx, u.ID); n != 1 {
+		t.Errorf("count after subscribing = %d", n)
+	}
+}

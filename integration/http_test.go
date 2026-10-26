@@ -180,7 +180,7 @@ func TestPublishNotifiesSubscribers(t *testing.T) {
 	// The admin reviews and publishes episode 2 with the multipart form.
 	id := s.mediaID(episode2)
 	_, form := admin.get("/admin/media/" + itoa(id))
-	if !strings.Contains(form, `value="Test Show"`) || !strings.Contains(form, `value="The Second One"`) {
+	if !strings.Contains(form, `value="Test Show"`) || !strings.Contains(form, `>The Second One</textarea>`) {
 		t.Fatalf("review form is not prefilled from the file name:\n%s", form)
 	}
 	var buf bytes.Buffer

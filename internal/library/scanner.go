@@ -34,6 +34,7 @@ type Store interface {
 	SubtitleSources(ctx context.Context) (map[string]bool, error)
 	AddSubtitle(ctx context.Context, t store.NewSubtitle) (id int64, inserted bool, err error)
 	H264MissingPixFmt(ctx context.Context) (map[string]int64, error)
+	SetEpisodeEnd(ctx context.Context, id int64, episode, end int) error
 	SetPixFmt(ctx context.Context, id int64, pixFmt string) error
 }
 
@@ -258,6 +259,7 @@ func (s *Scanner) scanAll(ctx context.Context) (Result, []string, error) {
 	s.retryMetadata(ctx)
 	res.Subtitles = s.importAllSidecars(ctx, tree, known)
 	s.backfillPixFmt(ctx, tree.videos)
+	s.backfillEpisodeEnd(ctx, tree.videos, known)
 	return res, tree.dirs, nil
 }
 
@@ -370,7 +372,7 @@ func (s *Scanner) probe(ctx context.Context, v found) (probedFile, error) {
 	}
 	g := ParsePath(v.rel)
 	return probedFile{found: v, guess: g, media: store.ScannedMedia{
-		Path: v.rel, Title: g.Title, Year: g.Year, Season: g.Season, Episode: g.Episode,
+		Path: v.rel, Title: g.Title, Year: g.Year, Season: g.Season, Episode: g.Episode, EpisodeEnd: g.EpisodeEnd,
 		Duration: probe.Duration, Container: probe.Container,
 		VideoCodec: video.Codec, AudioCodec: probe.AudioCodec(), PixFmt: video.PixFmt, Size: v.info.Size(),
 	}}, nil
@@ -678,6 +680,22 @@ func SidecarLanguage(videoRel, subRel string) (lang string, ok bool) {
 // backfillLimit caps how many files one scan re-probes, so the first scan
 // after upgrading a large library stays short; later scans do the rest.
 const backfillLimit = 50
+
+// backfillEpisodeEnd records the episode range of multi-episode files that
+// were scanned before the range was stored (see store.SetEpisodeEnd).
+func (s *Scanner) backfillEpisodeEnd(ctx context.Context, videos []found, known map[string]int64) {
+	for _, v := range videos {
+		id, ok := known[v.rel]
+		if !ok {
+			continue
+		}
+		if g := ParsePath(v.rel); g.EpisodeEnd > 0 {
+			if err := s.deps.Store.SetEpisodeEnd(ctx, id, g.Episode, g.EpisodeEnd); err != nil {
+				s.deps.Log.Warn("recording an episode range", "path", v.rel, "err", err)
+			}
+		}
+	}
+}
 
 // backfillPixFmt records the pixel format of H.264 files added before it was
 // stored. Without it, a 10-bit H.264 file (which no browser plays) would be

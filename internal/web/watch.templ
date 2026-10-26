@@ -57,7 +57,7 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 					<div class="meta-text">
 						<h1>{ m.CollectionName }<span class="episode-title">{ episodeLabel(m) + ": " + m.Title }</span></h1>
 						if m.Overview != "" {
-							<p class="overview">{ m.Overview }</p>
+							@clampedText(m.Overview)
 						}
 					</div>
 				} else {
@@ -70,7 +70,7 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 							<p class="meta-sub">Released in { m.Year }</p>
 						}
 						if m.Overview != "" {
-							<p class="overview">{ m.Overview }</p>
+							@clampedText(m.Overview)
 						}
 					</div>
 				}
@@ -85,26 +85,26 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 // controls stay.
 templ playerControls(hasSubtitles bool) {
 	<div class="controls" id="controls" hidden>
-		<button type="button" class="ctl" id="ctl-play" aria-label="Play">
+		<button type="button" class="ctl" id="ctl-play" aria-label="Play" title="Play (space)">
 			@icon("play")
 			@icon("pause")
 		</button>
-		<input type="range" class="rail" id="ctl-seek" min="0" max="1000" step="1" value="0" aria-label="Seek"/>
+		<input type="range" class="rail" id="ctl-seek" min="0" max="1000" step="1" value="0" aria-label="Seek" title="Seek"/>
 		<span class="time"><span id="ctl-time">00:00</span><span class="time-sep">|</span><span id="ctl-duration">00:00</span></span>
 		if hasSubtitles {
 			<span class="ctl-wrap">
-				<button type="button" class="ctl" id="ctl-captions" aria-label="Subtitles" aria-haspopup="true" aria-expanded="false">
+				<button type="button" class="ctl" id="ctl-captions" aria-label="Subtitles" title="Subtitles" aria-haspopup="true" aria-expanded="false">
 					@icon("captions")
 				</button>
 				<div class="captions-menu" id="captions-menu" role="menu" hidden></div>
 			</span>
 		}
-		<button type="button" class="ctl" id="ctl-mute" aria-label="Mute">
+		<button type="button" class="ctl" id="ctl-mute" aria-label="Mute" title="Mute">
 			@icon("volume")
 			@icon("volume-x")
 		</button>
-		<input type="range" class="volume" id="ctl-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume"/>
-		<button type="button" class="ctl" id="ctl-fullscreen" aria-label="Full screen">
+		<input type="range" class="volume" id="ctl-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume" title="Volume"/>
+		<button type="button" class="ctl" id="ctl-fullscreen" aria-label="Full screen" title="Full screen (f)">
 			@icon("maximize")
 			@icon("minimize")
 		</button>
@@ -158,10 +158,7 @@ templ subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes [
 				<div class="original-sub">{ cue.Text }</div>
 				<div class="changed-sub">
 					<textarea name="text" rows="1" required maxlength="500" aria-label={ "Corrected line (" + track.Label + ", " + cueTime(cue.StartMS) + ")" }>{ cue.Text }</textarea>
-					<button type="submit" class="vote-box" title="Submit your correction">
-						<span class="count-votes">0</span>
-						@icon("thumbs-up")
-					</button>
+					<button type="submit" class="vote-box vote-submit">Submit</button>
 				</div>
 			</form>
 		</div>

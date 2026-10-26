@@ -449,11 +449,11 @@ func TestLongSeasonList(t *testing.T) {
 		for _, name := range eps {
 			path := fmt.Sprintf("Long Show/Season %d/Long Show "+name, season, season)
 			g := library.ParsePath(path)
-			id, _, err := st.InsertScannedMedia(ctx, store.ScannedMedia{Path: path, Title: g.Title, Season: g.Season, Episode: g.Episode, VideoCodec: "h264"})
+			id, _, err := st.InsertScannedMedia(ctx, store.ScannedMedia{Path: path, Title: g.Title, Season: g.Season, Episode: g.Episode, EpisodeEnd: g.EpisodeEnd, VideoCodec: "h264"})
 			if err != nil {
 				t.Fatal(err)
 			}
-			u := store.MediaUpdate{Title: g.Title, CollectionID: coll, Season: g.Season, Episode: g.Episode}
+			u := store.MediaUpdate{Title: g.Title, CollectionID: coll, Season: g.Season, Episode: g.Episode, EpisodeEnd: g.EpisodeEnd}
 			if err := st.UpdateMedia(ctx, id, u, true); err != nil {
 				t.Fatal(err)
 			}

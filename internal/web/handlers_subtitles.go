@@ -170,12 +170,21 @@ func (h *subtitleHandlers) voteChange(w http.ResponseWriter, r *http.Request) er
 	return h.showVoteResult(w, r, cueID, note)
 }
 
+// sentence capitalizes an error message for display and ends it with a
+// full stop (Go error strings are lowercase, without one).
+func sentence(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:] + "."
+}
+
 // voteOutcome turns the result of a proposal or vote into the note shown to
 // the viewer. The voting rules' own refusals are shown, not treated as errors.
 func voteOutcome(applied bool, err error, okMsg string) (reportNote, error) {
 	switch {
 	case errors.Is(err, store.ErrAlreadyVoted), errors.Is(err, store.ErrUnchanged):
-		return reportNote{msg: err.Error() + ".", kind: "error"}, nil
+		return reportNote{msg: sentence(err.Error()), kind: "error"}, nil
 	case err != nil:
 		return reportNote{}, err
 	case applied:

@@ -235,6 +235,7 @@ button { font: inherit; }
 .panel + .panel { margin-top: 24px; }
 .footer { text-align: center; font-style: italic; font-size: 14px; color: var(--muted); padding: 16px; }
 .muted { color: #999; }
+.panel .muted:not(.featurette *), label small { color: #666; }
 
 /* Search: a box that widens while in use, and a drawer of results that
    slides down over the top of the page and dims the rest (#page-cover). */
@@ -253,7 +254,7 @@ button { font: inherit; }
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, .15);
   transition: width .7s ease;
 }
-.search input:focus { width: 250px; outline: none; border-color: #bbb; }
+.search input:focus { width: 250px; border-color: #bbb; }
 .search input::-webkit-search-cancel-button { cursor: pointer; }
 .search-drawer {
   display: grid;
@@ -316,8 +317,9 @@ button { font: inherit; }
 }
 .tile:hover, .tile:focus-visible { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0, 0, 0, .6); }
 .tile img { width: 100%; aspect-ratio: 2 / 3; height: auto; object-fit: cover; display: block; background: #111; }
-.tile-title { padding: 8px 12px 0; font-size: 1.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tile-meta { padding: 0 12px 10px; font-size: .85rem; color: var(--muted); display: flex; align-items: center; gap: 6px; min-height: 1.5em; }
+.tile-title { padding: 8px 12px 0; font-size: 1.15rem; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } /* two lines, then an ellipsis */
+.tile-meta { margin-top: auto; padding: 2px 12px 10px; font-size: .85rem; color: var(--muted); display: flex; align-items: center; gap: 6px; min-height: 1.5em; }
 .watched { color: var(--green); display: inline-flex; }
 .empty { padding: 32px 24px; }
 .empty h2 { margin-top: 0; }
@@ -393,7 +395,7 @@ button { font: inherit; }
 .modal-heading { margin: 0; padding: 12px 56px 12px 16px; background: var(--red); color: #fff; font-size: 1.2rem; }
 
 /* Collection dialog */
-.collection-header { display: flex; background: #222; color: #fff; }
+.collection-header { display: flex; background: rgb(41, 41, 41); color: #fff; }
 .poster-wrapper { position: relative; flex: none; width: 140px; }
 .poster-wrapper img { display: block; width: 140px; aspect-ratio: 2 / 3; height: auto; object-fit: cover; }
 .collection-meta { flex: 1; padding: 24px 48px 8px 20px; display: flex; flex-direction: column; min-width: 0; }
@@ -419,8 +421,11 @@ button { font: inherit; }
 .collection-body { padding: 16px; }
 .collection-page .collection-body { padding: 16px 24px 24px; }
 .overview { margin: 0 0 12px; color: #444; }
-.episodes { width: 100%; border-collapse: collapse; border: 1px solid #ddd; border-radius: 4px; }
+/* Separate borders, so the 4px radius shows (it is ignored when collapsed). */
+.episodes { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #ddd; border-radius: 4px; overflow: hidden; }
 .episodes th, .episodes td { text-align: left; padding: 8px; border-top: 1px solid #ddd; font-weight: 400; }
+.episodes thead tr:first-child > * { border-top: 0; }
+.episodes tbody tr:hover td:first-child::after { content: " \25BA"; color: #999; } /* the original's ► marker */
 .episodes td:first-child, .episodes th:first-child { width: 6em; border-right: 1px solid #ddd; }
 .episodes a { color: var(--ink); text-decoration: none; }
 .episodes tr:hover td { background: #f5f5f5; }
@@ -465,7 +470,7 @@ button { font: inherit; }
 .ribbon:hover .ribbon-band { background: #99cc00; }
 .ribbon-on:hover .ribbon-band { background: #0099cc; }
 .ribbon:focus-visible { outline: none; }
-.ribbon:focus-visible .ribbon-band { outline: 2px solid #fff; }
+.ribbon:focus-visible .ribbon-band { outline: 3px solid #ffb300; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* Watch page: the player is as wide as the other panels, with the
@@ -558,27 +563,33 @@ button { font: inherit; }
 
 /* The seek and volume bars are range inputs; --fill (and --loaded) are set
    by player.js as percentages. */
+/* The seek and volume bars are range inputs; player.js sets --fill (and
+   --loaded) as percentages. The red stripes are painted at a fixed width
+   across the whole bar, and the part not yet played is covered, so the
+   stripes keep their width wherever playback is. */
 .rail, .volume {
   -webkit-appearance: none;
   appearance: none;
-  height: 10px;
+  height: 14px;
   margin: 0 6px;
-  border-radius: 2px;
+  border-radius: 7px;
   cursor: pointer;
   background:
-    linear-gradient(135deg, #d61100 25%, #ce3129 25%, #d3352a 50%, #d61100 50%, #d61100 75%, #d3352a 75%, #d3352a) 0 0 / 10px 10px,
-    linear-gradient(#464849, #464849),
-    #262929;
-  background-repeat: repeat-y, no-repeat, no-repeat;
-  background-size: var(--fill, 0%) 10px, var(--loaded, 0%) 100%, auto;
+    linear-gradient(to right, transparent var(--fill, 0%), #464849 var(--fill, 0%), #464849 var(--loaded, 0%), #262929 var(--loaded, 0%)),
+    repeating-linear-gradient(135deg, #d61100 0 6px, #d3352a 6px 12px);
 }
 .rail { flex: 1; min-width: 40px; }
-.volume { flex: none; width: 50px; height: 5px; background-size: var(--fill, 100%) 5px, 0 0, auto; }
-.rail::-webkit-slider-thumb, .volume::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 12px; border-radius: 2px; background: #eee; box-shadow: 0 0 2px #000; opacity: 0; transition: opacity .2s; }
-.rail::-moz-range-thumb, .volume::-moz-range-thumb { width: 6px; height: 12px; border: 0; border-radius: 2px; background: #eee; opacity: 0; }
+.volume { flex: none; width: 50px; height: 6px; border-radius: 3px;
+  background: linear-gradient(to right, transparent var(--fill, 100%), #262929 var(--fill, 100%)), repeating-linear-gradient(135deg, #d61100 0 4px, #d3352a 4px 8px); }
+.rail::-webkit-slider-thumb, .volume::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 0 3px rgba(0, 0, 0, .8); opacity: 0; transition: opacity .2s; }
+.rail::-moz-range-thumb, .volume::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; opacity: 0; }
 .rail:hover::-webkit-slider-thumb, .rail:focus-visible::-webkit-slider-thumb, .volume:hover::-webkit-slider-thumb { opacity: 1; }
 .rail:hover::-moz-range-thumb, .volume:hover::-moz-range-thumb { opacity: 1; }
-.rail:focus-visible, .volume:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* Touch screens have no hover: the thumb is always there to grab. */
+@media (pointer: coarse) {
+  .rail::-webkit-slider-thumb { opacity: 1; width: 20px; height: 20px; }
+  .rail::-moz-range-thumb { opacity: 1; width: 20px; height: 20px; }
+}
 
 .ctl-wrap { position: relative; flex: none; }
 .captions-menu {
@@ -660,7 +671,7 @@ button { font: inherit; }
   field-sizing: content; /* one line tall, growing for two-line cues */
   min-height: 29px;
 }
-.changed-sub textarea:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--blue); }
+.changed-sub textarea:focus-visible { outline-offset: -3px; }
 .vote-box {
   flex: none;
   display: inline-flex;
@@ -694,7 +705,7 @@ button { font: inherit; }
 .auth-panel { max-width: 420px; margin: 0 auto; }
 .auth-note, .auth-switch { margin: 0; font-size: .85rem; color: #555; }
 label { display: grid; gap: 4px; font-size: .9rem; font-weight: 600; color: #333; }
-label small { font-weight: 400; color: #777; }
+label small { font-weight: 400; }
 label.check { display: flex; align-items: center; gap: 8px; font-weight: 400; }
 input[type="text"], input[type="email"], input[type="password"], input[type="number"], textarea {
   font: inherit;
@@ -706,7 +717,11 @@ input[type="text"], input[type="email"], input[type="password"], input[type="num
   color: var(--ink);
   background: #fff;
 }
-input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+/* Keyboard focus: one bright amber ring everywhere, readable on red, dark
+   and white surfaces alike. Inside the clipped control bar and the top bar
+   it sits inside the element. */
+:focus-visible { outline: 3px solid #ffb300; outline-offset: 1px; }
+.controls :focus-visible, .top-bar :focus-visible { outline-offset: -3px; }
 .button {
   display: inline-flex;
   align-items: center;
@@ -728,7 +743,11 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visib
 .button-danger { background: #6d1300; }
 
 /* Admin */
-.admin, .message { padding: 20px 24px 28px; }
+.admin { padding: 20px 24px 28px; }
+.panel.message { padding: 0; background: transparent; } /* parts paint their own corners */
+.message-heading { margin: 0; padding: 12px 24px; background: var(--red); color: #fff; font-size: 1.2rem; border-radius: var(--radius) var(--radius) 0 0; }
+.message-body { background: #fff; padding: 16px 24px 20px; border-radius: 0 0 var(--radius) var(--radius); }
+.message-body > p { margin: 0 0 10px; }
 .admin h1 { margin: 0; }
 .admin h2 { margin: 28px 0 8px; font-size: 1.3rem; }
 .admin-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
@@ -737,7 +756,7 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visib
 .admin-table th, .admin-table td { text-align: left; padding: 8px 6px; border-top: 1px solid #e3e3e3; vertical-align: middle; }
 .admin-table td:last-child { text-align: right; white-space: nowrap; }
 .admin-table form { margin: 0; }
-.path { font-family: ui-monospace, monospace; font-size: .85rem; word-break: break-all; color: #555; }
+.path { font-family: ui-monospace, monospace; font-size: .85rem; overflow-wrap: anywhere; color: #555; }
 .admin-new { margin-top: 24px; }
 .admin-new summary { cursor: pointer; font-weight: 700; }
 .admin-new form { margin-top: 12px; }
@@ -786,6 +805,7 @@ code { font-size: .9em; background: #f1f1f1; padding: 1px 4px; border-radius: 3p
 
 @media (max-width: 600px) {
   .page { padding-top: 24px; }
+  .pending-table th:nth-child(2), .pending-table td:nth-child(2) { display: none; }
   .brand, .top-link { font-size: .95rem; }
   /* 13. Library tabs stay on one row and scroll sideways. */
   .tab-list { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 0 18px; }
@@ -811,3 +831,110 @@ code { font-size: .9em; background: #f1f1f1; padding: 1px 4px; border-radius: 3p
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* ---- Round 2 of the polish review ---- */
+
+/* 15. Dialogs sit 10% from the top and grow downward, so switching seasons
+   never moves them, and slide in as the original's did. */
+.modal[open] { margin: 10vh auto auto; max-height: 85vh; animation: modal-in .3s ease-out; }
+.modal[open]::backdrop { animation: fade-in .3s ease-out; }
+@keyframes modal-in { from { opacity: 0; translate: 0 -24px; } }
+@keyframes fade-in { from { opacity: 0; } }
+
+/* 19. Subtitle tracks: labelled fields, with Save and Delete side by side. */
+.subtitle-table .inline-fields { align-items: end; }
+.subtitle-table .inline-fields label { display: grid; gap: 4px; }
+.subtitle-table td:last-child { width: 1%; text-align: left; vertical-align: bottom; }
+
+/* 20. The season row fades out at an edge with more seasons behind it
+   (app.js sets the classes from the scroll position). */
+.season-tabs.more-end { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent); }
+.season-tabs.more-start { -webkit-mask-image: linear-gradient(to right, transparent, #000 56px); mask-image: linear-gradient(to right, transparent, #000 56px); }
+.season-tabs.more-start.more-end { -webkit-mask-image: linear-gradient(to right, transparent, #000 56px, #000 calc(100% - 56px), transparent); mask-image: linear-gradient(to right, transparent, #000 56px, #000 calc(100% - 56px), transparent); }
+
+/* 23. While the search drawer is open, the dimmed page is not clickable:
+   a click there closes the drawer (app.js). */
+.page-cover.dimmed { cursor: pointer; }
+.page-cover.dimmed > * { pointer-events: none; }
+
+/* 25. While playing, the controls and the pointer hide after 2.5 s
+   without movement (app.js sets .idle). */
+.controls { transition: opacity .3s; }
+.player-container.idle .controls { opacity: 0; }
+.player-container.idle { cursor: none; }
+
+/* 28. Long descriptions show about five lines, fading out, with a round
+   arrow button that expands them. */
+.clamp { position: relative; }
+.clamp:not(.open):not(.fits) .overview { max-height: 7.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent); }
+.clamp-toggle { display: grid; place-items: center; width: 32px; height: 32px; margin: -6px auto 10px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .45); color: #fff; cursor: pointer; transition: background-color .15s; }
+.clamp-toggle:hover { background: rgba(0, 0, 0, .7); }
+.clamp-toggle .icon { width: 18px; height: 18px; transition: rotate .2s; }
+.clamp.open .clamp-toggle .icon { rotate: 180deg; }
+.video-content .clamp-toggle { background: rgba(255, 255, 255, .18); }
+
+/* 29. Your own correction is submitted with a labelled button. */
+.vote-submit { padding: 0 14px; font-size: 14px; }
+
+/* 30. Top-bar hover: the original's red block (gray while playing). */
+@media (hover: hover) {
+  .brand, .top-link { transition: background-color .5s; }
+  .brand:hover, .top-link:hover { background: rgb(231, 55, 0); color: #fff; }
+  .top-bar.playing .brand:hover, .top-bar.playing .top-link:hover { background: rgb(44, 44, 44); }
+}
+/* One row at every width: the greeting is what gives way, shrinking and
+   ending in an ellipsis before anything wraps. */
+.top-bar-inner { gap: 0; flex-wrap: nowrap; }
+.brand, .top-link, .top-text { padding: 0 12px; flex: none; }
+.top-text { flex: 0 1 auto; min-width: 0; }
+@media (min-width: 1000px) { .brand, .top-link, .top-text { padding: 0 16px; } }
+
+/* 31. The resume list: position of length, and a progress bar the full
+   width of the text column in every row. */
+.mini-list a > span { flex: 1; min-width: 0; }
+.progress { display: block; height: 3px; margin-top: 5px; background: #e3e3e3; border-radius: 2px; overflow: hidden; }
+.progress > span { display: block; height: 100%; background: var(--red); }
+
+/* 34. The subtitles menu: a radio mark before every item. */
+.captions-menu button::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 2px solid #aaa; margin-right: 8px; vertical-align: middle; }
+.captions-menu button[aria-checked="true"]::before { content: ""; background: #ff6a4d; border-color: #ff6a4d; }
+.captions-menu button[aria-checked="true"] { font-weight: 400; }
+
+/* 39. The no-JavaScript search page joins its box to the page below, as
+   the drawer does. */
+#search-results .panel { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+
+/* 40. No search row on the login and register pages. */
+.page:has(.auth-panel) .above-panel { visibility: hidden; }
+
+/* 41. Titles are edited in a field that grows with them. */
+textarea.grow { field-sizing: content; resize: none; min-height: 2.4em; }
+
+/* 43. On desktop the top bar and dialog headings have the original's
+   slimmer sizes; touch screens keep 44px targets. */
+@media (min-width: 801px) and (not (pointer: coarse)) {
+  .top-bar-inner, .brand, .top-link, .top-text { min-height: 32px; }
+  .brand, .top-link, .top-text { font-size: 1rem; }
+  .top-text { line-height: 32px; }
+  .modal-heading { padding: 9px 56px 9px 15px; font-size: 1.05rem; }
+  .modal-heading ~ .modal-close, .modal:has(.modal-heading) .modal-close { top: 3px; }
+}
+
+/* 46. The original's red @ / ? / Aa tabs on the account fields. */
+.field { display: flex; }
+.addon { flex: none; width: 38px; display: grid; place-items: center; background: var(--red); color: #fff; font-weight: 700; border-radius: 4px 0 0 4px; }
+.field input { border-radius: 0 4px 4px 0; }
+.auth-body .button { justify-self: end; padding: 8px 22px; }
+
+/* 47. The greeting is plain text, not a link. */
+.top-text { font-weight: 400; color: rgba(255, 255, 255, .8); cursor: default; }
+
+@media (prefers-reduced-motion: reduce) {
+  .modal[open], .modal[open]::backdrop { animation: none; }
+}
+
+/* 27. The episode range: "Episodes [1] to [2]" on one line. */
+.field-group { display: grid; gap: 4px; font-size: .9rem; font-weight: 600; color: #333; }
+.range-fields { display: flex; gap: 8px; align-items: center; font-weight: 400; }
+.range-fields input { width: 7em; }
+.field-group small { font-weight: 400; }

@@ -335,9 +335,10 @@
     }));
   }
 
-  function closeCaptionsMenu() {
+  function closeCaptionsMenu(refocus) {
     captionsMenu.hidden = true;
     captionsButton.setAttribute("aria-expanded", "false");
+    if (refocus) captionsButton.focus();
   }
 
   if (captionsButton) {
@@ -347,11 +348,38 @@
       buildCaptionsMenu();
       captionsMenu.hidden = false;
       captionsButton.setAttribute("aria-expanded", "true");
+      // From the keyboard, focus moves into the menu, on the current choice.
+      if (e.detail === 0) (captionsMenu.querySelector('[aria-checked="true"]') || captionsMenu.querySelector("button")).focus();
+    });
+    // Escape closes the menu and returns focus to its button.
+    captionsMenu.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { e.stopPropagation(); closeCaptionsMenu(true); }
     });
     document.addEventListener("click", function (e) {
       if (!captionsMenu.hidden && !captionsMenu.contains(e.target)) closeCaptionsMenu();
     });
   }
+
+  // While playing, the controls and the pointer fade out after 2.5 s
+  // without movement, as in the original; any movement, tap or key brings
+  // them back. Paused, or with focus in the controls, they stay.
+  var idleTimer = 0;
+  function wake() {
+    container.classList.remove("idle");
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(function () {
+      var busy = video.paused || video.ended || controls.contains(document.activeElement) ||
+        (captionsMenu && !captionsMenu.hidden);
+      if (!busy) container.classList.add("idle");
+    }, 2500);
+  }
+  ["mousemove", "pointerdown", "touchstart", "keydown", "focusin"].forEach(function (ev) {
+    container.addEventListener(ev, wake, { passive: true });
+  });
+  video.addEventListener("play", wake);
+  ["pause", "ended"].forEach(function (ev) {
+    video.addEventListener(ev, function () { clearTimeout(idleTimer); container.classList.remove("idle"); });
+  });
 
   // Progress ----------------------------------------------------------------
   //

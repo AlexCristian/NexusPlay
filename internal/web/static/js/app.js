@@ -47,13 +47,67 @@
     if (e.detail.target === results) setDrawer(results.children.length > 0);
   });
 
-  // Escape in the search box clears it and closes the drawer.
-  document.addEventListener("keydown", function (e) {
-    if (e.key !== "Escape" || !e.target.matches(".search input")) return;
-    e.target.value = "";
+  // The drawer closes on Escape anywhere, which also clears the query, and
+  // on a click on the dimmed page under it (which is not clickable while
+  // dimmed; see app.css).
+  function closeSearch(clear) {
+    if (clear) {
+      var input = document.querySelector(".search input");
+      if (input) input.value = "";
+    }
     results.replaceChildren();
     setDrawer(false);
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape" || (modal && modal.open)) return;
+    if (drawer && (drawer.classList.contains("open") || e.target.matches(".search input"))) closeSearch(true);
   });
+  if (cover) {
+    cover.addEventListener("click", function (e) {
+      if (!cover.classList.contains("dimmed")) return;
+      e.preventDefault();
+      closeSearch(false);
+    });
+  }
+
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // A row of seasons that scrolls fades out at whichever edge has more
+  // seasons behind it.
+  function markEdges(row) {
+    row.classList.toggle("more-start", row.scrollLeft > 2);
+    row.classList.toggle("more-end", row.scrollLeft + row.clientWidth < row.scrollWidth - 2);
+  }
+  // A long description shows its expand button only when it is cut.
+  function initClamps(root) {
+    root.querySelectorAll(".clamp").forEach(function (c) {
+      var text = c.querySelector(".overview"), button = c.querySelector(".clamp-toggle");
+      var cut = text.scrollHeight > text.clientHeight + 2;
+      c.classList.toggle("fits", !cut);
+      button.hidden = !cut;
+    });
+  }
+  function initContent(root) {
+    root.querySelectorAll(".season-tabs").forEach(function (row) {
+      markEdges(row);
+      row.addEventListener("scroll", function () { markEdges(row); }, { passive: true });
+    });
+    initClamps(root);
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest(".clamp-toggle");
+    if (!b) return;
+    var c = b.closest(".clamp"), open = !c.classList.contains("open");
+    c.classList.toggle("open", open);
+    b.setAttribute("aria-expanded", String(open));
+    b.setAttribute("aria-label", open ? "Show less of the description" : "Show the whole description");
+    b.title = b.getAttribute("aria-label");
+  });
+  document.addEventListener("htmx:afterSwap", function (e) {
+    if (e.detail.target === modalBody) initContent(modalBody);
+  });
+  initContent(document);
+  window.addEventListener("resize", function () { document.querySelectorAll(".season-tabs").forEach(markEdges); });
 
   // Popovers ("Previously watching", "My subscriptions") open under the
   // button that opened them, kept on screen, with the arrow pointing at it.
@@ -78,12 +132,27 @@
     if (!tab) return;
     var group = tab.closest("[data-tabs]");
     var scope = group.dataset.tabsScope ? group.closest(group.dataset.tabsScope) : group;
+    // Switching tabs fades the new panel in and eases the height between
+    // the old panel and the new one, so the page below glides rather
+    // than jumps.
+    var shown = scope.querySelector("#" + CSS.escape(tab.dataset.tab));
+    var box = shown && shown.parentElement;
+    var before = box ? box.getBoundingClientRect().height : 0;
     group.querySelectorAll("[data-tab]").forEach(function (t) {
       var selected = t === tab;
       t.setAttribute("aria-selected", String(selected));
       var panel = scope.querySelector("#" + CSS.escape(t.dataset.tab));
       if (panel) panel.hidden = !selected;
     });
+    if (box && !reduceMotion && box.animate) {
+      var after = box.getBoundingClientRect().height;
+      if (Math.abs(after - before) > 1) {
+        box.style.overflow = "hidden";
+        box.animate([{ height: before + "px" }, { height: after + "px" }], { duration: 250, easing: "ease-out" })
+          .finished.then(function () { box.style.overflow = ""; }, function () {});
+      }
+      shown.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
+    }
     // A long row of seasons scrolls sideways; the chosen one moves to the
     // middle, so the seasons next to it come into view (as in the original).
     var row = tab.parentElement;

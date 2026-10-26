@@ -101,7 +101,7 @@ templ tileGrid(tiles []store.Tile) {
 
 templ tileBody(t store.Tile) {
 	<img src={ posterURL(t.Poster) } alt="" loading="lazy" width="140" height="210"/>
-	<span class="tile-title" title={ t.Title }>{ t.Title }</span>
+	<span class="tile-title" title={ t.Title } dir="auto">{ t.Title }</span>
 	<span class="tile-meta">
 		if t.Watched {
 			<span class="watched" title="Watched">
@@ -141,7 +141,7 @@ templ collectionDialog(v Viewer, c store.Collection, seasons []Season, subscribe
 		</header>
 		<div class="collection-body">
 			if c.Overview != "" {
-				<p class="overview">{ c.Overview }</p>
+				@clampedText(c.Overview)
 			}
 			for i, s := range seasons {
 				<div class="tab-panel" id={ fmt.Sprintf("season-%d-%d", c.ID, s.Number) } role="tabpanel" hidden?={ i != 0 }>
@@ -177,6 +177,7 @@ templ collectionDialog(v Viewer, c store.Collection, seasons []Season, subscribe
 templ subscribeRibbon(collectionID int64, subscribed bool) {
 	<button
 		type="button"
+		id="subscribe-ribbon"
 		class={ "ribbon", templ.KV("ribbon-on", subscribed) }
 		hx-post={ collectionURL(collectionID) + "/subscribe" }
 		hx-swap="outerHTML"
@@ -214,8 +215,15 @@ templ resumeList(items []store.Resume) {
 							{ displayTitle(r.Media) }
 							<small>
 								@icon("pause")
-								{ minutes(r.Position) }
+								if r.Media.Duration > 0 {
+									{ clock(r.Position) } of { clock(r.Media.Duration) }
+								} else {
+									{ clock(r.Position) }
+								}
 							</small>
+							if r.Media.Duration > 0 {
+								<span class="progress" aria-hidden="true"><span style={ "width:" + percent(r.Position, r.Media.Duration) }></span></span>
+							}
 						</span>
 					</a>
 				</li>
@@ -224,9 +232,11 @@ templ resumeList(items []store.Resume) {
 	}
 }
 
-templ notificationList(items []store.Media) {
-	if len(items) == 0 {
+templ notificationList(items []store.Media, subscriptions int) {
+	if len(items) == 0 && subscriptions == 0 {
 		<p class="popover-empty">No new episodes. Subscribe to a show from its poster.</p>
+	} else if len(items) == 0 {
+		<p class="popover-empty">No new episodes in { subscriptionCount(subscriptions) }.</p>
 	} else {
 		<ul class="mini-list">
 			for _, m := range items {

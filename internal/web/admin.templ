@@ -1,10 +1,6 @@
 package web
 
-import (
-	"strconv"
-
-	"github.com/AlexCristian/NexusPlay/internal/store"
-)
+import "github.com/AlexCristian/NexusPlay/internal/store"
 
 templ controlPanel(p Page, pending []store.Media, collections []store.Collection, categories []string, metaEnabled bool, conv ConversionView, msg string) {
 	@shell(p) {
@@ -29,7 +25,7 @@ templ controlPanel(p Page, pending []store.Media, collections []store.Collection
 			if len(pending) == 0 {
 				<p class="muted">Nothing new. Files added to the media folder show up here after the next scan.</p>
 			} else {
-				<table class="admin-table">
+				<table class="admin-table pending-table">
 					<thead>
 						<tr><th scope="col">File</th><th scope="col">Detected as</th><th scope="col"></th></tr>
 					</thead>
@@ -93,7 +89,7 @@ templ categoryList(categories []string) {
 templ collectionFields(c store.Collection, categories []string, metaEnabled bool) {
 	<label>
 		Name
-		<input type="text" name="name" value={ c.Name } required maxlength="200"/>
+		<textarea name="name" class="grow" rows="1" required maxlength="200">{ c.Name }</textarea>
 	</label>
 	<label>
 		Category
@@ -187,7 +183,7 @@ templ editMediaPage(p Page, f MediaForm) {
 					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
 					<label>
 						Title
-						<input type="text" name="title" value={ f.Media.Title } required maxlength="200"/>
+						<textarea name="title" class="grow" rows="1" required maxlength="200">{ f.Media.Title }</textarea>
 					</label>
 					<label>
 						Year
@@ -205,12 +201,17 @@ templ editMediaPage(p Page, f MediaForm) {
 					</label>
 					<label>
 						Season
-						<input type="number" name="season" value={ strconv.Itoa(f.Media.Season) } min="0" max="999"/>
+						<input type="number" name="season" value={ blankZero(f.Media.Season) } placeholder="—" min="0" max="999"/>
 					</label>
-					<label>
-						Episode
-						<input type="number" name="episode" value={ strconv.Itoa(f.Media.Episode) } min="0" max="9999"/>
-					</label>
+					<div class="field-group">
+						<span class="field-label" id="episodes-label">Episodes</span>
+						<span class="range-fields" role="group" aria-labelledby="episodes-label">
+							<input type="number" name="episode" value={ blankZero(f.Media.Episode) } placeholder="—" min="0" max="9999" aria-label="First episode"/>
+							<span>to</span>
+							<input type="number" name="episode_end" value={ blankZero(f.Media.EpisodeEnd) } placeholder="—" min="0" max="9999" aria-label="Last episode (for a file with several)"/>
+						</span>
+						<small>Fill in “to” only for a file that holds several episodes.</small>
+					</div>
 					<label class="span-2">
 						Description
 						<textarea name="overview" rows="3">{ f.Media.Overview }</textarea>
@@ -239,15 +240,21 @@ templ editMediaPage(p Page, f MediaForm) {
 			if len(f.Subtitles) == 0 {
 				<p class="muted">No subtitles yet. Upload one below, or put a file named like the video (for example <code>Movie.en.srt</code>) next to it.</p>
 			} else {
-				<table class="admin-table">
+				<table class="admin-table subtitle-table">
 					<tbody>
 						for _, s := range f.Subtitles {
 							<tr>
 								<td colspan="2">
 									<form class="inline-fields" method="post" action={ templ.SafeURL("/admin/subtitles/" + itoa(s.ID)) }>
 										<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
-										<input type="text" name="language" value={ s.Language } required maxlength="12" aria-label="Language code"/>
-										<input type="text" name="label" value={ s.Label } required maxlength="60" aria-label="Label"/>
+										<label>
+											Language code
+											<input type="text" name="language" value={ s.Language } required maxlength="12"/>
+										</label>
+										<label>
+											Label
+											<input type="text" name="label" value={ s.Label } required maxlength="60"/>
+										</label>
 										<button type="submit" class="button button-small">Save</button>
 									</form>
 								</td>

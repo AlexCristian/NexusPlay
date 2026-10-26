@@ -81,6 +81,25 @@ func TestDecodeMediaForm(t *testing.T) {
 			},
 		},
 		{name: "no title", fields: map[string]string{"title": "  "}, wantErr: "title cannot be empty"},
+		{
+			name:   "episode range",
+			fields: map[string]string{"title": "Encounter\nat  Farpoint", "season": "1", "episode": "1", "episode_end": "2"},
+			check: func(t *testing.T, in mediaInput) {
+				if in.update.Title != "Encounter at Farpoint" || in.update.Episode != 1 || in.update.EpisodeEnd != 2 {
+					t.Errorf("decoded %+v", in.update)
+				}
+			},
+		},
+		{
+			name:   "a range of one episode is one episode",
+			fields: map[string]string{"title": "T", "episode": "4", "episode_end": "4"},
+			check: func(t *testing.T, in mediaInput) {
+				if in.update.EpisodeEnd != 0 {
+					t.Errorf("EpisodeEnd = %d, want 0", in.update.EpisodeEnd)
+				}
+			},
+		},
+		{name: "range backwards", fields: map[string]string{"title": "T", "episode": "3", "episode_end": "2"}, wantErr: "must come after the first"},
 		{name: "season not a number", fields: map[string]string{"title": "T", "season": "one"}, wantErr: "Season must be a number"},
 		{name: "negative episode", fields: map[string]string{"title": "T", "episode": "-1"}, wantErr: "Episode must be a number"},
 		{

@@ -132,11 +132,24 @@ templ searchBox(q string) {
 templ messagePage(p Page, title, msg string) {
 	@shell(p) {
 		<section class="panel message">
-			<h1>{ title }</h1>
-			<p>{ msg }</p>
-			<p><a href="/">Back to the library</a></p>
+			<h1 class="message-heading">{ title }</h1>
+			<div class="message-body">
+				<p>{ msg }</p>
+				<p><a href="/">Back to the library</a></p>
+			</div>
 		</section>
 	}
+}
+
+// clampedText is a description shown a few lines tall with a round arrow
+// button to expand it (app.js shows the button only when the text is cut).
+templ clampedText(text string) {
+	<div class="clamp">
+		<p class="overview">{ text }</p>
+		<button type="button" class="clamp-toggle" aria-expanded="false" aria-label="Show the whole description" title="Show the whole description" hidden>
+			@icon("chevron-down")
+		</button>
+	</div>
 }
 
 templ alert(kind, msg string) {

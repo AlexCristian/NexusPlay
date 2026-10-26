@@ -52,8 +52,53 @@ func collectionURL(id int64) string { return "/collections/" + itoa(id) }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
-// minutes formats a duration in seconds as "42 min".
-func minutes(sec float64) string { return strconv.Itoa(int(sec/60)) + " min" }
+// duration formats a length in seconds for people: "8 s", "42 min",
+// "1 h 5 min".
+func duration(sec float64) string {
+	s := int(sec + .5)
+	switch {
+	case s < 60:
+		return strconv.Itoa(s) + " s"
+	case s < 3600:
+		return strconv.Itoa(s/60) + " min"
+	case s%3600/60 == 0:
+		return strconv.Itoa(s/3600) + " h"
+	default:
+		return strconv.Itoa(s/3600) + " h " + strconv.Itoa(s%3600/60) + " min"
+	}
+}
+
+// clock formats a position in seconds as "0:05", "42:10" or "1:02:03".
+func clock(sec float64) string {
+	s := int(sec)
+	if s < 0 {
+		s = 0
+	}
+	if s >= 3600 {
+		return fmt.Sprintf("%d:%02d:%02d", s/3600, s/60%60, s%60)
+	}
+	return fmt.Sprintf("%d:%02d", s/60, s%60)
+}
+
+// percent is how far pos is through total, 0–100, for a progress bar.
+func percent(pos, total float64) string {
+	if total <= 0 {
+		return "0%"
+	}
+	return strconv.FormatFloat(min(100, max(0, pos/total*100)), 'f', 1, 64) + "%"
+}
+
+// fileSize formats a size in bytes with a unit that fits: "820 KB", "1.2 MB", "4.37 GB".
+func fileSize(b int64) string {
+	switch {
+	case b >= 1<<30:
+		return strconv.FormatFloat(float64(b)/(1<<30), 'f', 2, 64) + " GB"
+	case b >= 1<<20:
+		return strconv.FormatFloat(float64(b)/(1<<20), 'f', 1, 64) + " MB"
+	default:
+		return strconv.FormatInt((b+1023)/1024, 10) + " KB"
+	}
+}
 
 // registrationClosedMessage explains why the sign-up form is not shown.
 func registrationClosedMessage(maxAccounts int) string {
@@ -78,10 +123,22 @@ func seasonLabel(n int) string {
 }
 
 // seasonSummary is the line under a collection's title: "2 Seasons, 2019".
+// Specials (season 0) are not counted as a season.
 func seasonSummary(c store.Collection, seasons []Season) string {
-	s := "1 Season"
-	if len(seasons) != 1 {
-		s = strconv.Itoa(len(seasons)) + " Seasons"
+	n := 0
+	for _, se := range seasons {
+		if se.Number != 0 {
+			n++
+		}
+	}
+	var s string
+	switch n {
+	case 0:
+		s = "Specials"
+	case 1:
+		s = "1 Season"
+	default:
+		s = strconv.Itoa(n) + " Seasons"
 	}
 	if c.Year != "" {
 		s += ", " + c.Year
@@ -94,7 +151,7 @@ func displayTitle(m store.Media) string {
 	if m.CollectionName == "" {
 		return m.Title
 	}
-	return fmt.Sprintf("%s · S%dE%d · %s", m.CollectionName, m.Season, m.Episode, m.Title)
+	return m.CollectionName + " · " + episodeLabel(m) + " · " + m.Title
 }
 
 // ---- Player ----
@@ -106,20 +163,21 @@ type Playback struct {
 }
 
 // episodeNumbers is an episode's number, or its range for a file holding
-// several ("1–2" for a two-part pilot in one file). The range comes from the
-// file name, and only while the stored number still matches it: a number
-// an administrator changed is shown as it is.
+// several ("1–2" for a two-part pilot in one file).
 func episodeNumbers(m store.Media) string {
 	n := strconv.Itoa(m.Episode)
-	if g := guessFor(m); g.EpisodeEnd > m.Episode && g.Episode == m.Episode && g.Season == m.Season {
-		n += "–" + strconv.Itoa(g.EpisodeEnd)
+	if m.EpisodeEnd > m.Episode {
+		n += "–" + strconv.Itoa(m.EpisodeEnd)
 	}
 	return n
 }
 
 // episodeLabel is an episode's short number, "S3E4" or "S1E1–2", shown
-// before its title. Season 0 holds specials.
+// before its title everywhere. Season 0 holds specials: "Special 3".
 func episodeLabel(m store.Media) string {
+	if m.Season == 0 {
+		return "Special " + episodeNumbers(m)
+	}
 	return "S" + strconv.Itoa(m.Season) + "E" + episodeNumbers(m)
 }
 
@@ -140,6 +198,22 @@ func pad2(n int64) string {
 }
 
 // ---- Control panel ----
+
+// blankZero shows 0 as an empty field (a film has no season or episode).
+func blankZero(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
+}
+
+// subscriptionCount is "your 1 subscription" / "your 3 subscriptions".
+func subscriptionCount(n int) string {
+	if n == 1 {
+		return "your 1 subscription"
+	}
+	return "your " + strconv.Itoa(n) + " subscriptions"
+}
 
 // MediaForm is the data behind the edit and publish form.
 type MediaForm struct {
@@ -185,9 +259,9 @@ func techSummary(m store.Media) string {
 		s += " / " + m.AudioCodec
 	}
 	if m.Duration > 0 {
-		s += " · " + minutes(m.Duration)
+		s += " · " + duration(m.Duration)
 	}
-	s += " · " + strconv.FormatFloat(float64(m.Size)/(1<<30), 'f', 2, 64) + " GB"
+	s += " · " + fileSize(m.Size)
 	return s
 }
 

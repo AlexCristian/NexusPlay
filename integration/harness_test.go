@@ -280,7 +280,7 @@ func (s *server) publishAll(except ...string) {
 			continue
 		}
 		g := library.ParsePath(m.Path)
-		u := store.MediaUpdate{Title: m.Title, Year: m.Year, Season: m.Season, Episode: m.Episode, Category: "Movies"}
+		u := store.MediaUpdate{Title: m.Title, Year: m.Year, Season: m.Season, Episode: m.Episode, EpisodeEnd: m.EpisodeEnd, Category: "Movies"}
 		if g.IsEpisode() {
 			u.Category = ""
 			c, err := s.App.Store.CollectionByName(ctx, g.Show)

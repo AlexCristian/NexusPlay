@@ -19,6 +19,7 @@ type Media struct {
 	CollectionID int64 // 0 when standalone
 	Season       int
 	Episode      int
+	EpisodeEnd   int    // the last episode of a multi-episode file; 0 for one episode
 	Poster       string // file name in the poster directory: its own, else its collection's
 	OwnPoster    bool   // Poster is the media's own, not its collection's
 	Duration     float64
@@ -43,6 +44,7 @@ type ScannedMedia struct {
 	Year       string
 	Season     int
 	Episode    int
+	EpisodeEnd int // see Media.EpisodeEnd
 	Duration   float64
 	Container  string
 	VideoCodec string
@@ -54,7 +56,7 @@ type ScannedMedia struct {
 const mediaCols = `m.id, m.path, m.title, m.year, m.overview, m.category, COALESCE(m.collection_id, 0),
 	m.season, m.episode, CASE WHEN m.poster <> '' THEN m.poster ELSE COALESCE(c.poster, '') END,
 	m.duration, m.container, m.video_codec, m.audio_codec, m.size, m.published, m.views,
-	m.added_at, m.published_at, COALESCE(c.name, ''), m.pix_fmt, m.poster <> ''`
+	m.added_at, m.published_at, COALESCE(c.name, ''), m.pix_fmt, m.poster <> '', m.episode_end`
 
 const mediaFrom = ` FROM media m LEFT JOIN collections c ON c.id = m.collection_id `
 
@@ -68,10 +70,10 @@ func (s *Store) queryMedia(ctx context.Context, where string, args ...any) ([]Me
 // the path is already known it changes nothing and returns inserted == false.
 func (s *Store) InsertScannedMedia(ctx context.Context, sm ScannedMedia) (id int64, inserted bool, err error) {
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO media (path, title, year, season, episode, duration, container, video_codec, audio_codec, pix_fmt, size, added_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO media (path, title, year, season, episode, episode_end, duration, container, video_codec, audio_codec, pix_fmt, size, added_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO NOTHING`,
-		sm.Path, sm.Title, sm.Year, sm.Season, sm.Episode, sm.Duration, sm.Container,
+		sm.Path, sm.Title, sm.Year, sm.Season, sm.Episode, sm.EpisodeEnd, sm.Duration, sm.Container,
 		sm.VideoCodec, sm.AudioCodec, sm.PixFmt, sm.Size, s.unix())
 	if err != nil {
 		return 0, false, err
@@ -210,6 +212,15 @@ func (s *Store) PendingMedia(ctx context.Context) ([]Media, error) {
 	return s.queryMedia(ctx, `WHERE m.published = 0 ORDER BY m.path`)
 }
 
+// SetEpisodeEnd records the last episode of a multi-episode file, for files
+// scanned before the range was stored. It changes only rows with no range
+// whose episode number is still the one the file name gives, so an
+// administrator's renumbering is left alone.
+func (s *Store) SetEpisodeEnd(ctx context.Context, id int64, episode, end int) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE media SET episode_end = ? WHERE id = ? AND episode_end = 0 AND episode = ?`, end, id, episode)
+	return err
+}
+
 // CollectionEpisodes lists the published media in a collection, by season and episode.
 func (s *Store) CollectionEpisodes(ctx context.Context, collectionID int64) ([]Media, error) {
 	return s.queryMedia(ctx, `WHERE m.published = 1 AND m.collection_id = ? ORDER BY m.season, m.episode, m.title`, collectionID)
@@ -224,6 +235,7 @@ type MediaUpdate struct {
 	CollectionID int64
 	Season       int
 	Episode      int
+	EpisodeEnd   int    // the last episode of a multi-episode file; 0 for one
 	Poster       string // a new poster file; empty keeps the current one
 	RemovePoster bool   // clear the poster (Poster must be empty)
 }
@@ -243,9 +255,9 @@ func (s *Store) UpdateMedia(ctx context.Context, id int64, u MediaUpdate, publis
 		u.Category = category
 		_, err = tx.ExecContext(ctx, `
 			UPDATE media SET title = ?, year = ?, overview = ?, category = ?, collection_id = ?,
-				season = ?, episode = ?, poster = `+posterSQL+`
+				season = ?, episode = ?, episode_end = ?, poster = `+posterSQL+`
 			WHERE id = ?`,
-			u.Title, u.Year, u.Overview, u.Category, coll, u.Season, u.Episode, u.RemovePoster, u.Poster, u.Poster, id)
+			u.Title, u.Year, u.Overview, u.Category, coll, u.Season, u.Episode, u.EpisodeEnd, u.RemovePoster, u.Poster, u.Poster, id)
 		if err != nil {
 			return err
 		}

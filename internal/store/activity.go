@@ -84,6 +84,13 @@ func (s *Store) WatchedIn(ctx context.Context, userID, collectionID int64) (map[
 	return out, rows.Err()
 }
 
+// SubscriptionCount returns how many collections a user is subscribed to.
+func (s *Store) SubscriptionCount(ctx context.Context, userID int64) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM subscriptions WHERE user_id = ?`, userID).Scan(&n)
+	return n, err
+}
+
 // IsSubscribed reports whether a user follows a collection.
 func (s *Store) IsSubscribed(ctx context.Context, userID, collectionID int64) (bool, error) {
 	var ok bool

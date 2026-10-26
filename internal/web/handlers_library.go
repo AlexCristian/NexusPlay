@@ -28,6 +28,7 @@ type libraryStore interface {
 	ToggleSubscription(ctx context.Context, userID, collectionID int64) (bool, error)
 	InProgress(ctx context.Context, userID int64, limit int) ([]store.Resume, error)
 	Notifications(ctx context.Context, userID int64, limit int) ([]store.Media, error)
+	SubscriptionCount(ctx context.Context, userID int64) (int, error)
 }
 
 const (
@@ -175,6 +176,10 @@ func (h *libraryHandlers) notificationList(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		return err
 	}
-	h.render(w, r, http.StatusOK, notificationList(items))
+	subs, err := h.store.SubscriptionCount(r.Context(), viewer(r).ID())
+	if err != nil {
+		return err
+	}
+	h.render(w, r, http.StatusOK, notificationList(items, subs))
 	return nil
 }
