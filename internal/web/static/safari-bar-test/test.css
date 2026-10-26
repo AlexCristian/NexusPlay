@@ -1,0 +1,21 @@
+  html { min-height: 100%; background-color: #02040c; }
+  body { margin: 0; min-height: 100vh; font: 16px/1.5 -apple-system, system-ui, sans-serif; color: #fff; }
+  body::before {
+    content: ""; position: fixed; top: 0; left: 0; right: 0; height: 100lvh; z-index: -1; pointer-events: none;
+    background: radial-gradient(ellipse at 15% 20%, rgba(30, 70, 150, .55), transparent 55%), #02040c;
+  }
+  .top-bar { position: sticky; top: 0; z-index: 10; background: #c21f00; }
+  .top-bar.playing { background: rgb(25, 25, 25); }
+  .top-bar-inner { max-width: 960px; margin: 0 auto; padding: 0 16px; display: flex; gap: 32px; align-items: center; min-height: 36px; font-weight: 700; }
+  .top-bar.playing .top-bar-inner { color: rgb(190, 30, 0); }
+  .with-backdrop .top-bar { -webkit-backdrop-filter: blur(0px); backdrop-filter: blur(0px); }
+  main { max-width: 640px; margin: 48px auto; padding: 0 16px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  .strategies { display: grid; gap: 8px; margin: 16px 0 24px; padding: 0; list-style: none; }
+  .strategies a { display: block; padding: 10px 14px; border-radius: 8px; background: rgba(255, 255, 255, .08); color: #fff; text-decoration: none; }
+  .strategies a[aria-current] { background: #fff; color: #111; }
+  .strategies b { display: inline-block; width: 1.5em; }
+  button { font: inherit; font-weight: 700; padding: 14px 28px; border-radius: 999px; border: 0; background: #fff; color: #111; cursor: pointer; }
+  .state { margin-left: 12px; color: #aaa; }
+  ol.steps { color: #ccc; }
+  .filler { height: 30vh; }
