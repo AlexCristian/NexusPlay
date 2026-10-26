@@ -190,8 +190,11 @@ All settings are environment variables.
 | `NEXUSPLAY_DEBUG` | `false` | `true` logs every request |
 
 If you expose Nexus Play to the internet, put it behind a reverse proxy that terminates HTTPS
-(Caddy, nginx, Traefik), and set `NEXUSPLAY_SECURE_COOKIES=true`. Consider
-`NEXUSPLAY_REQUIRE_LOGIN=true` too.
+(Caddy, nginx, Traefik), and set `NEXUSPLAY_SECURE_COOKIES=true`. Guests can browse and watch
+without an account by default; set `NEXUSPLAY_REQUIRE_LOGIN=true` only if the library should be
+private, and keep `NEXUSPLAY_MAX_ACCOUNTS` at the number of people who need accounts. An access
+gate in front of the site (Cloudflare Access, an SSO proxy) also stops guests, whatever these
+settings say.
 
 Naming your files
 -----------------
