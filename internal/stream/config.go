@@ -4,10 +4,17 @@ import (
 	"time"
 )
 
-// Config tunes a Manager. Zero durations use the defaults.
+// [Config] tunes a [Manager]. Zero durations use the defaults.
 type Config struct {
-	Directory   string        // scratch folder for HLS output; emptied by NewManager
-	Max         int           // transcodes allowed to run at once
-	IdleTimeout time.Duration // stop a running transcode nobody fetched from for this long (default 3 min)
-	KeepDone    time.Duration // keep a finished transcode for this long after its last use (default 6 h)
+	// [Directory] is the scratch folder for HLS output. [NewManager] deletes it
+	// and everything in it, then creates it empty.
+	Directory string
+	// [Max] is how many transcodes may run at once, at least 1.
+	Max int
+	// [IdleTimeout] stops a running transcode nobody has fetched from for this
+	// long, because the viewer left. 0 means 3 minutes.
+	IdleTimeout time.Duration
+	// [KeepDone] keeps a finished transcode for this long after it was last
+	// used, so watching again does not start over. 0 means 6 hours.
+	KeepDone time.Duration
 }

@@ -11,47 +11,96 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/media"
 )
 
-// Errors the Manager returns.
+// Errors the [Manager] returns.
 var (
-	// ErrBusy means the concurrent transcode limit is reached. Callers
-	// should ask the client to retry later.
+	// [ErrBusy] means the limit of running transcodes is reached. Callers should
+	// ask the client to retry later.
 	ErrBusy = errors.New("too many transcodes running")
-	// ErrNoSegment means a requested segment did not appear in time.
+	// [ErrNoSegment] means a requested segment does not exist and did not appear
+	// in time.
 	ErrNoSegment = errors.New("segment not available")
 )
 
-// FFmpegStarter returns a Starter that runs the real ffmpeg.
+// [FFmpegStarter] adapts [ffmpeg.Tools] to [Starter], to run the real ffmpeg.
+//
+// Parameters:
+//   - [tools]: where ffmpeg is.
+//
+// Returns:
+//   - [Starter]: a starter that runs [ffmpeg.Tools.Start].
 func FFmpegStarter(tools ffmpeg.Tools) Starter { return ffmpegStarter{tools} }
 
-type ffmpegStarter struct{ tools ffmpeg.Tools }
+// [ffmpegStarter] is the [Starter] [FFmpegStarter] returns.
+type ffmpegStarter struct {
+	// [tools] is where ffmpeg is.
+	tools ffmpeg.Tools
+}
 
+// [Start] launches ffmpeg with [ffmpeg.Tools.Start].
+//
+// Parameters:
+//   - [ctx]: kills ffmpeg when cancelled.
+//   - [arguments]: ffmpeg's command-line arguments.
+//
+// Returns:
+//   - [Process]: the running ffmpeg.
+//   - [error]: [nil] on success, or the error from [ffmpeg.Tools.Start].
 func (starter ffmpegStarter) Start(ctx context.Context, arguments []string) (Process, error) {
 	return starter.tools.Start(ctx, arguments)
 }
 
-// job is one transcode. Every job has its own directory, so cleaning up an
-// old job never touches the output of a newer one for the same media.
+// [job] is one transcode. Every job has its own folder, so cleaning up an old
+// job never touches the output of a newer one for the same media item.
 type job struct {
-	directory  string
-	ctx        context.Context // the job's lifetime; cancelling it kills ffmpeg
-	cancel     context.CancelFunc
-	done       chan struct{} // closed when ffmpeg has exited (or failed to start)
-	err        error         // why it failed; set before done is closed
-	lastAccess time.Time     // guarded by Manager.mu
-	finished   bool          // guarded by Manager.mu
+	// [directory] is the transcode's own output folder.
+	directory string
+	// [ctx] is the transcode's lifetime; cancelling it kills ffmpeg.
+	ctx context.Context
+	// [cancel] cancels [ctx], stopping the transcode.
+	cancel context.CancelFunc
+	// [done] is closed when ffmpeg has exited, or failed to start.
+	done chan struct{}
+	// [err] is why the transcode failed, or [nil]. It is set before [done] is
+	// closed and not changed after, so read it only once [done] is closed.
+	err error
+	// [lastAccess] is when a client last used the transcode. Guarded by
+	// [Manager.mutex].
+	lastAccess time.Time
+	// [finished] is [true] once ffmpeg has exited or failed to start. Guarded by
+	// [Manager.mutex].
+	finished bool
 }
 
-// segmentName matches the files an HLS transcode writes.
+// [segmentName] matches the segment file names an HLS transcode writes,
+// "seg" and five digits, such as "seg00012.ts".
 var segmentName = regexp.MustCompile(`^seg\d{5}\.ts$`)
 
-// IsSegmentName reports whether name is a segment file name. Anything else
-// (paths, the playlist, other files) is refused before touching the disk.
+// [IsSegmentName] reports whether a name is a transcode's segment file
+// name. Anything else (paths, the playlist, other files) is refused before
+// the disk is touched.
+//
+// Parameters:
+//   - [name]: the requested file name.
+//
+// Returns:
+//   - [bool]: [true] for names such as "seg00012.ts", [false] otherwise.
 func IsSegmentName(name string) bool { return segmentName.MatchString(name) }
 
-// ffmpegArguments builds an HLS transcode. Browser-safe H.264 (8-bit 4:2:0) is
-// copied as-is, a cheap remux for MKV files; anything else, including 10-bit
-// H.264, is encoded to H.264. Audio is copied when it is AAC and otherwise
-// made stereo AAC, which every browser plays.
+// [ffmpegArguments] builds the ffmpeg arguments for an HLS transcode of the
+// first video and first audio stream (if any), without subtitles or data.
+// Browser-safe H.264 (8-bit 4:2:0) is copied as it is, a cheap remux for MKV
+// files; anything else, including 10-bit H.264, is encoded to H.264. Audio
+// is copied when it is AAC and otherwise made stereo AAC at 160 kbit/s,
+// which every browser plays. Segments are 6 seconds long.
+//
+// Parameters:
+//   - [source]: the original file's path.
+//   - [directory]: the transcode's folder, where "index.m3u8" and the
+//     segments are written.
+//   - [format]: the original's codecs.
+//
+// Returns:
+//   - [[]string]: ffmpeg's arguments, without the program name.
 func ffmpegArguments(source, directory string, format media.Format) []string {
 	arguments := []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-i", source,
 		"-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn"}
