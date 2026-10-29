@@ -81,7 +81,7 @@ func (store *Store) CreateSession(ctx context.Context, tokenHash string, userID 
 // SessionUser returns the session and its user. It returns ErrNotFound when
 // there is no such session or it has expired.
 func (store *Store) SessionUser(ctx context.Context, tokenHash string) (Session, User, error) {
-	var sess Session
+	var session Session
 	var exp int64
 	row := store.database.QueryRowContext(ctx, `
 		SELECT s.user_id, s.csrf_token, s.expires_at,
@@ -90,14 +90,14 @@ func (store *Store) SessionUser(ctx context.Context, tokenHash string) (Session,
 		WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash, store.unix())
 	var user User
 	var created int64
-	err := row.Scan(&sess.UserID, &sess.CSRFToken, &exp,
+	err := row.Scan(&session.UserID, &session.CSRFToken, &exp,
 		&user.ID, &user.Email, &user.Nickname, &user.PasswordHash, &user.IsAdmin, &created)
 	if err != nil {
-		return sess, user, notFound(err)
+		return session, user, notFound(err)
 	}
-	sess.ExpiresAt = time.Unix(exp, 0)
+	session.ExpiresAt = time.Unix(exp, 0)
 	user.CreatedAt = time.Unix(created, 0)
-	return sess, user, nil
+	return session, user, nil
 }
 
 // DeleteSession logs a session out.

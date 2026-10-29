@@ -10,7 +10,7 @@ import (
 
 func TestMakePlan(t *testing.T) {
 	source := ffmpeg.Probe{Duration: 60, Streams: []ffmpeg.Stream{
-		{Index: 0, Type: "video", Codec: "h264", PixFmt: "yuv420p"},
+		{Index: 0, Type: "video", Codec: "h264", PixelFormat: "yuv420p"},
 		{Index: 1, Type: "audio", Codec: "ac3", Channels: 6, Language: "fre"},
 		{Index: 2, Type: "audio", Codec: "aac", Channels: 2, Language: "eng", Default: true},
 		{Index: 3, Type: "audio", Codec: "dts", Channels: 8, Language: "eng"},
@@ -19,7 +19,7 @@ func TestMakePlan(t *testing.T) {
 		{Index: 6, Type: "subtitle", Codec: "subrip"},
 		{Index: 7, Type: "subtitle", Codec: "hdmv_pgs_subtitle", Language: "eng"},
 		{Index: 8, Type: "attachment", Codec: "ttf"},
-		{Index: 9, Type: "video", Codec: "mjpeg", AttachPic: true},
+		{Index: 9, Type: "video", Codec: "mjpeg", AttachedPicture: true},
 	}}
 	plan, err := MakePlan(source, "Movie (2020)")
 	if err != nil {
@@ -65,16 +65,16 @@ func TestMakePlan(t *testing.T) {
 
 func TestMakePlanReencodes(t *testing.T) {
 	for _, value := range []ffmpeg.Stream{
-		{Type: "video", Codec: "hevc", PixFmt: "yuv420p"},
-		{Type: "video", Codec: "h264", PixFmt: "yuv420p10le"}, // 10-bit H.264 does not play in browsers
-		{Type: "video", Codec: "mpeg4", PixFmt: "yuv420p"},
+		{Type: "video", Codec: "hevc", PixelFormat: "yuv420p"},
+		{Type: "video", Codec: "h264", PixelFormat: "yuv420p10le"}, // 10-bit H.264 does not play in browsers
+		{Type: "video", Codec: "mpeg4", PixelFormat: "yuv420p"},
 	} {
 		plan, err := MakePlan(ffmpeg.Probe{Streams: []ffmpeg.Stream{value}}, "x")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if plan.CopyVideo {
-			t.Errorf("%s/%s should be re-encoded", value.Codec, value.PixFmt)
+			t.Errorf("%s/%s should be re-encoded", value.Codec, value.PixelFormat)
 		}
 		if arguments := strings.Join(plan.ConvertArguments("i", "o"), " "); !strings.Contains(arguments, "-c:v libx264") || strings.Contains(arguments, "-disposition:a") {
 			t.Errorf("args for %s: %s", value.Codec, arguments)
@@ -89,7 +89,7 @@ func TestMakePlanReencodes(t *testing.T) {
 // steer the sidecar file outside the video's folder.
 func TestSubtitleNamesIgnoreHostileLanguageTags(t *testing.T) {
 	source := ffmpeg.Probe{Streams: []ffmpeg.Stream{
-		{Index: 0, Type: "video", Codec: "h264", PixFmt: "yuv420p"},
+		{Index: 0, Type: "video", Codec: "h264", PixelFormat: "yuv420p"},
 		{Index: 1, Type: "subtitle", Codec: "subrip", Language: "../../../../tmp/pwned"},
 		{Index: 2, Type: "subtitle", Codec: "subrip", Language: "EN"},
 		{Index: 3, Type: "subtitle", Codec: "subrip", Language: "pt-BR"},
@@ -126,7 +126,7 @@ func TestCheckConverted(t *testing.T) {
 		"lost a track":   {Duration: 600, Streams: []ffmpeg.Stream{{Type: "video", Codec: "h264"}, {Type: "audio"}}},
 		"cut short":      {Duration: 300, Streams: good.Streams},
 		"no video":       {Duration: 600, Streams: []ffmpeg.Stream{{Type: "audio"}, {Type: "audio"}}},
-		"only cover art": {Duration: 600, Streams: []ffmpeg.Stream{{Type: "video", Codec: "h264", AttachPic: true}, {Type: "audio"}, {Type: "audio"}}},
+		"only cover art": {Duration: 600, Streams: []ffmpeg.Stream{{Type: "video", Codec: "h264", AttachedPicture: true}, {Type: "audio"}, {Type: "audio"}}},
 	} {
 		if err := CheckConverted(got, source, plan); err == nil {
 			t.Errorf("%s: accepted, want an error (the original would be deleted)", name)

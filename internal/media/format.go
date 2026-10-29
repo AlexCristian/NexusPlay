@@ -12,7 +12,7 @@ type Format struct {
 	// [AudioCodec] is the first audio stream's codec as ffprobe names it, such
 	// as "aac", or "" when the file has no audio.
 	AudioCodec string
-	// [PixFmt] is the video stream's pixel format as ffprobe names it, such as
+	// [PixelFormat] is the video stream's pixel format as ffprobe names it, such as
 	// "yuv420p" or "yuv420p10le", or "" when it is not known.
-	PixFmt string
+	PixelFormat string
 }

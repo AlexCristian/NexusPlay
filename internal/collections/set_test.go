@@ -4,8 +4,8 @@ import "testing"
 
 func TestSet(t *testing.T) {
 	set := NewSet("the", "a", "the")
-	if set.Len() != 2 {
-		t.Errorf("Len = %d; want 2, duplicates stored once", set.Len())
+	if set.Size() != 2 {
+		t.Errorf("Len = %d; want 2, duplicates stored once", set.Size())
 	}
 	set.Add("of")
 	for _, word := range []string{"the", "a", "of"} {

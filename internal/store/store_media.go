@@ -24,7 +24,7 @@ func (store *Store) InsertScannedMedia(ctx context.Context, scanned ScannedMedia
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO NOTHING`,
 		scanned.Path, scanned.Title, scanned.Year, scanned.Season, scanned.Episode, scanned.EpisodeEnd, scanned.Duration, scanned.Container,
-		scanned.VideoCodec, scanned.AudioCodec, scanned.PixFmt, scanned.Size, store.unix())
+		scanned.VideoCodec, scanned.AudioCodec, scanned.PixelFormat, scanned.Size, store.unix())
 	if err != nil {
 		return 0, false, err
 	}
@@ -91,9 +91,9 @@ func (store *Store) MediaNeedingMetadata(ctx context.Context, checkedBefore time
 		AND m.metadata_checked_at < ? ORDER BY m.metadata_checked_at, m.id LIMIT ?`, checkedBefore.Unix(), limit)
 }
 
-// H264MissingPixFmt returns H.264 media whose pixel format has not been
+// H264MissingPixelFormat returns H.264 media whose pixel format has not been
 // recorded yet (added before it was stored), path mapped to ID.
-func (store *Store) H264MissingPixFmt(ctx context.Context) (map[string]int64, error) {
+func (store *Store) H264MissingPixelFormat(ctx context.Context) (map[string]int64, error) {
 	type row struct {
 		path string
 		id   int64
@@ -113,9 +113,9 @@ func (store *Store) H264MissingPixFmt(ctx context.Context) (map[string]int64, er
 	return out, nil
 }
 
-// SetPixFmt records a media item's video pixel format.
-func (store *Store) SetPixFmt(ctx context.Context, id int64, pixFmt string) error {
-	_, err := store.database.ExecContext(ctx, `UPDATE media SET pix_fmt = ? WHERE id = ?`, pixFmt, id)
+// SetPixelFormat records a media item's video pixel format.
+func (store *Store) SetPixelFormat(ctx context.Context, id int64, pixelFormat string) error {
+	_, err := store.database.ExecContext(ctx, `UPDATE media SET pix_fmt = ? WHERE id = ?`, pixelFormat, id)
 	return err
 }
 

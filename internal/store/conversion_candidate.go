@@ -8,5 +8,5 @@ import (
 // needs converting.
 type ConversionCandidate struct {
 	ID                                   int64
-	Path, VideoCodec, AudioCodec, PixFmt string
+	Path, VideoCodec, AudioCodec, PixelFormat string
 }

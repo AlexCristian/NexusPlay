@@ -63,7 +63,7 @@ func MakePlan(probe ffmpeg.Probe, videoBase string) (Plan, error) {
 	// Browsers decode only 8-bit 4:2:0 H.264; anything else is re-encoded.
 	// Here the pixel format comes straight from ffprobe, so an empty one is
 	// treated as unknown and re-encoded too.
-	plan.CopyVideo = plan.Video.Codec == "h264" && plan.Video.PixFmt != "" && media.BrowserSafeH264(plan.Video.PixFmt)
+	plan.CopyVideo = plan.Video.Codec == "h264" && plan.Video.PixelFormat != "" && media.BrowserSafeH264(plan.Video.PixelFormat)
 	nameSubtitles(plan.Subtitles, videoBase)
 	return plan, nil
 }

@@ -160,7 +160,7 @@ func (converter *Converter) queue(ctx context.Context) (queued []int64, postpone
 	converter.mutex.Lock()
 	defer converter.mutex.Unlock()
 	for _, candidate := range cands {
-		format := media.Format{Path: candidate.Path, VideoCodec: candidate.VideoCodec, AudioCodec: candidate.AudioCodec, PixFmt: candidate.PixFmt}
+		format := media.Format{Path: candidate.Path, VideoCodec: candidate.VideoCodec, AudioCodec: candidate.AudioCodec, PixelFormat: candidate.PixelFormat}
 		switch {
 		case !media.NeedsConversion(format) || converter.active[candidate.ID] != nil:
 		case now.Before(converter.waitUntil[candidate.ID]):

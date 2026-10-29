@@ -453,7 +453,7 @@ func TestPosterNames(t *testing.T) {
 	store.UpdateMedia(ctx, id, MediaUpdate{Title: "M", Poster: "film.jpg"}, false)
 	mustMedia(t, store, "none.mp4")
 	got, err := store.PosterNames(ctx)
-	if err != nil || got.Len() != 2 || !got.Contains("show.jpg") || !got.Contains("film.jpg") {
+	if err != nil || got.Size() != 2 || !got.Contains("show.jpg") || !got.Contains("film.jpg") {
 		t.Errorf("PosterNames = %v, %v", got, err)
 	}
 }

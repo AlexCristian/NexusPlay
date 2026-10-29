@@ -129,7 +129,7 @@ func TestProbe(t *testing.T) {
 	if probe.Duration != 1312.48 || probe.Container != "matroska,webm" || len(probe.Streams) != 5 {
 		t.Errorf("probe = %+v", probe)
 	}
-	if value, hasVideo := probe.Video(); !hasVideo || value.Index != 1 || value.PixFmt != "yuv420p10le" {
+	if value, hasVideo := probe.Video(); !hasVideo || value.Index != 1 || value.PixelFormat != "yuv420p10le" {
 		t.Errorf("Video() = %+v, %v; want stream 1, skipping the cover art", value, hasVideo)
 	}
 	if stream, hasAudio := probe.Audio(); !hasAudio || stream.Language != "fre" || stream.Channels != 6 || stream.Title != "VF" {

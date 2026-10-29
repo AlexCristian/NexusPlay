@@ -84,9 +84,9 @@ func (scanner *Scanner) Run(ctx context.Context) error {
 		defer watcher.Close()
 	}
 	var events <-chan fsnotify.Event
-	var errs <-chan error
+	var problems <-chan error
 	if watcher != nil {
-		events, errs = watcher.Events, watcher.Errors
+		events, problems = watcher.Events, watcher.Errors
 	}
 
 	ticker := time.NewTicker(scanner.config.Interval)
@@ -107,9 +107,9 @@ func (scanner *Scanner) Run(ctx context.Context) error {
 				scanner.onEvent(event, soon)
 			}
 			continue
-		case err, open := <-errs:
+		case err, open := <-problems:
 			if !open {
-				errs = nil
+				problems = nil
 			} else {
 				scanner.onWatchError(err, soon)
 			}
@@ -204,7 +204,7 @@ func (scanner *Scanner) scanAll(ctx context.Context) (Result, []string, error) {
 	}
 	scanner.retryMetadata(ctx)
 	result.Subtitles = scanner.importAllSidecars(ctx, tree, known)
-	scanner.backfillPixFmt(ctx, tree.videos)
+	scanner.backfillPixelFormat(ctx, tree.videos)
 	scanner.backfillEpisodeEnd(ctx, tree.videos, known)
 	return result, tree.directories, nil
 }
@@ -320,7 +320,7 @@ func (scanner *Scanner) probe(ctx context.Context, candidate found) (probedFile,
 	return probedFile{found: candidate, guess: guess, media: store.ScannedMedia{
 		Path: candidate.relativePath, Title: guess.Title, Year: guess.Year, Season: guess.Season, Episode: guess.Episode, EpisodeEnd: guess.EpisodeEnd,
 		Duration: probe.Duration, Container: probe.Container,
-		VideoCodec: video.Codec, AudioCodec: probe.AudioCodec(), PixFmt: video.PixFmt, Size: candidate.info.Size(),
+		VideoCodec: video.Codec, AudioCodec: probe.AudioCodec(), PixelFormat: video.PixelFormat, Size: candidate.info.Size(),
 	}}, nil
 }
 
@@ -643,11 +643,11 @@ func (scanner *Scanner) backfillEpisodeEnd(ctx context.Context, videos []found, 
 	}
 }
 
-// backfillPixFmt records the pixel format of H.264 files added before it was
+// backfillPixelFormat records the pixel format of H.264 files added before it was
 // stored. Without it, a 10-bit H.264 file (which no browser plays) would be
 // served as is and never converted.
-func (scanner *Scanner) backfillPixFmt(ctx context.Context, videos []found) {
-	missing, err := scanner.deps.Store.H264MissingPixFmt(ctx)
+func (scanner *Scanner) backfillPixelFormat(ctx context.Context, videos []found) {
+	missing, err := scanner.deps.Store.H264MissingPixelFormat(ctx)
 	if err != nil {
 		scanner.deps.Log.Warn("could not list media to re-probe", "err", err)
 		return
@@ -666,8 +666,8 @@ func (scanner *Scanner) backfillPixFmt(ctx context.Context, videos []found) {
 			scanner.deps.Log.Warn("could not re-probe media", "path", scannedVideo.relativePath, "err", err)
 			continue
 		}
-		if video, hasVideo := probe.Video(); hasVideo && video.PixFmt != "" {
-			if err := scanner.deps.Store.SetPixFmt(ctx, id, video.PixFmt); err != nil {
+		if video, hasVideo := probe.Video(); hasVideo && video.PixelFormat != "" {
+			if err := scanner.deps.Store.SetPixelFormat(ctx, id, video.PixelFormat); err != nil {
 				scanner.deps.Log.Warn("could not record pixel format", "path", scannedVideo.relativePath, "err", err)
 			}
 		}

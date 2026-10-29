@@ -19,8 +19,8 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 				data-media-id={ itoa(m.ID) }
 				data-src={ pb.URL }
 				data-hls={ strconv.FormatBool(!pb.Direct) }
-				data-resume={ fmtSeconds(resumeAt) }
-				data-duration={ fmtSeconds(m.Duration) }
+				data-resume={ formatSeconds(resumeAt) }
+				data-duration={ formatSeconds(m.Duration) }
 				data-hls-script={ asset("/static/vendor/hls.light.min.js") }
 				data-signed-in={ strconv.FormatBool(p.Viewer.User != nil) }
 			>

@@ -15,7 +15,7 @@ import (
 func (store *Store) ConversionCandidates(ctx context.Context) ([]ConversionCandidate, error) {
 	return queryAll(ctx, store.database, func(row rowScanner) (ConversionCandidate, error) {
 		var candidate ConversionCandidate
-		err := row.Scan(&candidate.ID, &candidate.Path, &candidate.VideoCodec, &candidate.AudioCodec, &candidate.PixFmt)
+		err := row.Scan(&candidate.ID, &candidate.Path, &candidate.VideoCodec, &candidate.AudioCodec, &candidate.PixelFormat)
 		return candidate, err
 	}, `SELECT id, path, video_codec, audio_codec, pix_fmt FROM media
 		WHERE convert_status = '' ORDER BY added_at DESC, id DESC`)
@@ -52,7 +52,7 @@ func (store *Store) ReplaceMediaFile(ctx context.Context, id int64, replaced Rep
 		_, err := transaction.ExecContext(ctx, `
 			UPDATE media SET path = ?, duration = ?, container = ?, video_codec = ?, audio_codec = ?,
 				pix_fmt = ?, size = ?, convert_status = '', convert_error = ''
-			WHERE id = ?`, replaced.Path, replaced.Duration, replaced.Container, replaced.VideoCodec, replaced.AudioCodec, replaced.PixFmt, replaced.Size, id)
+			WHERE id = ?`, replaced.Path, replaced.Duration, replaced.Container, replaced.VideoCodec, replaced.AudioCodec, replaced.PixelFormat, replaced.Size, id)
 		return err
 	})
 }

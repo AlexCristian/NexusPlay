@@ -31,7 +31,7 @@ func (fakeTools *fakeTools) Probe(ctx context.Context, file string) (ffmpeg.Prob
 		return fakeTools.converted, nil
 	}
 	return ffmpeg.Probe{Duration: 60, Container: "matroska,webm", Streams: []ffmpeg.Stream{
-		{Index: 0, Type: "video", Codec: "h264", PixFmt: "yuv420p"},
+		{Index: 0, Type: "video", Codec: "h264", PixelFormat: "yuv420p"},
 		{Index: 1, Type: "audio", Codec: "ac3", Channels: 6},
 	}}, nil
 }
@@ -51,7 +51,7 @@ func (fakeTools *fakeTools) Run(ctx context.Context, arguments []string, options
 }
 
 var goodMP4 = ffmpeg.Probe{Duration: 60, Container: "mov,mp4", Streams: []ffmpeg.Stream{
-	{Type: "video", Codec: "h264", PixFmt: "yuv420p"}, {Type: "audio", Codec: "aac"},
+	{Type: "video", Codec: "h264", PixelFormat: "yuv420p"}, {Type: "audio", Codec: "aac"},
 }}
 
 // fakeLibrary records how the converter uses the scanner.
@@ -210,8 +210,8 @@ func TestConversionCounts(t *testing.T) {
 		}
 		return id
 	}
-	add(store.ScannedMedia{Path: "ready.mp4", Title: "Ready", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p"})
-	add(store.ScannedMedia{Path: "tenbit.mp4", Title: "10-bit", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p10le"})
+	add(store.ScannedMedia{Path: "ready.mp4", Title: "Ready", VideoCodec: "h264", AudioCodec: "aac", PixelFormat: "yuv420p"})
+	add(store.ScannedMedia{Path: "tenbit.mp4", Title: "10-bit", VideoCodec: "h264", AudioCodec: "aac", PixelFormat: "yuv420p10le"})
 	waiting := add(store.ScannedMedia{Path: "big.avi", Title: "Big", VideoCodec: "mpeg4", AudioCodec: "mp3"})
 	failed := add(store.ScannedMedia{Path: "broken.avi", Title: "Broken", VideoCodec: "mpeg4", AudioCodec: "mp3"})
 	if err := jobFixture.database.SetConvertFailed(ctx, failed, "bad file"); err != nil {

@@ -11,8 +11,8 @@ func TestLines(t *testing.T) {
 
 func TestSet(t *testing.T) {
 	got := Set("srt\nass\n")
-	if got.Len() != 2 || !got.Contains("srt") || got.Contains("SRT") {
-		t.Errorf("Set kept %d entries; want srt and ass, case-sensitive", got.Len())
+	if got.Size() != 2 || !got.Contains("srt") || got.Contains("SRT") {
+		t.Errorf("Set kept %d entries; want srt and ass, case-sensitive", got.Size())
 	}
 }
 

@@ -71,19 +71,19 @@ func TestConcurrentWriteTransactions(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
 	var waitGroup sync.WaitGroup
-	errs := make(chan error, 40)
+	problems := make(chan error, 40)
 	for i := 0; i < 40; i++ {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
 			email := time.Now().Format("150405.000000000") + string(rune('a'+i%26)) + "@x.com"
 			_, err := store.CreateUser(ctx, email, email, "hash", 0)
-			errs <- err
+			problems <- err
 		}()
 	}
 	waitGroup.Wait()
-	close(errs)
-	for err := range errs {
+	close(problems)
+	for err := range problems {
 		if err != nil {
 			t.Errorf("concurrent CreateUser: %v", err)
 		}

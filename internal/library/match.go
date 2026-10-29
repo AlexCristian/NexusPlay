@@ -40,7 +40,7 @@ const minTitleScore = 0.6
 //     [false] if it does not or [title] has no meaningful words.
 func episodeByTitle(episodes []metadata.Episode, title string, number int) (metadata.Episode, bool) {
 	wantedWords := titleWords(title)
-	if wantedWords.Len() == 0 {
+	if wantedWords.Size() == 0 {
 		return metadata.Episode{}, false
 	}
 	var best metadata.Episode
@@ -165,7 +165,7 @@ func titleWords(title string) collections.Set[string] {
 //   - [float64]: a score from 0 (no words in common) to 1 (the same words),
 //     or 0 if either set is empty.
 func similarity(first, second collections.Set[string]) float64 {
-	if first.Len() == 0 || second.Len() == 0 {
+	if first.Size() == 0 || second.Size() == 0 {
 		return 0
 	}
 	shared := 0
@@ -174,7 +174,7 @@ func similarity(first, second collections.Set[string]) float64 {
 			shared++
 		}
 	}
-	return 2 * float64(shared) / float64(first.Len()+second.Len())
+	return 2 * float64(shared) / float64(first.Size()+second.Size())
 }
 
 // [absolute] gives the absolute value of a whole number.

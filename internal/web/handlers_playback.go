@@ -88,7 +88,7 @@ func playbackFor(mediaItem store.Media) Playback {
 
 // formatOf describes a media item for the playback policy.
 func formatOf(mediaItem store.Media) media.Format {
-	return media.Format{Path: mediaItem.Path, VideoCodec: mediaItem.VideoCodec, AudioCodec: mediaItem.AudioCodec, PixFmt: mediaItem.PixFmt}
+	return media.Format{Path: mediaItem.Path, VideoCodec: mediaItem.VideoCodec, AudioCodec: mediaItem.AudioCodec, PixelFormat: mediaItem.PixelFormat}
 }
 
 // mediaPath resolves a media item's file, refusing anything outside the media

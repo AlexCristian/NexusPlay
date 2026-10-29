@@ -21,7 +21,7 @@ type Store interface {
 	DeleteMedia(ctx context.Context, id int64) error
 	SubtitleSources(ctx context.Context) (collections.Set[string], error)
 	AddSubtitle(ctx context.Context, subtitle store.NewSubtitle) (id int64, inserted bool, err error)
-	H264MissingPixFmt(ctx context.Context) (map[string]int64, error)
+	H264MissingPixelFormat(ctx context.Context) (map[string]int64, error)
 	SetEpisodeEnd(ctx context.Context, id int64, episode, end int) error
-	SetPixFmt(ctx context.Context, id int64, pixFmt string) error
+	SetPixelFormat(ctx context.Context, id int64, pixelFormat string) error
 }

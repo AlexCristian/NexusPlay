@@ -16,6 +16,6 @@ type ScannedMedia struct {
 	Container  string
 	VideoCodec string
 	AudioCodec string
-	PixFmt     string
+	PixelFormat     string
 	Size       int64
 }

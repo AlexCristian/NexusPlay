@@ -78,7 +78,7 @@ func Deliver(format Format) Delivery {
 		playable = slices.Contains([]string{"vp8", "vp9", "av1"}, format.VideoCodec) &&
 			slices.Contains([]string{"", "opus", "vorbis"}, format.AudioCodec)
 	}
-	if playable && format.VideoCodec == "h264" && !BrowserSafeH264(format.PixFmt) {
+	if playable && format.VideoCodec == "h264" && !BrowserSafeH264(format.PixelFormat) {
 		playable = false
 	}
 	if playable {
@@ -104,7 +104,7 @@ func NeedsConversion(format Format) bool {
 	switch {
 	case extension(format.Path) != ".mp4" && extension(format.Path) != ".m4v":
 		return true
-	case format.VideoCodec != "h264" || !BrowserSafeH264(format.PixFmt):
+	case format.VideoCodec != "h264" || !BrowserSafeH264(format.PixelFormat):
 		return true
 	default:
 		return !slices.Contains([]string{"", "aac", "mp3"}, format.AudioCodec)
@@ -115,15 +115,15 @@ func NeedsConversion(format Format) bool {
 // in browsers, which decode only 8-bit 4:2:0 H.264.
 //
 // Parameters:
-//   - [pixFmt]: the pixel format as ffprobe names it, such as "yuv420p", or
+//   - [pixelFormat]: the pixel format as ffprobe names it, such as "yuv420p", or
 //     "" when it is not known.
 //
 // Returns:
 //   - [bool]: [true] for "yuv420p", "yuvj420p" and "" (an unknown format
 //     counts as safe, which nearly all H.264 files are); [false] for anything
 //     else, such as 10-bit "yuv420p10le".
-func BrowserSafeH264(pixFmt string) bool {
-	return pixFmt == "" || pixFmt == "yuv420p" || pixFmt == "yuvj420p"
+func BrowserSafeH264(pixelFormat string) bool {
+	return pixelFormat == "" || pixelFormat == "yuv420p" || pixelFormat == "yuvj420p"
 }
 
 // [extension] gets a file's extension for comparing with the policy's lists.

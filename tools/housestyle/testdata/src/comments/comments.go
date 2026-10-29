@@ -108,11 +108,11 @@ type list[T any] struct {
 	items []T
 }
 
-// [Len] is a method of a generic type.
+// [Size] is a method of a generic type.
 //
 // Returns:
 //   - [int]: how many items [list] holds.
-func (list *list[T]) Len() int { return len(list.items) }
+func (list *list[T]) Size() int { return len(list.items) }
 
 // [inlined] has a directive after its doc comment.
 //

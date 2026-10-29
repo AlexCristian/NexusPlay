@@ -56,14 +56,14 @@ func TestLookupCollection(t *testing.T) {
 		lookup.calls = nil
 		collection := store.Collection{Name: testCase.name, Category: testCase.category}
 		handlers.fillFromTMDB(context.Background(), &collection)
-		if collection.Poster != testCase.wantPoster || collection.Year != testCase.wantYear || fmtCalls(lookup.calls) != testCase.wantCalls {
+		if collection.Poster != testCase.wantPoster || collection.Year != testCase.wantYear || formatCalls(lookup.calls) != testCase.wantCalls {
 			t.Errorf("%s (%s): poster %q, year %q, searches %v; want %q, %q, %s",
 				testCase.name, testCase.category, collection.Poster, collection.Year, lookup.calls, testCase.wantPoster, testCase.wantYear, testCase.wantCalls)
 		}
 	}
 }
 
-func fmtCalls(calls []string) string {
+func formatCalls(calls []string) string {
 	text := "["
 	for i, call := range calls {
 		if i > 0 {

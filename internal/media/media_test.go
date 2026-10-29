@@ -9,7 +9,7 @@ func TestPolicy(t *testing.T) {
 		convert bool
 	}{
 		// The one format the library keeps: plays directly, never converted.
-		{Format{Path: "a.mp4", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p"}, DirectPlay, false},
+		{Format{Path: "a.mp4", VideoCodec: "h264", AudioCodec: "aac", PixelFormat: "yuv420p"}, DirectPlay, false},
 		{Format{Path: "a.M4V", VideoCodec: "h264", AudioCodec: "mp3"}, DirectPlay, false},
 		{Format{Path: "a.mp4", VideoCodec: "h264"}, DirectPlay, false}, // no audio
 		// Browsers play these, but the library still converts them.
@@ -23,8 +23,8 @@ func TestPolicy(t *testing.T) {
 		{Format{Path: "a.mkv", VideoCodec: "h264", AudioCodec: "aac"}, HLS, true},
 		{Format{Path: "a.avi", VideoCodec: "mpeg4", AudioCodec: "mp3"}, HLS, true},
 		// 10-bit H.264 plays in no browser, whatever the container.
-		{Format{Path: "a.mp4", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p10le"}, HLS, true},
-		{Format{Path: "a.mp4", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv444p"}, HLS, true},
+		{Format{Path: "a.mp4", VideoCodec: "h264", AudioCodec: "aac", PixelFormat: "yuv420p10le"}, HLS, true},
+		{Format{Path: "a.mp4", VideoCodec: "h264", AudioCodec: "aac", PixelFormat: "yuv444p"}, HLS, true},
 	}
 	for _, testCase := range tests {
 		if got := Deliver(testCase.format); got != testCase.deliver {

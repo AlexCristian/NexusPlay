@@ -31,15 +31,19 @@ elem element
 env environment
 ep episode
 eps episodes
+errs errors
 expr expression
 ext extension
+fmt format
 fn function
+frac fraction
 hdr header
 ident identifier
 idx index
 img image
 impl implementation
 lang language
+len length
 lit literal
 mem memory
 mgr manager
@@ -49,6 +53,8 @@ nums numbers
 obj object
 opt option
 opts options
+pic picture
+pix pixel
 pkg package
 pos position
 prev previous
@@ -60,6 +66,7 @@ res result
 resp response
 ret result
 sec seconds
+sess session
 src source
 stmt statement
 str string
@@ -68,5 +75,6 @@ svc service
 temp temporary
 tmp temporary
 tmpl template
+typ type
 val value
 vals values

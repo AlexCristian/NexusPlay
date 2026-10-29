@@ -131,7 +131,7 @@ func (converter *Converter) verify(ctx context.Context, work work) (store.Replac
 	}
 	video, _ := got.Video() // CheckConverted made sure there is one
 	return store.ReplacedFile{Duration: got.Duration, Container: got.Container,
-		VideoCodec: video.Codec, AudioCodec: got.AudioCodec(), PixFmt: video.PixFmt, Size: info.Size()}, nil
+		VideoCodec: video.Codec, AudioCodec: got.AudioCodec(), PixelFormat: video.PixelFormat, Size: info.Size()}, nil
 }
 
 // commit swaps the verified MP4 in while no scan can run.

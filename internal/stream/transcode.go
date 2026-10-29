@@ -55,7 +55,7 @@ func IsSegmentName(name string) bool { return segmentName.MatchString(name) }
 func ffmpegArguments(source, directory string, format media.Format) []string {
 	arguments := []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-i", source,
 		"-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn"}
-	if format.VideoCodec == "h264" && media.BrowserSafeH264(format.PixFmt) {
+	if format.VideoCodec == "h264" && media.BrowserSafeH264(format.PixelFormat) {
 		arguments = append(arguments, "-c:v", "copy")
 	} else {
 		arguments = append(arguments, "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",

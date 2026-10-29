@@ -22,7 +22,7 @@ var ErrNoVideo = errors.New("no video stream")
 // cover art.
 func (probe Probe) Video() (Stream, bool) {
 	for _, stream := range probe.Streams {
-		if stream.Type == "video" && !stream.AttachPic && !isImageCodec(stream.Codec) {
+		if stream.Type == "video" && !stream.AttachedPicture && !isImageCodec(stream.Codec) {
 			return stream, true
 		}
 	}
@@ -40,10 +40,10 @@ func (probe Probe) Audio() (Stream, bool) {
 }
 
 // Count returns how many streams of a type the file has.
-func (probe Probe) Count(typ string) int {
+func (probe Probe) Count(streamType string) int {
 	count := 0
 	for _, stream := range probe.Streams {
-		if stream.Type == typ {
+		if stream.Type == streamType {
 			count++
 		}
 	}
@@ -71,7 +71,7 @@ func parseProbe(out []byte) (Probe, error) {
 			Index       int               `json:"index"`
 			CodecType   string            `json:"codec_type"`
 			CodecName   string            `json:"codec_name"`
-			PixFmt      string            `json:"pix_fmt"`
+			PixelFormat      string            `json:"pix_fmt"`
 			Channels    int               `json:"channels"`
 			Tags        map[string]string `json:"tags"`
 			Disposition map[string]int    `json:"disposition"`
@@ -84,9 +84,9 @@ func parseProbe(out []byte) (Probe, error) {
 	probe.Duration, _ = strconv.ParseFloat(raw.Format.Duration, 64) // "N/A" for some files: 0 means unknown
 	for _, rawStream := range raw.Streams {
 		probe.Streams = append(probe.Streams, Stream{
-			Index: rawStream.Index, Type: rawStream.CodecType, Codec: rawStream.CodecName, PixFmt: rawStream.PixFmt, Channels: rawStream.Channels,
+			Index: rawStream.Index, Type: rawStream.CodecType, Codec: rawStream.CodecName, PixelFormat: rawStream.PixelFormat, Channels: rawStream.Channels,
 			Language: strings.ToLower(rawStream.Tags["language"]), Title: rawStream.Tags["title"],
-			Default: rawStream.Disposition["default"] == 1, AttachPic: rawStream.Disposition["attached_pic"] == 1,
+			Default: rawStream.Disposition["default"] == 1, AttachedPicture: rawStream.Disposition["attached_pic"] == 1,
 		})
 	}
 	return probe, nil

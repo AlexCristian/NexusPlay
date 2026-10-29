@@ -17,11 +17,11 @@ import (
 )
 
 func TestFFmpegArguments(t *testing.T) {
-	remux := ffmpegArguments("in.mkv", "/out", media.Format{VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p"})
+	remux := ffmpegArguments("in.mkv", "/out", media.Format{VideoCodec: "h264", AudioCodec: "aac", PixelFormat: "yuv420p"})
 	if !slices.Contains(remux, "copy") || slices.Contains(remux, "libx264") {
 		t.Errorf("h264/aac should be copied, got %v", remux)
 	}
-	if tenBit := ffmpegArguments("in.mkv", "/out", media.Format{VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p10le"}); !slices.Contains(tenBit, "libx264") {
+	if tenBit := ffmpegArguments("in.mkv", "/out", media.Format{VideoCodec: "h264", AudioCodec: "aac", PixelFormat: "yuv420p10le"}); !slices.Contains(tenBit, "libx264") {
 		t.Errorf("10-bit h264 must be re-encoded for browsers, got %v", tenBit)
 	}
 	encode := ffmpegArguments("in.avi", "/out", media.Format{VideoCodec: "mpeg4", AudioCodec: "mp3"})
@@ -76,7 +76,7 @@ func newTestManager(t *testing.T, fakeStarter *fakeStarter, max int) *Manager {
 	return manager
 }
 
-var h264 = media.Format{Path: "a.mkv", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p"}
+var h264 = media.Format{Path: "a.mkv", VideoCodec: "h264", AudioCodec: "aac", PixelFormat: "yuv420p"}
 
 func TestPlaylistReusesARunningTranscode(t *testing.T) {
 	fakeStarter := newFakeStarter()

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func pixFmtOf(t *testing.T, file string) string {
+func pixelFormatOf(t *testing.T, file string) string {
 	t.Helper()
 	out, err := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0",
 		"-show_entries", "stream=pix_fmt", "-of", "csv=p=0", file).Output()
@@ -30,8 +30,8 @@ func TestTenBitPlaysThroughHLS(t *testing.T) {
 	s.waitForMedia(1)
 	s.publishAll()
 	id := s.mediaID(tenBit)
-	if m, _ := s.App.Store.MediaByID(context.Background(), id); m.PixFmt != "yuv420p10le" {
-		t.Fatalf("scanner recorded pix_fmt %q, want yuv420p10le", m.PixFmt)
+	if m, _ := s.App.Store.MediaByID(context.Background(), id); m.PixelFormat != "yuv420p10le" {
+		t.Fatalf("scanner recorded pix_fmt %q, want yuv420p10le", m.PixelFormat)
 	}
 	viewer := s.register("viewer")
 	_, page := viewer.get("/watch/" + itoa(id))
@@ -49,7 +49,7 @@ func TestTenBitPlaysThroughHLS(t *testing.T) {
 	_, body := viewer.get("/media/" + itoa(id) + "/hls/" + segment)
 	seg := filepath.Join(t.TempDir(), "seg.ts")
 	os.WriteFile(seg, []byte(body), 0o644)
-	if got := pixFmtOf(t, seg); got != "yuv420p" {
+	if got := pixelFormatOf(t, seg); got != "yuv420p" {
 		t.Errorf("HLS segment pix_fmt = %q, want yuv420p (re-encoded, not copied)", got)
 	}
 }
@@ -63,10 +63,10 @@ func TestTenBitIsConverted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.PixFmt != "yuv420p" || m.Path != tenBit {
-		t.Errorf("after conversion: path=%q pix_fmt=%q, want the same path with yuv420p", m.Path, m.PixFmt)
+	if m.PixelFormat != "yuv420p" || m.Path != tenBit {
+		t.Errorf("after conversion: path=%q pix_fmt=%q, want the same path with yuv420p", m.Path, m.PixelFormat)
 	}
-	if got := pixFmtOf(t, filepath.Join(s.Media, filepath.FromSlash(tenBit))); got != "yuv420p" {
+	if got := pixelFormatOf(t, filepath.Join(s.Media, filepath.FromSlash(tenBit))); got != "yuv420p" {
 		t.Errorf("file on disk is %q, want yuv420p", got)
 	}
 }
@@ -78,7 +78,7 @@ func TestScannerBackfillsPixelFormat(t *testing.T) {
 	s.waitForMedia(2)
 	ctx := context.Background()
 	for _, p := range []string{tenBit, movieMP4} {
-		if err := s.App.Store.SetPixFmt(ctx, s.mediaID(p), ""); err != nil { // as if added before migration 0003
+		if err := s.App.Store.SetPixelFormat(ctx, s.mediaID(p), ""); err != nil { // as if added before migration 0003
 			t.Fatal(err)
 		}
 	}
@@ -86,8 +86,8 @@ func TestScannerBackfillsPixelFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	for p, want := range map[string]string{tenBit: "yuv420p10le", movieMP4: "yuv420p"} {
-		if m, _ := s.App.Store.MediaByID(ctx, s.mediaID(p)); m.PixFmt != want {
-			t.Errorf("%s: pix_fmt after rescan = %q, want %q", p, m.PixFmt, want)
+		if m, _ := s.App.Store.MediaByID(ctx, s.mediaID(p)); m.PixelFormat != want {
+			t.Errorf("%s: pix_fmt after rescan = %q, want %q", p, m.PixelFormat, want)
 		}
 	}
 }

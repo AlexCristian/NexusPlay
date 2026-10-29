@@ -51,11 +51,11 @@ func (set Set[T]) Contains(value T) bool {
 	return contains
 }
 
-// [Len] counts the values in the set.
+// [Size] counts the values in the set.
 //
 // Returns:
 //   - [int]: the number of distinct values in the set.
-func (set Set[T]) Len() int {
+func (set Set[T]) Size() int {
 	return len(set.members)
 }
 

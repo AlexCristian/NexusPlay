@@ -161,8 +161,8 @@ func episodeLabel(media store.Media) string {
 	return "S" + strconv.Itoa(media.Season) + "E" + episodeNumbers(media)
 }
 
-// fmtSeconds formats a resume position for player.js.
-func fmtSeconds(seconds float64) string { return strconv.FormatFloat(seconds, 'f', 1, 64) }
+// formatSeconds formats a resume position for player.js.
+func formatSeconds(seconds float64) string { return strconv.FormatFloat(seconds, 'f', 1, 64) }
 
 // cueTime formats a subtitle time in milliseconds as H:MM:SS.
 func cueTime(milliseconds int64) string {

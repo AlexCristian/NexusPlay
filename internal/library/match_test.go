@@ -55,7 +55,7 @@ func TestIgnoredWordsLoaded(t *testing.T) {
 
 func TestParseWordList(t *testing.T) {
 	got := parseWordList("# a comment\n\n  The \nPT\r\n")
-	if got.Len() != 2 || !got.Contains("the") || !got.Contains("pt") {
-		t.Errorf("parseWordList kept %d words; want the and pt", got.Len())
+	if got.Size() != 2 || !got.Contains("the") || !got.Contains("pt") {
+		t.Errorf("parseWordList kept %d words; want the and pt", got.Size())
 	}
 }

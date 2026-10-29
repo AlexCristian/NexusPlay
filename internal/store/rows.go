@@ -49,7 +49,7 @@ func scanMediaWith(row rowScanner, extra ...any) (Media, error) {
 	var added, published int64
 	destinations := []any{&media.ID, &media.Path, &media.Title, &media.Year, &media.Overview, &media.Category, &media.CollectionID,
 		&media.Season, &media.Episode, &media.Poster, &media.Duration, &media.Container, &media.VideoCodec, &media.AudioCodec,
-		&media.Size, &media.Published, &media.Views, &added, &published, &media.CollectionName, &media.PixFmt, &media.OwnPoster, &media.EpisodeEnd}
+		&media.Size, &media.Published, &media.Views, &added, &published, &media.CollectionName, &media.PixelFormat, &media.OwnPoster, &media.EpisodeEnd}
 	if err := row.Scan(append(destinations, extra...)...); err != nil {
 		return Media{}, err
 	}

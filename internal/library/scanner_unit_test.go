@@ -38,7 +38,7 @@ func (fakeProber *fakeProber) Probe(ctx context.Context, file string) (ffmpeg.Pr
 		}
 	}
 	return ffmpeg.Probe{Duration: 60, Container: "mov,mp4", Streams: []ffmpeg.Stream{
-		{Index: 0, Type: "video", Codec: "h264", PixFmt: "yuv420p"},
+		{Index: 0, Type: "video", Codec: "h264", PixelFormat: "yuv420p"},
 		{Index: 1, Type: "audio", Codec: "aac"},
 	}}, nil
 }
@@ -85,7 +85,7 @@ func TestScanWithFakeProber(t *testing.T) {
 		t.Errorf("result = %+v, want 2 added, 1 subtitle, 1 waiting", result)
 	}
 	pending, _ := store.PendingMedia(ctx)
-	if len(pending) != 2 || pending[0].PixFmt != "yuv420p" {
+	if len(pending) != 2 || pending[0].PixelFormat != "yuv420p" {
 		t.Errorf("pending = %+v", pending)
 	}
 

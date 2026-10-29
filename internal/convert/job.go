@@ -94,7 +94,7 @@ func moveNoReplace(temporaryPath, target string) error {
 // removeLeftovers deletes half-written files from a conversion that was
 // interrupted (a crash or a power cut).
 func removeLeftovers(mediaDirectory string) error {
-	var errs []error
+	var problems []error
 	walkErr := filepath.WalkDir(mediaDirectory, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // an unreadable folder holds no leftovers we could remove
@@ -102,12 +102,12 @@ func removeLeftovers(mediaDirectory string) error {
 		if !entry.IsDir() && strings.HasPrefix(entry.Name(), ".") &&
 			(strings.HasSuffix(entry.Name(), temporarySuffix) || strings.HasSuffix(entry.Name(), ".srt.part")) {
 			if err := os.Remove(path); err != nil {
-				errs = append(errs, err)
+				problems = append(problems, err)
 			}
 		}
 		return nil
 	})
-	return errors.Join(append(errs, walkErr)...)
+	return errors.Join(append(problems, walkErr)...)
 }
 
 // checkWritable reports whether files can be created in dir.
