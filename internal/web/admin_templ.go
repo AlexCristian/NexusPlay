@@ -868,7 +868,7 @@ func editMediaPage(p Page, f MediaForm) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			if f.MetaEnabled {
+			if f.MetadataEnabled {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "<button type=\"submit\" class=\"button button-quiet\" formaction=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err

@@ -2,7 +2,6 @@ package library
 
 import (
 	"context"
-	_ "embed"
 	"time"
 
 	"github.com/AlexCristian/NexusPlay/internal/collections"

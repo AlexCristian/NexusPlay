@@ -23,7 +23,7 @@ import (
 type adminHandlers struct {
 	responder
 	store           adminStore
-	meta            metadataLookup
+	metadata        metadataLookup
 	refresher       metadataRefresher
 	scanner         scanTrigger
 	conversions     Conversions
@@ -99,7 +99,7 @@ func (handlers *adminHandlers) controlPanel(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		return err
 	}
-	handlers.render(w, r, http.StatusOK, controlPanel(newPage(r, "Control panel"), pending, colls, cats, handlers.meta.Enabled(), conversions,
+	handlers.render(w, r, http.StatusOK, controlPanel(newPage(r, "Control panel"), pending, colls, cats, handlers.metadata.Enabled(), conversions,
 		doneMessages[r.URL.Query().Get("done")]))
 	return nil
 }
@@ -160,7 +160,7 @@ func (handlers *adminHandlers) scanNow(w http.ResponseWriter, r *http.Request) e
 // mediaForm fills the edit form for m. For media not yet published it
 // pre-fills the collection and category from the file name.
 func (handlers *adminHandlers) mediaForm(ctx context.Context, media store.Media) (MediaForm, error) {
-	form := MediaForm{Media: media, CollectionName: media.CollectionName, MetaEnabled: handlers.meta.Enabled()}
+	form := MediaForm{Media: media, CollectionName: media.CollectionName, MetadataEnabled: handlers.metadata.Enabled()}
 	var err error
 	if form.Collections, err = handlers.store.Collections(ctx); err != nil {
 		return form, err
@@ -313,9 +313,9 @@ func (handlers *adminHandlers) fillCollectionUpdate(ctx context.Context, existin
 // film; anything else is searched as a TV show first, then the same way.
 func (handlers *adminHandlers) lookupCollection(ctx context.Context, name, category string) (metadata.Info, error) {
 	films := func() (metadata.Info, error) {
-		info, err := handlers.meta.Collection(ctx, name)
+		info, err := handlers.metadata.Collection(ctx, name)
 		if errors.Is(err, metadata.ErrNoMatch) {
-			info, err = handlers.meta.Movie(ctx, name, "")
+			info, err = handlers.metadata.Movie(ctx, name, "")
 			info.Year = "" // the first film's year is not the collection's
 		}
 		return info, err
@@ -323,7 +323,7 @@ func (handlers *adminHandlers) lookupCollection(ctx context.Context, name, categ
 	if isFilmCategory(category) {
 		return films()
 	}
-	info, err := handlers.meta.Show(ctx, name, "")
+	info, err := handlers.metadata.Show(ctx, name, "")
 	if errors.Is(err, metadata.ErrNoMatch) {
 		return films()
 	}
@@ -342,7 +342,7 @@ func isFilmCategory(category string) bool {
 // fillFromTMDB fills a collection's empty fields from TMDB, when lookups
 // are on. A failed lookup is logged and leaves c unchanged.
 func (handlers *adminHandlers) fillFromTMDB(ctx context.Context, collection *store.Collection) {
-	if !handlers.meta.Enabled() {
+	if !handlers.metadata.Enabled() {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
@@ -521,7 +521,7 @@ func (handlers *adminHandlers) editCollectionPage(w http.ResponseWriter, r *http
 	if err != nil {
 		return err
 	}
-	handlers.render(w, r, http.StatusOK, editCollectionPage(newPage(r, "Edit "+collection.Name), collection, cats, handlers.meta.Enabled(), ""))
+	handlers.render(w, r, http.StatusOK, editCollectionPage(newPage(r, "Edit "+collection.Name), collection, cats, handlers.metadata.Enabled(), ""))
 	return nil
 }
 
@@ -569,7 +569,7 @@ func (handlers *adminHandlers) showCollectionFormError(w http.ResponseWriter, r 
 		return err
 	}
 	collection.Name, collection.Category, collection.Year, collection.Overview = typed.Name, typed.Category, typed.Year, typed.Overview
-	handlers.render(w, r, http.StatusBadRequest, editCollectionPage(newPage(r, "Edit collection"), collection, cats, handlers.meta.Enabled(), formErr.message))
+	handlers.render(w, r, http.StatusBadRequest, editCollectionPage(newPage(r, "Edit collection"), collection, cats, handlers.metadata.Enabled(), formErr.message))
 	return nil
 }
 

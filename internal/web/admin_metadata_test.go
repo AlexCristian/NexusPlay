@@ -43,7 +43,7 @@ func TestLookupCollection(t *testing.T) {
 		collections: map[string]bool{"Star Trek": true},
 		films:       map[string]bool{"Alien": true},
 	}
-	handlers := &adminHandlers{responder: responder{log: slog.New(slog.NewTextHandler(io.Discard, nil))}, meta: lookup}
+	handlers := &adminHandlers{responder: responder{log: slog.New(slog.NewTextHandler(io.Discard, nil))}, metadata: lookup}
 	for _, testCase := range []struct {
 		name, category, wantPoster, wantYear string
 		wantCalls                            string

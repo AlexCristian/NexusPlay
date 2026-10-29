@@ -51,6 +51,7 @@ lang language
 len length
 lit literal
 mem memory
+meta metadata
 mgr manager
 msg message
 num number

@@ -1,9 +1,5 @@
 package library
 
-import (
-	_ "embed"
-)
-
 // Result summarizes one scan.
 type Result struct {
 	Added     int

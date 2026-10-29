@@ -115,9 +115,9 @@ func checkBinaries(config config.Config) error {
 // is visible here.
 func build(config config.Config, database *store.Store, log *slog.Logger) (*App, error) {
 	tools := ffmpeg.Tools{FFmpeg: config.FFmpegPath, FFprobe: config.FFprobePath}
-	meta := metadata.New(metadata.Config{APIKey: config.TMDBAPIKey, PosterDirectory: config.PosterDirectory()}, log.With("component", "tmdb"))
+	tmdbClient := metadata.New(metadata.Config{APIKey: config.TMDBAPIKey, PosterDirectory: config.PosterDirectory()}, log.With("component", "tmdb"))
 	scanner := library.NewScanner(
-		library.Dependencies{Store: database, Prober: tools, Meta: meta, Log: log.With("component", "scanner")},
+		library.Dependencies{Store: database, Prober: tools, Metadata: tmdbClient, Log: log.With("component", "scanner")},
 		library.Config{MediaDirectory: config.MediaDirectory, Interval: config.ScanInterval},
 	)
 	transcodes, err := stream.NewManager(stream.FFmpegStarter(tools),
@@ -144,7 +144,7 @@ func build(config config.Config, database *store.Store, log *slog.Logger) (*App,
 		workers = append(workers, converter)
 	}
 
-	srv := &web.Server{Config: config, Store: database, Scanner: scanner, Meta: meta, Transcodes: transcodes,
+	srv := &web.Server{Config: config, Store: database, Scanner: scanner, Metadata: tmdbClient, Transcodes: transcodes,
 		Converter: conversions, Accounts: accounts, Sessions: sessions, Log: log}
 	return &App{
 		Config: config, Log: log, Store: database, Scanner: scanner, Transcodes: transcodes,

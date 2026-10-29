@@ -1,7 +1,6 @@
 package library
 
 import (
-	_ "embed"
 	"time"
 )
 

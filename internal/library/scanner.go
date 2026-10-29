@@ -418,7 +418,7 @@ const (
 // lookupMetadata enriches an unpublished item from TMDB. It is optional:
 // failures are logged and the file-name guess stays.
 func (scanner *Scanner) lookupMetadata(ctx context.Context, id int64, guess Guess) {
-	if scanner.dependencies.Meta == nil {
+	if scanner.dependencies.Metadata == nil {
 		return
 	}
 	scannedMetadata, err := scanner.metadataFor(ctx, guess)
@@ -441,7 +441,7 @@ func (scanner *Scanner) lookupMetadata(ctx context.Context, id int64, guess Gues
 // retryMetadata looks up again unpublished media that is still missing a
 // poster or description (see metadataRetryAfter).
 func (scanner *Scanner) retryMetadata(ctx context.Context) {
-	if scanner.dependencies.Meta == nil {
+	if scanner.dependencies.Metadata == nil {
 		return
 	}
 	list, err := scanner.dependencies.Store.MediaNeedingMetadata(ctx, scanner.now().Add(-metadataRetryAfter), metadataRetryBatch)
@@ -463,7 +463,7 @@ func (scanner *Scanner) retryMetadata(ctx context.Context) {
 // administrator may have corrected. It returns metadata.ErrNoMatch when
 // TMDB has nothing and metadata.ErrDisabled without an API key.
 func (scanner *Scanner) RefreshMetadata(ctx context.Context, id int64) error {
-	if scanner.dependencies.Meta == nil {
+	if scanner.dependencies.Metadata == nil {
 		return metadata.ErrDisabled
 	}
 	media, err := scanner.dependencies.Store.MediaByID(ctx, id)
@@ -510,9 +510,9 @@ func (scanner *Scanner) metadataFor(ctx context.Context, guess Guess) (store.Sca
 // findMetadata looks up a film, or an episode with its show's poster.
 func (scanner *Scanner) findMetadata(ctx context.Context, guess Guess) (metadata.Info, error) {
 	if !guess.IsEpisode() {
-		return scanner.dependencies.Meta.Movie(ctx, guess.Title, guess.Year)
+		return scanner.dependencies.Metadata.Movie(ctx, guess.Title, guess.Year)
 	}
-	show, err := scanner.dependencies.Meta.Show(ctx, guess.Show, guess.Year)
+	show, err := scanner.dependencies.Metadata.Show(ctx, guess.Show, guess.Year)
 	if err != nil {
 		return metadata.Info{}, err
 	}
@@ -530,9 +530,9 @@ func (scanner *Scanner) findMetadata(ctx context.Context, guess Guess) (metadata
 func (scanner *Scanner) findEpisode(ctx context.Context, showID int, guess Guess) (metadata.Info, error) {
 	title := fileEpisodeTitle(guess)
 	if title == "" {
-		return scanner.dependencies.Meta.Episode(ctx, showID, guess.Season, guess.Episode)
+		return scanner.dependencies.Metadata.Episode(ctx, showID, guess.Season, guess.Episode)
 	}
-	episodes, err := scanner.dependencies.Meta.Season(ctx, showID, guess.Season)
+	episodes, err := scanner.dependencies.Metadata.Season(ctx, showID, guess.Season)
 	if err != nil {
 		return metadata.Info{}, err
 	}

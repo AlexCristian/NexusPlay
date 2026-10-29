@@ -60,14 +60,14 @@ func newEnvironment(t *testing.T, mutate func(*config.Config)) *environment {
 	if err != nil {
 		t.Fatal(err)
 	}
-	meta := metadata.New(metadata.Config{PosterDirectory: configuration.PosterDirectory()}, log)
+	tmdbClient := metadata.New(metadata.Config{PosterDirectory: configuration.PosterDirectory()}, log)
 	accounts, err := auth.NewAccounts(database, configuration.MaxAccounts, log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testServer := &Server{Config: configuration, Store: database, Meta: meta, Transcodes: manager, Converter: convert.Disabled{}, Log: log,
+	testServer := &Server{Config: configuration, Store: database, Metadata: tmdbClient, Transcodes: manager, Converter: convert.Disabled{}, Log: log,
 		Accounts: accounts, Sessions: auth.NewSessions(database, time.Hour, log),
-		Scanner: library.NewScanner(library.Dependencies{Store: database, Meta: meta, Log: log}, library.Config{MediaDirectory: configuration.MediaDirectory})}
+		Scanner: library.NewScanner(library.Dependencies{Store: database, Metadata: tmdbClient, Log: log}, library.Config{MediaDirectory: configuration.MediaDirectory})}
 	server := httptest.NewServer(testServer.Handler())
 	t.Cleanup(func() { server.Close(); database.Close() })
 	return &environment{t: t, srv: server, store: database, config: configuration}

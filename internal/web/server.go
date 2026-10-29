@@ -34,7 +34,7 @@ type Server struct {
 	Config     config.Config
 	Store      *store.Store
 	Scanner    *library.Scanner
-	Meta       *metadata.Client
+	Metadata   *metadata.Client
 	Transcodes *stream.Manager
 	Accounts   *auth.Accounts
 	Sessions   *auth.Sessions
@@ -64,7 +64,7 @@ func (server *Server) Handler() http.Handler {
 	subtitleRoutes := &subtitleHandlers{responder: server.responder, store: server.Store, votesRequired: server.Config.VotesRequired}
 	acct := &accountHandlers{responder: server.responder, accounts: server.Accounts, sessions: server.Sessions,
 		secureCookies: server.Config.SecureCookies}
-	adm := &adminHandlers{responder: server.responder, store: server.Store, meta: server.Meta, scanner: server.Scanner, refresher: server.Scanner,
+	adm := &adminHandlers{responder: server.responder, store: server.Store, metadata: server.Metadata, scanner: server.Scanner, refresher: server.Scanner,
 		conversions: server.Converter, posterDirectory: server.Config.PosterDirectory()}
 
 	mux := http.NewServeMux()

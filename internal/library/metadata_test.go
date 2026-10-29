@@ -14,26 +14,26 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-// fakeMeta is TMDB with one film and one show (TNG, whose pilot is one
+// fakeMetadata is TMDB with one film and one show (TNG, whose pilot is one
 // episode). fail makes every lookup fail as if the network were down.
-type fakeMeta struct {
+type fakeMetadata struct {
 	mutex   sync.Mutex
 	fail    bool
 	lookups int
 }
 
-func (fakeMeta *fakeMeta) start() error {
-	fakeMeta.mutex.Lock()
-	defer fakeMeta.mutex.Unlock()
-	fakeMeta.lookups++
-	if fakeMeta.fail {
+func (fakeMetadata *fakeMetadata) start() error {
+	fakeMetadata.mutex.Lock()
+	defer fakeMetadata.mutex.Unlock()
+	fakeMetadata.lookups++
+	if fakeMetadata.fail {
 		return errors.New("connection reset")
 	}
 	return nil
 }
 
-func (fakeMeta *fakeMeta) Movie(ctx context.Context, title, year string) (metadata.Info, error) {
-	if err := fakeMeta.start(); err != nil {
+func (fakeMetadata *fakeMetadata) Movie(ctx context.Context, title, year string) (metadata.Info, error) {
+	if err := fakeMetadata.start(); err != nil {
 		return metadata.Info{}, err
 	}
 	if title != "Alien" {
@@ -42,14 +42,14 @@ func (fakeMeta *fakeMeta) Movie(ctx context.Context, title, year string) (metada
 	return metadata.Info{Title: "Alien", Year: "1979", Overview: "In space.", Poster: "alien.jpg"}, nil
 }
 
-func (fakeMeta *fakeMeta) Show(ctx context.Context, name, year string) (metadata.Info, error) {
-	if err := fakeMeta.start(); err != nil {
+func (fakeMetadata *fakeMetadata) Show(ctx context.Context, name, year string) (metadata.Info, error) {
+	if err := fakeMetadata.start(); err != nil {
 		return metadata.Info{}, err
 	}
 	return metadata.Info{ID: 655, Title: "Star Trek: The Next Generation", Year: "1987", Poster: "tng.jpg"}, nil
 }
 
-func (fakeMeta *fakeMeta) Episode(ctx context.Context, showID, season, episode int) (metadata.Info, error) {
+func (fakeMetadata *fakeMetadata) Episode(ctx context.Context, showID, season, episode int) (metadata.Info, error) {
 	for _, listed := range tngS1 {
 		if listed.Number == episode {
 			return listed.Info, nil
@@ -58,14 +58,14 @@ func (fakeMeta *fakeMeta) Episode(ctx context.Context, showID, season, episode i
 	return metadata.Info{}, metadata.ErrNoMatch
 }
 
-func (fakeMeta *fakeMeta) Season(ctx context.Context, showID, season int) ([]metadata.Episode, error) {
+func (fakeMetadata *fakeMetadata) Season(ctx context.Context, showID, season int) ([]metadata.Episode, error) {
 	return tngS1, nil
 }
 
-func newMetaScanner(t *testing.T, meta Metadata) (*Scanner, *store.Store, string) {
+func newMetadataScanner(t *testing.T, lookups Metadata) (*Scanner, *store.Store, string) {
 	t.Helper()
 	scanner, store, media := newUnitScanner(t, &fakeProber{})
-	scanner.dependencies.Meta = meta
+	scanner.dependencies.Metadata = lookups
 	scanner.dependencies.Log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	return scanner, store, media
 }
@@ -82,8 +82,8 @@ func mediaByPath(t *testing.T, store *store.Store, relativePath string) store.Me
 
 // A lookup that failed is retried by a later scan, once an hour has passed.
 func TestFailedLookupIsRetried(t *testing.T) {
-	meta := &fakeMeta{fail: true}
-	scanner, store, media := newMetaScanner(t, meta)
+	lookups := &fakeMetadata{fail: true}
+	scanner, store, media := newMetadataScanner(t, lookups)
 	clock := time.Now()
 	scanner.now = func() time.Time { return clock }
 	ctx := context.Background()
@@ -93,10 +93,10 @@ func TestFailedLookupIsRetried(t *testing.T) {
 	if media := mediaByPath(t, store, "Movies/Alien (1979).mp4"); media.Poster != "" {
 		t.Fatalf("poster after a failed lookup: %q", media.Poster)
 	}
-	meta.fail = false
-	before := meta.lookups
+	lookups.fail = false
+	before := lookups.lookups
 	scanner.Scan(ctx)
-	if meta.lookups != before {
+	if lookups.lookups != before {
 		t.Error("retried within the hour")
 	}
 	clock = clock.Add(2 * time.Hour)
@@ -114,7 +114,7 @@ func TestLookupAfterKeyIsSet(t *testing.T) {
 	writeSettled(t, filepath.Join(media, "Movies", "Alien (1979).mp4"), "video")
 	scanner.Scan(ctx)
 
-	scanner.dependencies.Meta = &fakeMeta{}
+	scanner.dependencies.Metadata = &fakeMetadata{}
 	scanner.Scan(ctx)
 	if media := mediaByPath(t, store, "Movies/Alien (1979).mp4"); media.Poster != "alien.jpg" {
 		t.Errorf("poster = %q, want it looked up once lookups were on", media.Poster)
@@ -124,7 +124,7 @@ func TestLookupAfterKeyIsSet(t *testing.T) {
 // Episodes are matched by the title in the file name, so a two-part pilot
 // in one file does not shift the rest of the season.
 func TestEpisodeMatchedByTitle(t *testing.T) {
-	scanner, store, media := newMetaScanner(t, &fakeMeta{})
+	scanner, store, media := newMetadataScanner(t, &fakeMetadata{})
 	ctx := context.Background()
 	directory := filepath.Join(media, "Star Trek The Next Generation", "Season 1")
 	writeSettled(t, filepath.Join(directory, "TNG S01E01E02 Encounter at Farpoint.mkv"), "video")
@@ -146,7 +146,7 @@ func TestEpisodeMatchedByTitle(t *testing.T) {
 
 // Refresh looks a published item up again, using its corrected episode.
 func TestRefreshMetadata(t *testing.T) {
-	scanner, database, media := newMetaScanner(t, &fakeMeta{})
+	scanner, database, media := newMetadataScanner(t, &fakeMetadata{})
 	ctx := context.Background()
 	writeSettled(t, filepath.Join(media, "TNG", "Season 1", "TNG S01E09.mkv"), "video")
 	scanner.Scan(ctx)

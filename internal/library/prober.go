@@ -2,7 +2,6 @@ package library
 
 import (
 	"context"
-	_ "embed"
 
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 )

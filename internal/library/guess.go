@@ -1,9 +1,5 @@
 package library
 
-import (
-	_ "embed"
-)
-
 // Guess is what a file path says about its content.
 type Guess struct {
 	Title   string
