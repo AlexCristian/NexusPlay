@@ -60,7 +60,7 @@ func newEnv(t *testing.T, mutate func(*config.Config)) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	meta := metadata.New(metadata.Config{PosterDir: cfg.PosterDir()}, log)
+	meta := metadata.New(metadata.Config{PosterDirectory: cfg.PosterDir()}, log)
 	accounts, err := auth.NewAccounts(st, cfg.MaxAccounts, log)
 	if err != nil {
 		t.Fatal(err)

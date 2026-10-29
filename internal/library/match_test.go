@@ -44,3 +44,18 @@ func TestFileEpisodeTitle(t *testing.T) {
 		t.Errorf("title = %q", got)
 	}
 }
+
+func TestIgnoredWordsLoaded(t *testing.T) {
+	for _, word := range []string{"the", "and", "part"} {
+		if !ignoredWords.Contains(word) {
+			t.Errorf("ignored_words.txt does not have %q", word)
+		}
+	}
+}
+
+func TestParseWordList(t *testing.T) {
+	got := parseWordList("# a comment\n\n  The \nPT\r\n")
+	if got.Len() != 2 || !got.Contains("the") || !got.Contains("pt") {
+		t.Errorf("parseWordList kept %d words; want the and pt", got.Len())
+	}
+}

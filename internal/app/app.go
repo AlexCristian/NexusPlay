@@ -119,7 +119,7 @@ func checkBinaries(cfg config.Config) error {
 // is visible here.
 func build(cfg config.Config, st *store.Store, log *slog.Logger) (*App, error) {
 	tools := ffmpeg.Tools{FFmpeg: cfg.FFmpegPath, FFprobe: cfg.FFprobePath}
-	meta := metadata.New(metadata.Config{APIKey: cfg.TMDBAPIKey, PosterDir: cfg.PosterDir()}, log.With("component", "tmdb"))
+	meta := metadata.New(metadata.Config{APIKey: cfg.TMDBAPIKey, PosterDirectory: cfg.PosterDir()}, log.With("component", "tmdb"))
 	scanner := library.NewScanner(
 		library.Deps{Store: st, Prober: tools, Meta: meta, Log: log.With("component", "scanner")},
 		library.Config{MediaDir: cfg.MediaDir, Interval: cfg.ScanInterval},

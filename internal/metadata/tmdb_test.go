@@ -79,7 +79,7 @@ func (f *fakeTMDB) note(r *http.Request) {
 
 func (f *fakeTMDB) client(t *testing.T, apiKey string) (*Client, string) {
 	dir := t.TempDir()
-	c := New(Config{APIKey: apiKey, PosterDir: dir}, slog.New(slog.NewTextHandler(io.Discard, nil)),
+	c := New(Config{APIKey: apiKey, PosterDirectory: dir}, slog.New(slog.NewTextHandler(io.Discard, nil)),
 		WithBaseURL(f.srv.URL+"/api", f.srv.URL+"/img"))
 	return c, dir
 }

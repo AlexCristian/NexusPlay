@@ -1,0 +1,14 @@
+# Words ignored when comparing an episode title from a file name with TMDB's
+# episode names, because they carry no meaning: "Encounter at Farpoint, Part 1
+# and 2" should match "Encounter at Farpoint".
+#
+# One lowercase word per line. Blank lines and lines starting with # are
+# skipped. This file is built into the program, so a change takes effect on
+# the next build, and a missing file fails the build.
+the
+a
+an
+and
+part
+pt
+of
