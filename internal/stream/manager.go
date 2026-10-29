@@ -196,22 +196,22 @@ func (manager *Manager) launch(job *job, mediaID int64, source string, format me
 	if err := os.MkdirAll(job.directory, 0o755); err != nil {
 		return err
 	}
-	proc, err := manager.start.Start(job.ctx, ffmpegArguments(source, job.directory, format))
+	process, err := manager.start.Start(job.ctx, ffmpegArguments(source, job.directory, format))
 	if err != nil {
 		job.cancel()
 		os.RemoveAll(job.directory)
 		return err
 	}
 	manager.log.Info("transcode started", "media", mediaID, "video", format.VideoCodec, "audio", format.AudioCodec)
-	go manager.finish(job, proc)
+	go manager.finish(job, process)
 	return nil
 }
 
 // finish waits for ffmpeg and records the outcome. A failure is not logged
 // here: Playlist returns it to the request waiting for the playlist, and the
 // handler reports it there.
-func (manager *Manager) finish(job *job, proc Process) {
-	err := proc.Wait()
+func (manager *Manager) finish(job *job, process Process) {
+	err := process.Wait()
 	if err != nil && job.ctx.Err() == nil {
 		job.err = err
 	}

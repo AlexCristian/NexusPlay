@@ -110,11 +110,11 @@ func (store *Store) CueAt(ctx context.Context, subtitleID, milliseconds int64) (
 // CueByID returns one cue and the ID of its track, or ErrNotFound.
 func (store *Store) CueByID(ctx context.Context, id int64) (Cue, int64, error) {
 	var cue Cue
-	var subID int64
+	var subtitleID int64
 	err := store.database.QueryRowContext(ctx,
 		`SELECT id, start_ms, end_ms, text, subtitle_id FROM subtitle_cues WHERE id = ?`, id).
-		Scan(&cue.ID, &cue.StartMS, &cue.EndMS, &cue.Text, &subID)
-	return cue, subID, notFound(err)
+		Scan(&cue.ID, &cue.StartMS, &cue.EndMS, &cue.Text, &subtitleID)
+	return cue, subtitleID, notFound(err)
 }
 
 // CueForChange returns the ID of the cue a proposal targets, or ErrNotFound

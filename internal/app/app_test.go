@@ -22,42 +22,42 @@ var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
 // never actually asked to convert anything in these tests.
 func testConfig(t *testing.T) config.Config {
 	t.Helper()
-	dir := t.TempDir()
-	c := config.Defaults()
-	c.MediaDirectory = filepath.Join(dir, "media")
-	c.DataDirectory = filepath.Join(dir, "data")
-	c.FFmpegPath, c.FFprobePath = "true", "true"
-	os.MkdirAll(c.MediaDirectory, 0o755)
-	return c
+	directory := t.TempDir()
+	configuration := config.Defaults()
+	configuration.MediaDirectory = filepath.Join(directory, "media")
+	configuration.DataDirectory = filepath.Join(directory, "data")
+	configuration.FFmpegPath, configuration.FFprobePath = "true", "true"
+	os.MkdirAll(configuration.MediaDirectory, 0o755)
+	return configuration
 }
 
 func TestNewFailsWithoutFFmpeg(t *testing.T) {
-	c := testConfig(t)
-	c.FFmpegPath = filepath.Join(t.TempDir(), "no-ffmpeg-here")
-	_, err := New(context.Background(), c, quiet)
+	config := testConfig(t)
+	config.FFmpegPath = filepath.Join(t.TempDir(), "no-ffmpeg-here")
+	_, err := New(context.Background(), config, quiet)
 	if err == nil || !strings.Contains(err.Error(), "NEXUSPLAY_FFMPEG") {
 		t.Errorf("err = %v, want it to explain how to point at ffmpeg", err)
 	}
 }
 
 func TestNewFailsWithoutMediaFolder(t *testing.T) {
-	c := testConfig(t)
-	c.MediaDirectory = filepath.Join(t.TempDir(), "missing")
-	if _, err := New(context.Background(), c, quiet); err == nil || !strings.Contains(err.Error(), "media folder") {
+	config := testConfig(t)
+	config.MediaDirectory = filepath.Join(t.TempDir(), "missing")
+	if _, err := New(context.Background(), config, quiet); err == nil || !strings.Contains(err.Error(), "media folder") {
 		t.Errorf("err = %v", err)
 	}
 }
 
-func serve(t *testing.T, a *App) (url string, stop func() error) {
+func serve(t *testing.T, app *App) (url string, stop func() error) {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- a.Serve(ctx, ln) }()
-	return "http://" + ln.Addr().String(), func() error {
+	go func() { done <- app.Serve(ctx, listener) }()
+	return "http://" + listener.Addr().String(), func() error {
 		cancel()
 		select {
 		case err := <-done:
@@ -75,33 +75,33 @@ type stubbornWorker struct {
 	stopped atomic.Bool
 }
 
-func (w *stubbornWorker) Run(ctx context.Context) error {
+func (stubbornWorker *stubbornWorker) Run(ctx context.Context) error {
 	<-ctx.Done()
-	time.Sleep(w.hold)
-	w.stopped.Store(true)
+	time.Sleep(stubbornWorker.hold)
+	stubbornWorker.stopped.Store(true)
 	return nil
 }
 
 func TestServeClosesStoreAfterWorkers(t *testing.T) {
-	a, err := New(context.Background(), testConfig(t), quiet)
+	app, err := New(context.Background(), testConfig(t), quiet)
 	if err != nil {
 		t.Fatal(err)
 	}
 	slow := &stubbornWorker{hold: 200 * time.Millisecond}
-	a.workers = append(a.workers, slow)
-	url, stop := serve(t, a)
-	resp, err := http.Get(url + "/healthz")
-	if err != nil || resp.StatusCode != 200 {
-		t.Fatalf("healthz: %v %v", resp, err)
+	app.workers = append(app.workers, slow)
+	url, stop := serve(t, app)
+	response, err := http.Get(url + "/healthz")
+	if err != nil || response.StatusCode != 200 {
+		t.Fatalf("healthz: %v %v", response, err)
 	}
-	resp.Body.Close()
+	response.Body.Close()
 	if err := stop(); err != nil {
 		t.Errorf("Serve = %v", err)
 	}
 	if !slow.stopped.Load() {
 		t.Error("Serve returned before a worker finished")
 	}
-	if err := a.Store.Ping(context.Background()); err == nil {
+	if err := app.Store.Ping(context.Background()); err == nil {
 		t.Error("the database is still open after a clean shutdown")
 	}
 }
@@ -109,16 +109,16 @@ func TestServeClosesStoreAfterWorkers(t *testing.T) {
 // A worker that does not stop in time leaves the database open rather than
 // closing it underneath that worker.
 func TestServeShutdownTimeoutLeavesStoreOpen(t *testing.T) {
-	a, err := New(context.Background(), testConfig(t), quiet)
+	app, err := New(context.Background(), testConfig(t), quiet)
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.workers = append(a.workers, &stubbornWorker{hold: 2 * time.Second})
-	a.shutdownTimeout = 100 * time.Millisecond
-	_, stop := serve(t, a)
+	app.workers = append(app.workers, &stubbornWorker{hold: 2 * time.Second})
+	app.shutdownTimeout = 100 * time.Millisecond
+	_, stop := serve(t, app)
 	stop()
-	if err := a.Store.Ping(context.Background()); err != nil {
+	if err := app.Store.Ping(context.Background()); err != nil {
 		t.Errorf("the database was closed while a worker was still running: %v", err)
 	}
-	t.Cleanup(func() { time.Sleep(2 * time.Second); a.Close() })
+	t.Cleanup(func() { time.Sleep(2 * time.Second); app.Close() })
 }

@@ -131,8 +131,8 @@ func decodeSubtitleUpload(r *http.Request) (language string, cues []subtitle.Cue
 
 // posterUpload is an uploaded poster whose content is a supported image.
 type posterUpload struct {
-	file *multipart.FileHeader
-	ext  string // from the content, not the file name
+	file      *multipart.FileHeader
+	extension string // from the content, not the file name
 }
 
 // [posterTypesFile] is the contents of poster_types.txt, built into the
@@ -171,11 +171,11 @@ func decodePoster(r *http.Request) (upload *posterUpload, remove bool, err error
 	defer file.Close()
 	head := make([]byte, 512)
 	bytesRead, _ := io.ReadFull(file, head) // a file shorter than 512 bytes is fine: sniff what there is
-	ext, allowed := posterTypes[http.DetectContentType(head[:bytesRead])]
+	extension, allowed := posterTypes[http.DetectContentType(head[:bytesRead])]
 	if !allowed {
 		return nil, false, formErr("Posters must be JPEG, PNG or WebP images.")
 	}
-	return &posterUpload{file: posterFile, ext: ext}, false, nil
+	return &posterUpload{file: posterFile, extension: extension}, false, nil
 }
 
 // oneLine trims s and joins its lines and runs of spaces with single spaces:

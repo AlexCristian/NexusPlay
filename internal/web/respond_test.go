@@ -19,8 +19,8 @@ import (
 
 func TestRespondErrorMapping(t *testing.T) {
 	var logs bytes.Buffer
-	s := responder{log: slog.New(slog.NewTextHandler(&logs, nil))}
-	for _, tt := range []struct {
+	testResponder := responder{log: slog.New(slog.NewTextHandler(&logs, nil))}
+	for _, testCase := range []struct {
 		name   string
 		err    error
 		status int
@@ -35,16 +35,16 @@ func TestRespondErrorMapping(t *testing.T) {
 	} {
 		logs.Reset()
 		rec := httptest.NewRecorder()
-		s.respondError(rec, httptest.NewRequest("GET", "/x", nil).WithContext(context.Background()), tt.err)
-		if rec.Code != tt.status {
-			t.Errorf("%s: status %d, want %d", tt.name, rec.Code, tt.status)
+		testResponder.respondError(rec, httptest.NewRequest("GET", "/x", nil).WithContext(context.Background()), testCase.err)
+		if rec.Code != testCase.status {
+			t.Errorf("%s: status %d, want %d", testCase.name, rec.Code, testCase.status)
 		}
-		if logged := strings.Contains(logs.String(), "request failed"); logged != tt.logged {
-			t.Errorf("%s: logged = %v, want %v", tt.name, logged, tt.logged)
+		if logged := strings.Contains(logs.String(), "request failed"); logged != testCase.logged {
+			t.Errorf("%s: logged = %v, want %v", testCase.name, logged, testCase.logged)
 		}
 	}
 	rec := httptest.NewRecorder()
-	s.respondError(rec, httptest.NewRequest("GET", "/x", nil), stream.ErrBusy)
+	testResponder.respondError(rec, httptest.NewRequest("GET", "/x", nil), stream.ErrBusy)
 	if rec.Header().Get("Retry-After") != "30" {
 		t.Error("busy responses must say when to retry")
 	}
@@ -53,17 +53,17 @@ func TestRespondErrorMapping(t *testing.T) {
 	cancel()
 	logs.Reset()
 	rec = httptest.NewRecorder()
-	s.respondError(rec, httptest.NewRequest("GET", "/x", nil).WithContext(ctx), errors.New("write: broken pipe"))
+	testResponder.respondError(rec, httptest.NewRequest("GET", "/x", nil).WithContext(ctx), errors.New("write: broken pipe"))
 	if rec.Body.Len() != 0 || logs.Len() != 0 {
 		t.Errorf("cancelled request: body %q, log %q", rec.Body.String(), logs.String())
 	}
 }
 
 func TestRespondFragmentOrPage(t *testing.T) {
-	s := responder{log: slog.Default()}
+	testResponder := responder{log: slog.Default()}
 	fragment := templ.Raw("<p>fragment</p>")
-	page := func(p Page, c templ.Component) templ.Component {
-		return templ.Join(templ.Raw("<html>"+p.Title+"</html>"), c)
+	page := func(page Page, component templ.Component) templ.Component {
+		return templ.Join(templ.Raw("<html>"+page.Title+"</html>"), component)
 	}
 	for _, htmx := range []bool{true, false} {
 		r := httptest.NewRequest("GET", "/collections/1", nil)
@@ -71,7 +71,7 @@ func TestRespondFragmentOrPage(t *testing.T) {
 			r.Header.Set("HX-Request", "true")
 		}
 		rec := httptest.NewRecorder()
-		s.respond(rec, r, http.StatusOK, "Cosmos", fragment, page)
+		testResponder.respond(rec, r, http.StatusOK, "Cosmos", fragment, page)
 		gotPage := strings.Contains(rec.Body.String(), "<html>Cosmos</html>")
 		if gotPage == htmx || !strings.Contains(rec.Body.String(), "fragment") {
 			t.Errorf("htmx=%v: body %q", htmx, rec.Body.String())
@@ -80,11 +80,11 @@ func TestRespondFragmentOrPage(t *testing.T) {
 }
 
 func TestGroupBySeason(t *testing.T) {
-	eps := []store.Media{{ID: 1, Season: 1}, {ID: 2, Season: 1}, {ID: 3, Season: 2}, {ID: 4, Season: 4}}
-	seasons := groupBySeason(eps)
+	episodes := []store.Media{{ID: 1, Season: 1}, {ID: 2, Season: 1}, {ID: 3, Season: 2}, {ID: 4, Season: 4}}
+	seasons := groupBySeason(episodes)
 	var got []string
-	for _, s := range seasons {
-		got = append(got, fmt.Sprintf("%d:%d", s.Number, len(s.Episodes)))
+	for _, season := range seasons {
+		got = append(got, fmt.Sprintf("%d:%d", season.Number, len(season.Episodes)))
 	}
 	if strings.Join(got, ",") != "1:2,2:1,4:1" {
 		t.Errorf("seasons = %v", got)
@@ -96,10 +96,10 @@ func TestGroupBySeason(t *testing.T) {
 
 // A database failure is a server error, logged, never "Not found".
 func TestDatabaseErrorIsNotNotFound(t *testing.T) {
-	e := newEnv(t, nil)
-	e.store.Close()
-	resp, _ := e.client().do("GET", "/collections/1", nil, nil)
-	if resp.StatusCode != http.StatusInternalServerError {
-		t.Errorf("status %d, want 500", resp.StatusCode)
+	environment := newEnvironment(t, nil)
+	environment.store.Close()
+	response, _ := environment.client().sendForm("GET", "/collections/1", nil, nil)
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Errorf("status %d, want 500", response.StatusCode)
 	}
 }

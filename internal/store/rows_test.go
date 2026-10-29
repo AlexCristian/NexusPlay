@@ -13,27 +13,27 @@ import (
 // scan by hand and forgot AddedAt and PublishedAt.
 func TestListQueriesKeepEveryMediaColumn(t *testing.T) {
 	ctx := context.Background()
-	s := newStore(t)
-	u := mustUser(t, s, "a@example.com", "a")
-	id := mustMedia(t, s, "m.mp4")
-	if err := s.UpdateMedia(ctx, id, MediaUpdate{Title: "M"}, true); err != nil {
+	store := newStore(t)
+	user := mustUser(t, store, "a@example.com", "a")
+	id := mustMedia(t, store, "m.mp4")
+	if err := store.UpdateMedia(ctx, id, MediaUpdate{Title: "M"}, true); err != nil {
 		t.Fatal(err)
 	}
-	s.SaveProgress(ctx, u.ID, id, 10, false)
-	s.SetConvertFailed(ctx, id, "boom")
+	store.SaveProgress(ctx, user.ID, id, 10, false)
+	store.SetConvertFailed(ctx, id, "boom")
 
-	want, err := s.MediaByID(ctx, id)
+	want, err := store.MediaByID(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want.AddedAt.IsZero() || want.PublishedAt.IsZero() {
 		t.Fatalf("MediaByID lost timestamps: %+v", want)
 	}
-	resume, err := s.InProgress(ctx, u.ID, 10)
+	resume, err := store.InProgress(ctx, user.ID, 10)
 	if err != nil || len(resume) != 1 {
 		t.Fatalf("InProgress = %+v, %v", resume, err)
 	}
-	failed, err := s.ConversionFailures(ctx)
+	failed, err := store.ConversionFailures(ctx)
 	if err != nil || len(failed) != 1 {
 		t.Fatalf("ConversionFailures = %+v, %v", failed, err)
 	}
@@ -48,10 +48,10 @@ func TestListQueriesKeepEveryMediaColumn(t *testing.T) {
 }
 
 func TestTruncateRunes(t *testing.T) {
-	for _, tc := range []struct {
-		in   string
-		n    int
-		want string
+	for _, testCase := range []struct {
+		input string
+		limit int
+		want  string
 	}{
 		{"hello", 10, "hello"},
 		{"hello", 3, "hel"},
@@ -59,8 +59,8 @@ func TestTruncateRunes(t *testing.T) {
 		{"ăîș", 4, "ăî"},
 		{"日本", 4, "日"},
 	} {
-		if got := truncateRunes(tc.in, tc.n); got != tc.want {
-			t.Errorf("truncateRunes(%q, %d) = %q, want %q", tc.in, tc.n, got, tc.want)
+		if got := truncateRunes(testCase.input, testCase.limit); got != testCase.want {
+			t.Errorf("truncateRunes(%q, %d) = %q, want %q", testCase.input, testCase.limit, got, testCase.want)
 		}
 	}
 }
@@ -69,19 +69,19 @@ func TestTruncateRunes(t *testing.T) {
 // with SQLITE_BUSY when they run at the same time.
 func TestConcurrentWriteTransactions(t *testing.T) {
 	ctx := context.Background()
-	s := newStore(t)
-	var wg sync.WaitGroup
+	store := newStore(t)
+	var waitGroup sync.WaitGroup
 	errs := make(chan error, 40)
 	for i := 0; i < 40; i++ {
-		wg.Add(1)
+		waitGroup.Add(1)
 		go func() {
-			defer wg.Done()
+			defer waitGroup.Done()
 			email := time.Now().Format("150405.000000000") + string(rune('a'+i%26)) + "@x.com"
-			_, err := s.CreateUser(ctx, email, email, "hash", 0)
+			_, err := store.CreateUser(ctx, email, email, "hash", 0)
 			errs <- err
 		}()
 	}
-	wg.Wait()
+	waitGroup.Wait()
 	close(errs)
 	for err := range errs {
 		if err != nil {
@@ -89,9 +89,9 @@ func TestConcurrentWriteTransactions(t *testing.T) {
 		}
 	}
 	admins := 0
-	users, _ := queryAll(ctx, s.database, scanUser, `SELECT `+userCols+` FROM users`)
-	for _, u := range users {
-		if u.IsAdmin {
+	users, _ := queryAll(ctx, store.database, scanUser, `SELECT `+userCols+` FROM users`)
+	for _, user := range users {
+		if user.IsAdmin {
 			admins++
 		}
 	}
@@ -103,21 +103,21 @@ func TestConcurrentWriteTransactions(t *testing.T) {
 // A data folder with URL-special characters must open the right file, with
 // its settings applied.
 func TestOpenPathWithQueryCharacters(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "we?ird#dir %20x")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	directory := filepath.Join(t.TempDir(), "we?ird#dir %20x")
+	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "nexusplay.db")
-	s, err := Open(context.Background(), path)
+	path := filepath.Join(directory, "nexusplay.db")
+	store, err := Open(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer store.Close()
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("database not created at %s: %v", path, err)
 	}
 	var mode string
-	if err := s.database.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || mode != "wal" {
+	if err := store.database.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || mode != "wal" {
 		t.Errorf("journal_mode = %q (%v), want wal: settings were not applied", mode, err)
 	}
 }

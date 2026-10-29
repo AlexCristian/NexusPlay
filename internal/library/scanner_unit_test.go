@@ -19,20 +19,20 @@ import (
 type fakeProber struct {
 	gate    chan struct{}
 	probing chan struct{} // receives a value when a probe starts
-	mu      sync.Mutex
+	mutex   sync.Mutex
 	probed  []string
 }
 
-func (f *fakeProber) Probe(ctx context.Context, file string) (ffmpeg.Probe, error) {
-	f.mu.Lock()
-	f.probed = append(f.probed, filepath.Base(file))
-	f.mu.Unlock()
-	if f.probing != nil {
-		f.probing <- struct{}{}
+func (fakeProber *fakeProber) Probe(ctx context.Context, file string) (ffmpeg.Probe, error) {
+	fakeProber.mutex.Lock()
+	fakeProber.probed = append(fakeProber.probed, filepath.Base(file))
+	fakeProber.mutex.Unlock()
+	if fakeProber.probing != nil {
+		fakeProber.probing <- struct{}{}
 	}
-	if f.gate != nil {
+	if fakeProber.gate != nil {
 		select {
-		case <-f.gate:
+		case <-fakeProber.gate:
 		case <-ctx.Done():
 			return ffmpeg.Probe{}, ctx.Err()
 		}
@@ -43,18 +43,18 @@ func (f *fakeProber) Probe(ctx context.Context, file string) (ffmpeg.Probe, erro
 	}}, nil
 }
 
-func newUnitScanner(t *testing.T, p Prober) (*Scanner, *store.Store, string) {
+func newUnitScanner(t *testing.T, prober Prober) (*Scanner, *store.Store, string) {
 	t.Helper()
-	dir := t.TempDir()
-	st, err := store.Open(context.Background(), filepath.Join(dir, "db"))
+	directory := t.TempDir()
+	database, err := store.Open(context.Background(), filepath.Join(directory, "db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { st.Close() })
-	media := filepath.Join(dir, "media")
+	t.Cleanup(func() { database.Close() })
+	media := filepath.Join(directory, "media")
 	os.MkdirAll(media, 0o755)
-	sc := NewScanner(Deps{Store: st, Prober: p, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
-	return sc, st, media
+	scanner := NewScanner(Deps{Store: database, Prober: prober, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
+	return scanner, database, media
 }
 
 // writeSettled creates a file dated an hour ago, past the settle time.
@@ -70,37 +70,37 @@ func writeSettled(t *testing.T, path, content string) {
 
 // The whole scan, with no ffprobe installed.
 func TestScanWithFakeProber(t *testing.T) {
-	sc, st, media := newUnitScanner(t, &fakeProber{})
+	scanner, store, media := newUnitScanner(t, &fakeProber{})
 	ctx := context.Background()
 	writeSettled(t, filepath.Join(media, "Movies", "Alien (1979).mp4"), "video")
 	writeSettled(t, filepath.Join(media, "Movies", "Alien (1979).en.srt"), "1\n00:00:01,000 --> 00:00:02,000\nHello\n")
 	writeSettled(t, filepath.Join(media, "Cosmos", "Season 1", "Cosmos.S01E02.mkv"), "video")
 	os.WriteFile(filepath.Join(media, "Movies", "New.mp4"), []byte("still copying"), 0o644)
 
-	res, err := sc.Scan(ctx)
+	result, err := scanner.Scan(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Added != 2 || res.Subtitles != 1 || res.Waiting != 1 || res.Removed != 0 {
-		t.Errorf("result = %+v, want 2 added, 1 subtitle, 1 waiting", res)
+	if result.Added != 2 || result.Subtitles != 1 || result.Waiting != 1 || result.Removed != 0 {
+		t.Errorf("result = %+v, want 2 added, 1 subtitle, 1 waiting", result)
 	}
-	pending, _ := st.PendingMedia(ctx)
+	pending, _ := store.PendingMedia(ctx)
 	if len(pending) != 2 || pending[0].PixFmt != "yuv420p" {
 		t.Errorf("pending = %+v", pending)
 	}
 
 	os.Remove(filepath.Join(media, "Movies", "Alien (1979).mp4"))
-	if res, _ := sc.Scan(ctx); res.Removed != 1 || res.Added != 0 {
-		t.Errorf("after deleting a file: %+v, want 1 removed", res)
+	if result, _ := scanner.Scan(ctx); result.Removed != 1 || result.Added != 0 {
+		t.Errorf("after deleting a file: %+v, want 1 removed", result)
 	}
 }
 
 // A trigger sent before Run starts is kept, not dropped.
 func TestTriggerBeforeRunIsKept(t *testing.T) {
-	sc, _, _ := newUnitScanner(t, &fakeProber{})
-	sc.Trigger()
+	scanner, _, _ := newUnitScanner(t, &fakeProber{})
+	scanner.Trigger()
 	select {
-	case <-sc.trigger:
+	case <-scanner.trigger:
 	default:
 		t.Fatal("the trigger was dropped")
 	}
@@ -109,27 +109,27 @@ func TestTriggerBeforeRunIsKept(t *testing.T) {
 // The converter's lock (Exclusive) is free while the scanner probes files,
 // which can take minutes on a large first scan.
 func TestScanLockReleasedWhileProbing(t *testing.T) {
-	p := &fakeProber{gate: make(chan struct{}), probing: make(chan struct{}, 1)}
-	sc, _, media := newUnitScanner(t, p)
+	prober := &fakeProber{gate: make(chan struct{}), probing: make(chan struct{}, 1)}
+	scanner, _, media := newUnitScanner(t, prober)
 	writeSettled(t, filepath.Join(media, "slow.mp4"), "video")
 
 	done := make(chan Result, 1)
 	go func() {
-		res, _ := sc.Scan(context.Background())
-		done <- res
+		result, _ := scanner.Scan(context.Background())
+		done <- result
 	}()
-	<-p.probing // the scan is now inside ffprobe
+	<-prober.probing // the scan is now inside ffprobe
 
 	entered := make(chan struct{})
-	go sc.Exclusive(func() error { close(entered); return nil })
+	go scanner.Exclusive(func() error { close(entered); return nil })
 	select {
 	case <-entered:
 	case <-time.After(2 * time.Second):
 		t.Fatal("Exclusive was blocked while the scan was probing")
 	}
-	close(p.gate)
-	if res := <-done; res.Added != 1 {
-		t.Errorf("result = %+v", res)
+	close(prober.gate)
+	if result := <-done; result.Added != 1 {
+		t.Errorf("result = %+v", result)
 	}
 }
 
@@ -137,41 +137,41 @@ func TestScanLockReleasedWhileProbing(t *testing.T) {
 // example renamed by the converter) is not inserted, and a row whose file
 // reappears is not deleted.
 func TestReconcileRechecksTheDisk(t *testing.T) {
-	p := &fakeProber{gate: make(chan struct{}), probing: make(chan struct{}, 1)}
-	sc, st, media := newUnitScanner(t, p)
+	prober := &fakeProber{gate: make(chan struct{}), probing: make(chan struct{}, 1)}
+	scanner, database, media := newUnitScanner(t, prober)
 	ctx := context.Background()
 	writeSettled(t, filepath.Join(media, "Movie.mkv"), "video")
 	writeSettled(t, filepath.Join(media, "Other.mp4"), "video")
-	id, _, _ := st.InsertScannedMedia(ctx, store.ScannedMedia{Path: "Other.mp4", Title: "Other"})
+	id, _, _ := database.InsertScannedMedia(ctx, store.ScannedMedia{Path: "Other.mp4", Title: "Other"})
 
 	done := make(chan Result, 1)
 	go func() {
-		res, _ := sc.Scan(ctx)
-		done <- res
+		result, _ := scanner.Scan(ctx)
+		done <- result
 	}()
-	<-p.probing
+	<-prober.probing
 	// While Movie.mkv is being probed, the converter swaps it for an MP4
 	// that the walk never saw, and updates the row.
-	sc.Exclusive(func() error {
+	scanner.Exclusive(func() error {
 		os.Rename(filepath.Join(media, "Movie.mkv"), filepath.Join(media, "Movie.mp4"))
-		_, _, err := st.InsertScannedMedia(ctx, store.ScannedMedia{Path: "Movie.mp4", Title: "Movie"})
+		_, _, err := database.InsertScannedMedia(ctx, store.ScannedMedia{Path: "Movie.mp4", Title: "Movie"})
 		return err
 	})
-	close(p.gate)
-	res := <-done
-	if res.Added != 0 || res.Removed != 0 {
-		t.Errorf("result = %+v; want nothing added (the .mkv is gone) and nothing removed (the .mp4 exists)", res)
+	close(prober.gate)
+	result := <-done
+	if result.Added != 0 || result.Removed != 0 {
+		t.Errorf("result = %+v; want nothing added (the .mkv is gone) and nothing removed (the .mp4 exists)", result)
 	}
-	paths, _ := st.MediaPaths(ctx)
-	if _, ok := paths["Movie.mp4"]; !ok || paths["Other.mp4"] != id || len(paths) != 2 {
+	paths, _ := database.MediaPaths(ctx)
+	if _, found := paths["Movie.mp4"]; !found || paths["Other.mp4"] != id || len(paths) != 2 {
 		t.Errorf("library = %v", paths)
 	}
 }
 
 func TestSidecarLanguage(t *testing.T) {
-	for _, tt := range []struct {
-		video, sub, lang string
-		ok               bool
+	for _, testCase := range []struct {
+		video, subtitle, language string
+		isSidecar                 bool
 	}{
 		{"Movies/Alien.mp4", "Movies/Alien.srt", "und", true},
 		{"Movies/Alien.mp4", "Movies/Alien.en.srt", "en", true},
@@ -179,9 +179,9 @@ func TestSidecarLanguage(t *testing.T) {
 		{"Movies/Alien.mp4", "Movies/Aliens.en.srt", "", false},
 		{"Movies/Alien.mp4", "Other/Alien.en.srt", "", false},
 	} {
-		lang, ok := SidecarLanguage(tt.video, tt.sub)
-		if lang != tt.lang || ok != tt.ok {
-			t.Errorf("SidecarLanguage(%q, %q) = %q, %v; want %q, %v", tt.video, tt.sub, lang, ok, tt.lang, tt.ok)
+		language, isSidecar := SidecarLanguage(testCase.video, testCase.subtitle)
+		if language != testCase.language || isSidecar != testCase.isSidecar {
+			t.Errorf("SidecarLanguage(%q, %q) = %q, %v; want %q, %v", testCase.video, testCase.subtitle, language, isSidecar, testCase.language, testCase.isSidecar)
 		}
 	}
 }

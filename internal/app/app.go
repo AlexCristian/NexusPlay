@@ -135,13 +135,13 @@ func build(config config.Config, database *store.Store, log *slog.Logger) (*App,
 
 	var conversions web.Conversions = convert.Disabled{}
 	if config.Convert {
-		conv := convert.New(
+		converter := convert.New(
 			convert.Deps{Store: database, Tools: tools, Library: scanner, Log: log.With("component", "convert")},
 			convert.Config{MediaDirectory: config.MediaDirectory, Max: config.MaxConversions},
 		)
-		scanner.OnAdded(conv.Wake)
-		conversions = conv
-		workers = append(workers, conv)
+		scanner.OnAdded(converter.Wake)
+		conversions = converter
+		workers = append(workers, converter)
 	}
 
 	srv := &web.Server{Config: config, Store: database, Scanner: scanner, Meta: meta, Transcodes: transcodes,

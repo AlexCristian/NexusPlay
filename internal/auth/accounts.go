@@ -81,7 +81,7 @@ func (accounts *Accounts) Register(ctx context.Context, registration Registratio
 }
 
 func validate(registration Registration) error {
-	if addr, err := mail.ParseAddress(registration.Email); err != nil || addr.Address != registration.Email || len(registration.Email) > 254 {
+	if address, err := mail.ParseAddress(registration.Email); err != nil || address.Address != registration.Email || len(registration.Email) > 254 {
 		return &ValidationError{"email", "Enter a valid e-mail address."}
 	}
 	if length := utf8.RuneCountInString(registration.Nickname); length < 2 || length > 40 {

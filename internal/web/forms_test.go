@@ -19,21 +19,21 @@ type file struct {
 // formRequest builds a multipart POST like the admin forms send.
 func formRequest(t *testing.T, fields map[string]string, files ...file) *http.Request {
 	t.Helper()
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-	for k, v := range fields {
-		mw.WriteField(k, v)
+	var buffer bytes.Buffer
+	multipartWriter := multipart.NewWriter(&buffer)
+	for key, value := range fields {
+		multipartWriter.WriteField(key, value)
 	}
-	for _, f := range files {
-		fw, err := mw.CreateFormFile(f.field, f.name)
+	for _, file := range files {
+		writer, err := multipartWriter.CreateFormFile(file.field, file.name)
 		if err != nil {
 			t.Fatal(err)
 		}
-		fw.Write(f.data)
+		writer.Write(file.data)
 	}
-	mw.Close()
-	r := httptest.NewRequest(http.MethodPost, "/admin/media/1", &buf)
-	r.Header.Set("Content-Type", mw.FormDataContentType())
+	multipartWriter.Close()
+	r := httptest.NewRequest(http.MethodPost, "/admin/media/1", &buffer)
+	r.Header.Set("Content-Type", multipartWriter.FormDataContentType())
 	return r
 }
 
@@ -43,19 +43,19 @@ var onePixelPNG = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x0
 // or that err is nil when want is "".
 func wantFormError(t *testing.T, err error, want string) {
 	t.Helper()
-	var fe *formError
+	var formErr *formError
 	switch {
 	case want == "" && err != nil:
 		t.Errorf("unexpected error: %v", err)
-	case want != "" && !errors.As(err, &fe):
+	case want != "" && !errors.As(err, &formErr):
 		t.Errorf("error = %v, want a form error containing %q", err, want)
-	case want != "" && !strings.Contains(fe.message, want):
-		t.Errorf("message = %q, want it to contain %q", fe.message, want)
+	case want != "" && !strings.Contains(formErr.message, want):
+		t.Errorf("message = %q, want it to contain %q", formErr.message, want)
 	}
 }
 
 func TestDecodeMediaForm(t *testing.T) {
-	for _, tc := range []struct {
+	for _, testCase := range []struct {
 		name    string
 		fields  map[string]string
 		files   []file
@@ -65,18 +65,18 @@ func TestDecodeMediaForm(t *testing.T) {
 		{
 			name:   "trimmed fields",
 			fields: map[string]string{"title": "  Pilot ", "collection": " Cosmos ", "season": "1", "episode": " 2 ", "publish": "1"},
-			check: func(t *testing.T, in mediaInput) {
-				if in.update.Title != "Pilot" || in.collection != "Cosmos" || in.update.Season != 1 || in.update.Episode != 2 || !in.publish {
-					t.Errorf("decoded %+v", in)
+			check: func(t *testing.T, input mediaInput) {
+				if input.update.Title != "Pilot" || input.collection != "Cosmos" || input.update.Season != 1 || input.update.Episode != 2 || !input.publish {
+					t.Errorf("decoded %+v", input)
 				}
 			},
 		},
 		{
 			name:   "blank season is zero",
 			fields: map[string]string{"title": "Alien", "season": ""},
-			check: func(t *testing.T, in mediaInput) {
-				if in.update.Season != 0 || in.publish || in.poster != nil {
-					t.Errorf("decoded %+v", in)
+			check: func(t *testing.T, input mediaInput) {
+				if input.update.Season != 0 || input.publish || input.poster != nil {
+					t.Errorf("decoded %+v", input)
 				}
 			},
 		},
@@ -84,18 +84,18 @@ func TestDecodeMediaForm(t *testing.T) {
 		{
 			name:   "episode range",
 			fields: map[string]string{"title": "Encounter\nat  Farpoint", "season": "1", "episode": "1", "episode_end": "2"},
-			check: func(t *testing.T, in mediaInput) {
-				if in.update.Title != "Encounter at Farpoint" || in.update.Episode != 1 || in.update.EpisodeEnd != 2 {
-					t.Errorf("decoded %+v", in.update)
+			check: func(t *testing.T, input mediaInput) {
+				if input.update.Title != "Encounter at Farpoint" || input.update.Episode != 1 || input.update.EpisodeEnd != 2 {
+					t.Errorf("decoded %+v", input.update)
 				}
 			},
 		},
 		{
 			name:   "a range of one episode is one episode",
 			fields: map[string]string{"title": "T", "episode": "4", "episode_end": "4"},
-			check: func(t *testing.T, in mediaInput) {
-				if in.update.EpisodeEnd != 0 {
-					t.Errorf("EpisodeEnd = %d, want 0", in.update.EpisodeEnd)
+			check: func(t *testing.T, input mediaInput) {
+				if input.update.EpisodeEnd != 0 {
+					t.Errorf("EpisodeEnd = %d, want 0", input.update.EpisodeEnd)
 				}
 			},
 		},
@@ -106,18 +106,18 @@ func TestDecodeMediaForm(t *testing.T) {
 			name:   "poster upload",
 			fields: map[string]string{"title": "T"},
 			files:  []file{{"poster", "p.png", onePixelPNG}},
-			check: func(t *testing.T, in mediaInput) {
-				if in.poster == nil || in.poster.ext != ".png" || in.update.RemovePoster {
-					t.Errorf("poster = %+v, remove = %v", in.poster, in.update.RemovePoster)
+			check: func(t *testing.T, input mediaInput) {
+				if input.poster == nil || input.poster.extension != ".png" || input.update.RemovePoster {
+					t.Errorf("poster = %+v, remove = %v", input.poster, input.update.RemovePoster)
 				}
 			},
 		},
 		{
 			name:   "remove poster",
 			fields: map[string]string{"title": "T", "remove_poster": "1"},
-			check: func(t *testing.T, in mediaInput) {
-				if in.poster != nil || !in.update.RemovePoster {
-					t.Errorf("poster = %+v, remove = %v", in.poster, in.update.RemovePoster)
+			check: func(t *testing.T, input mediaInput) {
+				if input.poster != nil || !input.update.RemovePoster {
+					t.Errorf("poster = %+v, remove = %v", input.poster, input.update.RemovePoster)
 				}
 			},
 		},
@@ -137,28 +137,28 @@ func TestDecodeMediaForm(t *testing.T) {
 			name:   "empty file input is no upload",
 			fields: map[string]string{"title": "T"},
 			files:  []file{{"poster", "", nil}},
-			check: func(t *testing.T, in mediaInput) {
-				if in.poster != nil {
-					t.Errorf("poster = %+v", in.poster)
+			check: func(t *testing.T, input mediaInput) {
+				if input.poster != nil {
+					t.Errorf("poster = %+v", input.poster)
 				}
 			},
 		},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			in, err := decodeMediaForm(formRequest(t, tc.fields, tc.files...))
-			wantFormError(t, err, tc.wantErr)
-			if err == nil && tc.check != nil {
-				tc.check(t, in)
+		t.Run(testCase.name, func(t *testing.T) {
+			input, err := decodeMediaForm(formRequest(t, testCase.fields, testCase.files...))
+			wantFormError(t, err, testCase.wantErr)
+			if err == nil && testCase.check != nil {
+				testCase.check(t, input)
 			}
 		})
 	}
 }
 
 func TestDecodeCollectionForm(t *testing.T) {
-	in, err := decodeCollectionForm(formRequest(t, map[string]string{"name": " Cosmos ", "category": "TV Shows", "lookup": "1"}))
+	input, err := decodeCollectionForm(formRequest(t, map[string]string{"name": " Cosmos ", "category": "TV Shows", "lookup": "1"}))
 	wantFormError(t, err, "")
-	if in.update.Name != "Cosmos" || in.update.Category != "TV Shows" || !in.lookup {
-		t.Errorf("decoded %+v", in)
+	if input.update.Name != "Cosmos" || input.update.Category != "TV Shows" || !input.lookup {
+		t.Errorf("decoded %+v", input)
 	}
 	_, err = decodeCollectionForm(formRequest(t, map[string]string{"name": "Cosmos"}))
 	wantFormError(t, err, "needs a name and a category")
@@ -166,23 +166,23 @@ func TestDecodeCollectionForm(t *testing.T) {
 
 func TestDecodeSubtitleUpload(t *testing.T) {
 	srt := []byte("1\n00:00:01,000 --> 00:00:02,000\nHello\n")
-	for _, tc := range []struct {
-		name    string
-		lang    string
-		files   []file
-		wantErr string
+	for _, testCase := range []struct {
+		name     string
+		language string
+		files    []file
+		wantErr  string
 	}{
-		{name: "srt", lang: " EN ", files: []file{{"file", "a.srt", srt}}},
-		{name: "no language", lang: "", files: []file{{"file", "a.srt", srt}}, wantErr: "language code"},
-		{name: "language too long", lang: "abcdefghijklm", files: []file{{"file", "a.srt", srt}}, wantErr: "language code"},
-		{name: "no file", lang: "en", wantErr: "Choose a subtitle file"},
-		{name: "not a subtitle", lang: "en", files: []file{{"file", "a.srt", []byte("hello")}}, wantErr: "not a valid SRT or WebVTT"},
+		{name: "srt", language: " EN ", files: []file{{"file", "a.srt", srt}}},
+		{name: "no language", language: "", files: []file{{"file", "a.srt", srt}}, wantErr: "language code"},
+		{name: "language too long", language: "abcdefghijklm", files: []file{{"file", "a.srt", srt}}, wantErr: "language code"},
+		{name: "no file", language: "en", wantErr: "Choose a subtitle file"},
+		{name: "not a subtitle", language: "en", files: []file{{"file", "a.srt", []byte("hello")}}, wantErr: "not a valid SRT or WebVTT"},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			lang, cues, err := decodeSubtitleUpload(formRequest(t, map[string]string{"language": tc.lang}, tc.files...))
-			wantFormError(t, err, tc.wantErr)
-			if err == nil && (lang != "en" || len(cues) != 1 || cues[0].Text != "Hello") {
-				t.Errorf("lang = %q, cues = %+v", lang, cues)
+		t.Run(testCase.name, func(t *testing.T) {
+			language, cues, err := decodeSubtitleUpload(formRequest(t, map[string]string{"language": testCase.language}, testCase.files...))
+			wantFormError(t, err, testCase.wantErr)
+			if err == nil && (language != "en" || len(cues) != 1 || cues[0].Text != "Hello") {
+				t.Errorf("lang = %q, cues = %+v", language, cues)
 			}
 		})
 	}

@@ -15,9 +15,9 @@ import (
 // bounds how long Wait then waits for output pipes to close, so a child
 // process that inherited them cannot hold up shutdown.
 func command(ctx context.Context, name string, arguments ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, name, arguments...)
-	cmd.WaitDelay = 2 * time.Second
-	return cmd
+	command := exec.CommandContext(ctx, name, arguments...)
+	command.WaitDelay = 2 * time.Second
+	return command
 }
 
 // exitError turns the result of cmd.Wait into this package's error vocabulary.

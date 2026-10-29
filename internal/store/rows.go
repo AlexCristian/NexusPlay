@@ -31,11 +31,11 @@ func queryAll[T any](ctx context.Context, database querier, scan func(rowScanner
 	defer rows.Close()
 	var out []T
 	for rows.Next() {
-		v, err := scan(rows)
+		value, err := scan(rows)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, v)
+		out = append(out, value)
 	}
 	return out, rows.Err()
 }

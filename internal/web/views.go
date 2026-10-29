@@ -46,8 +46,8 @@ func itoa(number int64) string { return strconv.FormatInt(number, 10) }
 
 // duration formats a length in seconds for people: "8 s", "42 min",
 // "1 h 5 min".
-func duration(sec float64) string {
-	seconds := int(sec + .5)
+func duration(durationSeconds float64) string {
+	seconds := int(durationSeconds + .5)
 	switch {
 	case seconds < 60:
 		return strconv.Itoa(seconds) + " s"
@@ -61,8 +61,8 @@ func duration(sec float64) string {
 }
 
 // clock formats a position in seconds as "0:05", "42:10" or "1:02:03".
-func clock(sec float64) string {
-	totalSeconds := int(sec)
+func clock(seconds float64) string {
+	totalSeconds := int(seconds)
 	if totalSeconds < 0 {
 		totalSeconds = 0
 	}

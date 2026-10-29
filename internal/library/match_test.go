@@ -16,7 +16,7 @@ var tngS1 = []metadata.Episode{
 }
 
 func TestEpisodeByTitle(t *testing.T) {
-	for _, tc := range []struct {
+	for _, testCase := range []struct {
 		title  string
 		number int
 		want   int // 0: no match
@@ -29,9 +29,9 @@ func TestEpisodeByTitle(t *testing.T) {
 		{"Something Else Entirely", 2, 0},
 		{"", 2, 0},
 	} {
-		got, ok := episodeByTitle(tngS1, tc.title, tc.number)
-		if (tc.want == 0) == ok || (ok && got.Number != tc.want) {
-			t.Errorf("episodeByTitle(%q, %d) = %d, %v; want %d", tc.title, tc.number, got.Number, ok, tc.want)
+		got, found := episodeByTitle(tngS1, testCase.title, testCase.number)
+		if (testCase.want == 0) == found || (found && got.Number != testCase.want) {
+			t.Errorf("episodeByTitle(%q, %d) = %d, %v; want %d", testCase.title, testCase.number, got.Number, found, testCase.want)
 		}
 	}
 }

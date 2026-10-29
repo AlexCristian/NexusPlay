@@ -20,15 +20,15 @@ import (
 // MKV with H.264 video and AC-3 audio; Run writes the output file and the
 // converted file probes as `converted`.
 type fakeTools struct {
-	mu        sync.Mutex
+	mutex     sync.Mutex
 	converted ffmpeg.Probe
 	runErr    error
 	block     bool // Run waits for cancellation
 }
 
-func (f *fakeTools) Probe(ctx context.Context, file string) (ffmpeg.Probe, error) {
+func (fakeTools *fakeTools) Probe(ctx context.Context, file string) (ffmpeg.Probe, error) {
 	if strings.HasSuffix(file, temporarySuffix) {
-		return f.converted, nil
+		return fakeTools.converted, nil
 	}
 	return ffmpeg.Probe{Duration: 60, Container: "matroska,webm", Streams: []ffmpeg.Stream{
 		{Index: 0, Type: "video", Codec: "h264", PixFmt: "yuv420p"},
@@ -36,18 +36,18 @@ func (f *fakeTools) Probe(ctx context.Context, file string) (ffmpeg.Probe, error
 	}}, nil
 }
 
-func (f *fakeTools) Run(ctx context.Context, args []string, opt ffmpeg.RunOptions) error {
-	if f.block {
+func (fakeTools *fakeTools) Run(ctx context.Context, arguments []string, options ffmpeg.RunOptions) error {
+	if fakeTools.block {
 		<-ctx.Done()
 		return ctx.Err()
 	}
-	if f.runErr != nil {
-		return f.runErr
+	if fakeTools.runErr != nil {
+		return fakeTools.runErr
 	}
-	if opt.OnProgress != nil {
-		opt.OnProgress(30)
+	if options.OnProgress != nil {
+		options.OnProgress(30)
 	}
-	return os.WriteFile(args[len(args)-1], []byte("mp4"), 0o644)
+	return os.WriteFile(arguments[len(arguments)-1], []byte("mp4"), 0o644)
 }
 
 var goodMP4 = ffmpeg.Probe{Duration: 60, Container: "mov,mp4", Streams: []ffmpeg.Stream{
@@ -59,54 +59,57 @@ type fakeLibrary struct {
 	exclusive, triggers int
 }
 
-func (l *fakeLibrary) Exclusive(fn func() error) error { l.exclusive++; return fn() }
-func (l *fakeLibrary) Trigger()                        { l.triggers++ }
+func (fakeLibrary *fakeLibrary) Exclusive(operation func() error) error {
+	fakeLibrary.exclusive++
+	return operation()
+}
+func (fakeLibrary *fakeLibrary) Trigger() { fakeLibrary.triggers++ }
 
 type jobFixture struct {
-	c     *Converter
-	st    *store.Store
-	lib   *fakeLibrary
-	tools *fakeTools
-	media store.Media
-	dir   string
+	converter *Converter
+	database  *store.Store
+	library   *fakeLibrary
+	tools     *fakeTools
+	media     store.Media
+	directory string
 }
 
 func newJobFixture(t *testing.T, tools *fakeTools, free uint64) jobFixture {
 	t.Helper()
 	ctx := context.Background()
-	dir := t.TempDir()
-	st, err := store.Open(ctx, filepath.Join(dir, "db"))
+	directory := t.TempDir()
+	database, err := store.Open(ctx, filepath.Join(directory, "db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { st.Close() })
-	mediaDir := filepath.Join(dir, "media")
-	os.MkdirAll(mediaDir, 0o755)
-	os.WriteFile(filepath.Join(mediaDir, "Movie.mkv"), []byte("original"), 0o644)
-	id, _, err := st.InsertScannedMedia(ctx, store.ScannedMedia{Path: "Movie.mkv", Title: "Movie", VideoCodec: "h264", AudioCodec: "ac3"})
+	t.Cleanup(func() { database.Close() })
+	mediaDirectory := filepath.Join(directory, "media")
+	os.MkdirAll(mediaDirectory, 0o755)
+	os.WriteFile(filepath.Join(mediaDirectory, "Movie.mkv"), []byte("original"), 0o644)
+	id, _, err := database.InsertScannedMedia(ctx, store.ScannedMedia{Path: "Movie.mkv", Title: "Movie", VideoCodec: "h264", AudioCodec: "ac3"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, _ := st.MediaByID(ctx, id)
+	media, _ := database.MediaByID(ctx, id)
 	lib := &fakeLibrary{}
-	c := New(Deps{Store: st, Tools: tools, Library: lib, Log: slog.New(slog.NewTextHandler(io.Discard, nil))},
-		Config{MediaDirectory: mediaDir, FreeSpace: func(string) (uint64, error) { return free, nil }})
-	return jobFixture{c: c, st: st, lib: lib, tools: tools, media: m, dir: mediaDir}
+	converter := New(Deps{Store: database, Tools: tools, Library: lib, Log: slog.New(slog.NewTextHandler(io.Discard, nil))},
+		Config{MediaDirectory: mediaDirectory, FreeSpace: func(string) (uint64, error) { return free, nil }})
+	return jobFixture{converter: converter, database: database, library: lib, tools: tools, media: media, directory: mediaDirectory}
 }
 
-func (f jobFixture) files(t *testing.T) []string {
+func (jobFixture jobFixture) files(t *testing.T) []string {
 	t.Helper()
-	entries, _ := os.ReadDir(f.dir)
+	entries, _ := os.ReadDir(jobFixture.directory)
 	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
+	for _, entry := range entries {
+		names = append(names, entry.Name())
 	}
 	return names
 }
 
-func (f jobFixture) failures(t *testing.T) []store.ConversionFailure {
+func (jobFixture jobFixture) failures(t *testing.T) []store.ConversionFailure {
 	t.Helper()
-	got, err := f.st.ConversionFailures(context.Background())
+	got, err := jobFixture.database.ConversionFailures(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,34 +117,34 @@ func (f jobFixture) failures(t *testing.T) []store.ConversionFailure {
 }
 
 func TestJobReplacesOriginal(t *testing.T) {
-	f := newJobFixture(t, &fakeTools{converted: goodMP4}, 1<<40)
-	f.c.runJob(context.Background(), &job{media: f.media})
-	if got := f.files(t); len(got) != 1 || got[0] != "Movie.mp4" {
+	jobFixture := newJobFixture(t, &fakeTools{converted: goodMP4}, 1<<40)
+	jobFixture.converter.runJob(context.Background(), &job{media: jobFixture.media})
+	if got := jobFixture.files(t); len(got) != 1 || got[0] != "Movie.mp4" {
 		t.Errorf("files = %v, want only Movie.mp4", got)
 	}
-	if m, _ := f.st.MediaByID(context.Background(), f.media.ID); m.Path != "Movie.mp4" || m.AudioCodec != "aac" {
-		t.Errorf("row = %+v", m)
+	if media, _ := jobFixture.database.MediaByID(context.Background(), jobFixture.media.ID); media.Path != "Movie.mp4" || media.AudioCodec != "aac" {
+		t.Errorf("row = %+v", media)
 	}
-	if f.lib.exclusive != 1 || f.lib.triggers != 1 {
-		t.Errorf("library calls: exclusive=%d triggers=%d, want 1 and 1", f.lib.exclusive, f.lib.triggers)
+	if jobFixture.library.exclusive != 1 || jobFixture.library.triggers != 1 {
+		t.Errorf("library calls: exclusive=%d triggers=%d, want 1 and 1", jobFixture.library.exclusive, jobFixture.library.triggers)
 	}
-	if len(f.failures(t)) != 0 {
+	if len(jobFixture.failures(t)) != 0 {
 		t.Error("a successful conversion was recorded as failed")
 	}
 }
 
 // A full disk postpones the file and touches nothing.
 func TestJobWithoutSpaceIsPostponed(t *testing.T) {
-	f := newJobFixture(t, &fakeTools{converted: goodMP4}, 1<<20)
-	f.c.runJob(context.Background(), &job{media: f.media})
-	if len(f.failures(t)) != 0 {
+	jobFixture := newJobFixture(t, &fakeTools{converted: goodMP4}, 1<<20)
+	jobFixture.converter.runJob(context.Background(), &job{media: jobFixture.media})
+	if len(jobFixture.failures(t)) != 0 {
 		t.Error("a full disk must not be recorded as a failure")
 	}
-	st, err := f.c.Status(context.Background())
-	if err != nil || st.Postponed != 1 || st.Queued != 0 {
-		t.Errorf("status = %+v, %v; want 1 postponed", st, err)
+	status, err := jobFixture.converter.Status(context.Background())
+	if err != nil || status.Postponed != 1 || status.Queued != 0 {
+		t.Errorf("status = %+v, %v; want 1 postponed", status, err)
 	}
-	if got := f.files(t); len(got) != 1 || got[0] != "Movie.mkv" {
+	if got := jobFixture.files(t); len(got) != 1 || got[0] != "Movie.mkv" {
 		t.Errorf("files = %v", got)
 	}
 }
@@ -149,13 +152,13 @@ func TestJobWithoutSpaceIsPostponed(t *testing.T) {
 // A converted file that fails verification is thrown away; the original stays.
 func TestJobVerificationFailureKeepsOriginal(t *testing.T) {
 	lost := ffmpeg.Probe{Duration: 60, Streams: []ffmpeg.Stream{{Type: "video", Codec: "h264"}}} // audio lost
-	f := newJobFixture(t, &fakeTools{converted: lost}, 1<<40)
-	f.c.runJob(context.Background(), &job{media: f.media})
-	failed := f.failures(t)
+	jobFixture := newJobFixture(t, &fakeTools{converted: lost}, 1<<40)
+	jobFixture.converter.runJob(context.Background(), &job{media: jobFixture.media})
+	failed := jobFixture.failures(t)
 	if len(failed) != 1 || !strings.Contains(failed[0].Error, "audio tracks") {
 		t.Errorf("failures = %+v", failed)
 	}
-	if got := f.files(t); len(got) != 1 || got[0] != "Movie.mkv" {
+	if got := jobFixture.files(t); len(got) != 1 || got[0] != "Movie.mkv" {
 		t.Errorf("files = %v, want only the original", got)
 	}
 }
@@ -163,33 +166,33 @@ func TestJobVerificationFailureKeepsOriginal(t *testing.T) {
 // An ffmpeg failure is recorded with its reason.
 func TestJobFFmpegFailureIsRecorded(t *testing.T) {
 	runErr := &ffmpeg.ExitError{Program: "ffmpeg", Err: errors.New("exit status 1"), LastLine: "Invalid data found"}
-	f := newJobFixture(t, &fakeTools{runErr: runErr}, 1<<40)
-	f.c.runJob(context.Background(), &job{media: f.media})
-	if failed := f.failures(t); len(failed) != 1 || !strings.Contains(failed[0].Error, "Invalid data found") {
+	jobFixture := newJobFixture(t, &fakeTools{runErr: runErr}, 1<<40)
+	jobFixture.converter.runJob(context.Background(), &job{media: jobFixture.media})
+	if failed := jobFixture.failures(t); len(failed) != 1 || !strings.Contains(failed[0].Error, "Invalid data found") {
 		t.Errorf("failures = %+v", failed)
 	}
 }
 
 // A shutdown during the encode is not a failure and leaves no temp file.
 func TestJobCancelledIsNotRecorded(t *testing.T) {
-	f := newJobFixture(t, &fakeTools{block: true}, 1<<40)
+	jobFixture := newJobFixture(t, &fakeTools{block: true}, 1<<40)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { f.c.runJob(ctx, &job{media: f.media}); close(done) }()
+	go func() { jobFixture.converter.runJob(ctx, &job{media: jobFixture.media}); close(done) }()
 	cancel()
 	<-done
-	if len(f.failures(t)) != 0 {
+	if len(jobFixture.failures(t)) != 0 {
 		t.Error("a shutdown was recorded as a failure")
 	}
-	if got := f.files(t); len(got) != 1 || got[0] != "Movie.mkv" {
+	if got := jobFixture.files(t); len(got) != 1 || got[0] != "Movie.mkv" {
 		t.Errorf("files = %v", got)
 	}
 }
 
 func TestDisabledStatus(t *testing.T) {
-	st, err := Disabled{}.Status(context.Background())
-	if err != nil || !st.Off {
-		t.Errorf("Disabled status = %+v, %v", st, err)
+	status, err := Disabled{}.Status(context.Background())
+	if err != nil || !status.Off {
+		t.Errorf("Disabled status = %+v, %v", status, err)
 	}
 	Disabled{}.Wake() // must not panic or block
 }
@@ -198,10 +201,10 @@ func TestDisabledStatus(t *testing.T) {
 // space, and not counting browser-ready files or failed ones.
 func TestConversionCounts(t *testing.T) {
 	ctx := context.Background()
-	f := newJobFixture(t, &fakeTools{}, 1<<40) // Movie.mkv: H.264 + AC-3, needs converting
-	add := func(m store.ScannedMedia) int64 {
+	jobFixture := newJobFixture(t, &fakeTools{}, 1<<40) // Movie.mkv: H.264 + AC-3, needs converting
+	add := func(scannedMedia store.ScannedMedia) int64 {
 		t.Helper()
-		id, _, err := f.st.InsertScannedMedia(ctx, m)
+		id, _, err := jobFixture.database.InsertScannedMedia(ctx, scannedMedia)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -211,16 +214,16 @@ func TestConversionCounts(t *testing.T) {
 	add(store.ScannedMedia{Path: "tenbit.mp4", Title: "10-bit", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p10le"})
 	waiting := add(store.ScannedMedia{Path: "big.avi", Title: "Big", VideoCodec: "mpeg4", AudioCodec: "mp3"})
 	failed := add(store.ScannedMedia{Path: "broken.avi", Title: "Broken", VideoCodec: "mpeg4", AudioCodec: "mp3"})
-	if err := f.st.SetConvertFailed(ctx, failed, "bad file"); err != nil {
+	if err := jobFixture.database.SetConvertFailed(ctx, failed, "bad file"); err != nil {
 		t.Fatal(err)
 	}
-	f.c.waitUntil[waiting] = f.c.now().Add(time.Hour)
+	jobFixture.converter.waitUntil[waiting] = jobFixture.converter.now().Add(time.Hour)
 
-	st, err := f.c.Status(ctx)
+	status, err := jobFixture.converter.Status(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Queued != 2 || st.Postponed != 1 || len(st.Active) != 0 {
-		t.Errorf("status = %+v, want 2 queued (Movie.mkv, tenbit.mp4) and 1 postponed", st)
+	if status.Queued != 2 || status.Postponed != 1 || len(status.Active) != 0 {
+		t.Errorf("status = %+v, want 2 queued (Movie.mkv, tenbit.mp4) and 1 postponed", status)
 	}
 }

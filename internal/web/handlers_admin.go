@@ -95,11 +95,11 @@ func (handlers *adminHandlers) controlPanel(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		return err
 	}
-	conv, err := handlers.conversionView(ctx)
+	conversions, err := handlers.conversionView(ctx)
 	if err != nil {
 		return err
 	}
-	handlers.render(w, r, http.StatusOK, controlPanel(newPage(r, "Control panel"), pending, colls, cats, handlers.meta.Enabled(), conv,
+	handlers.render(w, r, http.StatusOK, controlPanel(newPage(r, "Control panel"), pending, colls, cats, handlers.meta.Enabled(), conversions,
 		doneMessages[r.URL.Query().Get("done")]))
 	return nil
 }
@@ -380,7 +380,7 @@ func (handlers *adminHandlers) savePoster(upload *posterUpload) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	name := "upload-" + token[:16] + upload.ext
+	name := "upload-" + token[:16] + upload.extension
 	out, err := os.OpenFile(filepath.Join(handlers.posterDirectory, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return "", err

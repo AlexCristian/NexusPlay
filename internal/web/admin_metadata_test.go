@@ -17,34 +17,34 @@ type fakeLookup struct {
 	calls                     []string
 }
 
-func (f *fakeLookup) Enabled() bool { return true }
+func (fakeLookup *fakeLookup) Enabled() bool { return true }
 
-func (f *fakeLookup) find(kind string, known map[string]bool, name string) (metadata.Info, error) {
-	f.calls = append(f.calls, kind)
+func (fakeLookup *fakeLookup) find(kind string, known map[string]bool, name string) (metadata.Info, error) {
+	fakeLookup.calls = append(fakeLookup.calls, kind)
 	if !known[name] {
 		return metadata.Info{}, metadata.ErrNoMatch
 	}
 	return metadata.Info{Title: name, Year: "1993", Poster: kind + ".jpg"}, nil
 }
 
-func (f *fakeLookup) Show(_ context.Context, name, _ string) (metadata.Info, error) {
-	return f.find("show", f.shows, name)
+func (fakeLookup *fakeLookup) Show(_ context.Context, name, _ string) (metadata.Info, error) {
+	return fakeLookup.find("show", fakeLookup.shows, name)
 }
-func (f *fakeLookup) Collection(_ context.Context, name string) (metadata.Info, error) {
-	return f.find("collection", f.collections, name)
+func (fakeLookup *fakeLookup) Collection(_ context.Context, name string) (metadata.Info, error) {
+	return fakeLookup.find("collection", fakeLookup.collections, name)
 }
-func (f *fakeLookup) Movie(_ context.Context, name, _ string) (metadata.Info, error) {
-	return f.find("movie", f.films, name)
+func (fakeLookup *fakeLookup) Movie(_ context.Context, name, _ string) (metadata.Info, error) {
+	return fakeLookup.find("movie", fakeLookup.films, name)
 }
 
 func TestLookupCollection(t *testing.T) {
-	f := &fakeLookup{
+	lookup := &fakeLookup{
 		shows:       map[string]bool{"Deep Space Nine": true},
 		collections: map[string]bool{"Star Trek": true},
 		films:       map[string]bool{"Alien": true},
 	}
-	h := &adminHandlers{responder: responder{log: slog.New(slog.NewTextHandler(io.Discard, nil))}, meta: f}
-	for _, tc := range []struct {
+	handlers := &adminHandlers{responder: responder{log: slog.New(slog.NewTextHandler(io.Discard, nil))}, meta: lookup}
+	for _, testCase := range []struct {
 		name, category, wantPoster, wantYear string
 		wantCalls                            string
 	}{
@@ -53,31 +53,31 @@ func TestLookupCollection(t *testing.T) {
 		{"Deep Space Nine", "TV Shows", "show.jpg", "1993", "[show]"},
 		{"Star Trek", "TV Shows", "collection.jpg", "1993", "[show collection]"},
 	} {
-		f.calls = nil
-		c := store.Collection{Name: tc.name, Category: tc.category}
-		h.fillFromTMDB(context.Background(), &c)
-		if c.Poster != tc.wantPoster || c.Year != tc.wantYear || fmtCalls(f.calls) != tc.wantCalls {
+		lookup.calls = nil
+		collection := store.Collection{Name: testCase.name, Category: testCase.category}
+		handlers.fillFromTMDB(context.Background(), &collection)
+		if collection.Poster != testCase.wantPoster || collection.Year != testCase.wantYear || fmtCalls(lookup.calls) != testCase.wantCalls {
 			t.Errorf("%s (%s): poster %q, year %q, searches %v; want %q, %q, %s",
-				tc.name, tc.category, c.Poster, c.Year, f.calls, tc.wantPoster, tc.wantYear, tc.wantCalls)
+				testCase.name, testCase.category, collection.Poster, collection.Year, lookup.calls, testCase.wantPoster, testCase.wantYear, testCase.wantCalls)
 		}
 	}
 }
 
 func fmtCalls(calls []string) string {
-	s := "["
-	for i, c := range calls {
+	text := "["
+	for i, call := range calls {
 		if i > 0 {
-			s += " "
+			text += " "
 		}
-		s += c
+		text += call
 	}
-	return s + "]"
+	return text + "]"
 }
 
 // A new collection never takes an episode's air year; only the show's
 // folder year.
 func TestShowYearGuess(t *testing.T) {
-	for _, tc := range []struct {
+	for _, testCase := range []struct {
 		path, collection, want string
 	}{
 		{"Star Trek Deep Space Nine (1993)/Season 5/Star Trek Deep Space Nine S05E01.mkv", "Star Trek Deep Space Nine", "1993"},
@@ -86,9 +86,9 @@ func TestShowYearGuess(t *testing.T) {
 		{"Star Trek Deep Space Nine (1993)/Season 5/DS9 S05E01.mkv", "Something Else", ""},
 		{"Movies/Alien (1979).mp4", "Alien Films", ""},
 	} {
-		m := store.Media{Path: tc.path, Year: "1997"}
-		if got := showYearGuess(m, tc.collection); got != tc.want {
-			t.Errorf("showYearGuess(%q, %q) = %q, want %q", tc.path, tc.collection, got, tc.want)
+		media := store.Media{Path: testCase.path, Year: "1997"}
+		if got := showYearGuess(media, testCase.collection); got != testCase.want {
+			t.Errorf("showYearGuess(%q, %q) = %q, want %q", testCase.path, testCase.collection, got, testCase.want)
 		}
 	}
 }

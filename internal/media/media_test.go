@@ -4,7 +4,7 @@ import "testing"
 
 func TestPolicy(t *testing.T) {
 	tests := []struct {
-		f       Format
+		format  Format
 		deliver Delivery
 		convert bool
 	}{
@@ -26,20 +26,20 @@ func TestPolicy(t *testing.T) {
 		{Format{Path: "a.mp4", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p10le"}, HLS, true},
 		{Format{Path: "a.mp4", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv444p"}, HLS, true},
 	}
-	for _, tt := range tests {
-		if got := Deliver(tt.f); got != tt.deliver {
-			t.Errorf("Deliver(%+v) = %v, want %v", tt.f, got, tt.deliver)
+	for _, testCase := range tests {
+		if got := Deliver(testCase.format); got != testCase.deliver {
+			t.Errorf("Deliver(%+v) = %v, want %v", testCase.format, got, testCase.deliver)
 		}
-		if got := NeedsConversion(tt.f); got != tt.convert {
-			t.Errorf("NeedsConversion(%+v) = %v, want %v", tt.f, got, tt.convert)
+		if got := NeedsConversion(testCase.format); got != testCase.convert {
+			t.Errorf("NeedsConversion(%+v) = %v, want %v", testCase.format, got, testCase.convert)
 		}
 	}
 }
 
 func TestFileTypes(t *testing.T) {
 	for name, want := range map[string]string{"a.MP4": "video/mp4", "b.mkv": "video/x-matroska", "c.webm": "video/webm"} {
-		if got, ok := MIMEType(name); !ok || got != want || !IsVideo(name) {
-			t.Errorf("%s: MIMEType = %q, %v", name, got, ok)
+		if got, known := MIMEType(name); !known || got != want || !IsVideo(name) {
+			t.Errorf("%s: MIMEType = %q, %v", name, got, known)
 		}
 	}
 	for _, name := range []string{"a.srt", "notes.txt", "noext"} {

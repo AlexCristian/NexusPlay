@@ -19,36 +19,36 @@ func (tools Tools) Run(ctx context.Context, arguments []string, options RunOptio
 	if options.OnProgress != nil {
 		arguments = append([]string{"-progress", "pipe:1", "-nostats"}, arguments...)
 	}
-	cmd := command(ctx, tools.FFmpeg, arguments...)
+	execCommand := command(ctx, tools.FFmpeg, arguments...)
 	stderr := &lastLineWriter{}
-	cmd.Stderr = stderr
+	execCommand.Stderr = stderr
 	var stdout io.Reader
 	if options.OnProgress != nil {
-		pipe, err := cmd.StdoutPipe()
+		pipe, err := execCommand.StdoutPipe()
 		if err != nil {
 			return err
 		}
 		stdout = pipe
 	}
-	if err := cmd.Start(); err != nil {
+	if err := execCommand.Start(); err != nil {
 		return fmt.Errorf("starting ffmpeg: %w", err)
 	}
 	if options.LowPriority {
-		lowerPriority(cmd.Process.Pid)
+		lowerPriority(execCommand.Process.Pid)
 	}
 	if stdout != nil {
 		readProgress(stdout, options.OnProgress)
 	}
-	return exitError("ffmpeg", ctx, cmd.Wait(), stderr)
+	return exitError("ffmpeg", ctx, execCommand.Wait(), stderr)
 }
 
 // Start launches ffmpeg and returns without waiting for it. Cancelling ctx
 // kills the process. The caller must call Wait.
 func (tools Tools) Start(ctx context.Context, arguments []string) (*Process, error) {
-	cmd := command(ctx, tools.FFmpeg, arguments...)
-	process := &Process{cmd: cmd, ctx: ctx, stderr: &lastLineWriter{}}
-	cmd.Stderr = process.stderr
-	if err := cmd.Start(); err != nil {
+	execCommand := command(ctx, tools.FFmpeg, arguments...)
+	process := &Process{command: execCommand, ctx: ctx, stderr: &lastLineWriter{}}
+	execCommand.Stderr = process.stderr
+	if err := execCommand.Start(); err != nil {
 		return nil, fmt.Errorf("starting ffmpeg: %w", err)
 	}
 	return process, nil

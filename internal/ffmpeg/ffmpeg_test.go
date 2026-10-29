@@ -34,8 +34,8 @@ func TestRunReportsLastLine(t *testing.T) {
 	if want := "ffmpeg: exit status 1: in.avi: Invalid data found"; err.Error() != want {
 		t.Errorf("Error() = %q, want %q", err.Error(), want)
 	}
-	var procErr *exec.ExitError
-	if !errors.As(err, &procErr) || procErr.ExitCode() != 1 {
+	var processErr *exec.ExitError
+	if !errors.As(err, &processErr) || processErr.ExitCode() != 1 {
 		t.Errorf("ExitError should unwrap to the process exit status, got %v", err)
 	}
 }
@@ -58,7 +58,7 @@ case "$*" in "-progress pipe:1 -nostats -i in.mkv out.mp4") ;; *) echo "unexpect
 printf 'frame=10\nout_time_us=1500000\nprogress=continue\nout_time_ms=3000000\nprogress=end\n'`)}
 	var got []float64
 	err := tools.Run(context.Background(), []string{"-i", "in.mkv", "out.mp4"}, RunOptions{
-		OnProgress:  func(s float64) { got = append(got, s) },
+		OnProgress:  func(seconds float64) { got = append(got, seconds) },
 		LowPriority: true,
 	})
 	if err != nil {
@@ -80,22 +80,22 @@ func TestRunKeepsOnlyTheEndOfLongStderr(t *testing.T) {
 
 func TestStartAndWait(t *testing.T) {
 	tools := Tools{FFmpeg: fakeProgram(t, `sleep 0.1; echo "boom" >&2; exit 3`)}
-	p, err := tools.Start(context.Background(), nil)
+	process, err := tools.Start(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var exitErr *ExitError
-	if err := p.Wait(); !errors.As(err, &exitErr) || exitErr.LastLine != "boom" {
+	if err := process.Wait(); !errors.As(err, &exitErr) || exitErr.LastLine != "boom" {
 		t.Errorf("Wait = %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	p, err = Tools{FFmpeg: fakeProgram(t, `exec sleep 10`)}.Start(ctx, nil)
+	process, err = Tools{FFmpeg: fakeProgram(t, `exec sleep 10`)}.Start(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cancel()
-	if err := p.Wait(); !errors.Is(err, context.Canceled) {
+	if err := process.Wait(); !errors.Is(err, context.Canceled) {
 		t.Errorf("Wait after cancel = %v, want context.Canceled", err)
 	}
 }
@@ -122,23 +122,23 @@ func TestProbe(t *testing.T) {
 	jsonFile := filepath.Join(t.TempDir(), "probe.json")
 	os.WriteFile(jsonFile, []byte(probeJSON), 0o644)
 	tools := Tools{FFprobe: fakeProgram(t, `cat `+jsonFile)}
-	p, err := tools.Probe(context.Background(), "movie.mkv")
+	probe, err := tools.Probe(context.Background(), "movie.mkv")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Duration != 1312.48 || p.Container != "matroska,webm" || len(p.Streams) != 5 {
-		t.Errorf("probe = %+v", p)
+	if probe.Duration != 1312.48 || probe.Container != "matroska,webm" || len(probe.Streams) != 5 {
+		t.Errorf("probe = %+v", probe)
 	}
-	if v, ok := p.Video(); !ok || v.Index != 1 || v.PixFmt != "yuv420p10le" {
-		t.Errorf("Video() = %+v, %v; want stream 1, skipping the cover art", v, ok)
+	if value, hasVideo := probe.Video(); !hasVideo || value.Index != 1 || value.PixFmt != "yuv420p10le" {
+		t.Errorf("Video() = %+v, %v; want stream 1, skipping the cover art", value, hasVideo)
 	}
-	if a, ok := p.Audio(); !ok || a.Language != "fre" || a.Channels != 6 || a.Title != "VF" {
-		t.Errorf("Audio() = %+v", a)
+	if stream, hasAudio := probe.Audio(); !hasAudio || stream.Language != "fre" || stream.Channels != 6 || stream.Title != "VF" {
+		t.Errorf("Audio() = %+v", stream)
 	}
-	if p.VideoCodec() != "h264" || p.AudioCodec() != "ac3" || p.Count("audio") != 2 || p.Count("subtitle") != 1 {
-		t.Errorf("codecs %s/%s, counts audio=%d subtitle=%d", p.VideoCodec(), p.AudioCodec(), p.Count("audio"), p.Count("subtitle"))
+	if probe.VideoCodec() != "h264" || probe.AudioCodec() != "ac3" || probe.Count("audio") != 2 || probe.Count("subtitle") != 1 {
+		t.Errorf("codecs %s/%s, counts audio=%d subtitle=%d", probe.VideoCodec(), probe.AudioCodec(), probe.Count("audio"), probe.Count("subtitle"))
 	}
-	if !p.Streams[3].Default || p.Streams[2].Default {
+	if !probe.Streams[3].Default || probe.Streams[2].Default {
 		t.Error("default dispositions not read")
 	}
 }
@@ -152,11 +152,11 @@ func TestProbeFailures(t *testing.T) {
 	if _, err := (Tools{FFprobe: fakeProgram(t, `echo not json`)}).Probe(context.Background(), "x"); err == nil {
 		t.Error("garbage output should be an error")
 	}
-	p, err := parseProbe([]byte(`{"format": {"duration": "N/A"}, "streams": [{"codec_type": "audio", "codec_name": "mp3"}]}`))
-	if err != nil || p.Duration != 0 {
-		t.Errorf("N/A duration: %v, %v", p.Duration, err)
+	probe, err := parseProbe([]byte(`{"format": {"duration": "N/A"}, "streams": [{"codec_type": "audio", "codec_name": "mp3"}]}`))
+	if err != nil || probe.Duration != 0 {
+		t.Errorf("N/A duration: %v, %v", probe.Duration, err)
 	}
-	if _, ok := p.Video(); ok {
+	if _, hasVideo := probe.Video(); hasVideo {
 		t.Error("an audio-only file has no video stream")
 	}
 }

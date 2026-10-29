@@ -51,9 +51,9 @@ func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil || version != argon2.Version {
 		return false, errors.New("unsupported argon2 version")
 	}
-	var mem, iterations uint32
+	var memory, iterations uint32
 	var parallelism uint8
-	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &mem, &iterations, &parallelism); err != nil {
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism); err != nil {
 		return false, errors.New("bad argon2 parameters")
 	}
 	b64 := base64.RawStdEncoding
@@ -65,11 +65,11 @@ func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	got := argon2.IDKey([]byte(password), salt, iterations, mem, parallelism, uint32(len(want)))
+	got := argon2.IDKey([]byte(password), salt, iterations, memory, parallelism, uint32(len(want)))
 	if subtle.ConstantTimeCompare(got, want) != 1 {
 		return false, ErrMismatch
 	}
-	return mem < argonMemory || iterations < argonTime, nil
+	return memory < argonMemory || iterations < argonTime, nil
 }
 
 // NewToken returns a random URL-safe token with 256 bits of entropy.

@@ -13,15 +13,15 @@ import (
 // An episode's page: the server's length for the player, the episode title
 // on its own line, and only the play button shown over the picture.
 func TestWatchEpisodeMarkup(t *testing.T) {
-	e := newEnv(t, nil)
+	environment := newEnvironment(t, nil)
 	ctx := context.Background()
-	id, _, _ := e.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "Show/Show S01E04.mp4", Title: "E4", VideoCodec: "h264", Duration: 2672.3})
-	coll, _ := e.store.CreateCollection(ctx, store.Collection{Name: "Star Trek: The Next Generation", Category: "TV Shows"})
-	e.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "Who Watches the Watchers", CollectionID: coll, Season: 3, Episode: 4}, true)
+	id, _, _ := environment.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "Show/Show S01E04.mp4", Title: "E4", VideoCodec: "h264", Duration: 2672.3})
+	coll, _ := environment.store.CreateCollection(ctx, store.Collection{Name: "Star Trek: The Next Generation", Category: "TV Shows"})
+	environment.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "Who Watches the Watchers", CollectionID: coll, Season: 3, Episode: 4}, true)
 
-	resp, page := e.client().do("GET", "/watch/"+itoa(id), nil, nil)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status %d", resp.StatusCode)
+	response, page := environment.client().sendForm("GET", "/watch/"+itoa(id), nil, nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", response.StatusCode)
 	}
 	for _, want := range []string{
 		`data-duration="2672.3"`,
@@ -42,27 +42,27 @@ func TestWatchEpisodeMarkup(t *testing.T) {
 // Static files are linked with a content hash, so an update is fetched at
 // once; hashed URLs are cached for good, others for a day.
 func TestStaticAssetsAreVersioned(t *testing.T) {
-	e := newEnv(t, nil)
-	c := e.client()
-	_, page := c.do("GET", "/", nil, nil)
-	m := regexp.MustCompile(`href="(/static/css/app\.css\?v=([0-9a-f]{10}))"`).FindStringSubmatch(page)
-	if m == nil {
+	environment := newEnvironment(t, nil)
+	client := environment.client()
+	_, page := client.sendForm("GET", "/", nil, nil)
+	match := regexp.MustCompile(`href="(/static/css/app\.css\?v=([0-9a-f]{10}))"`).FindStringSubmatch(page)
+	if match == nil {
 		t.Fatal("the stylesheet link has no content hash")
 	}
-	if m[2] != assetHashes["/static/css/app.css"] {
-		t.Errorf("hash %s, want %s", m[2], assetHashes["/static/css/app.css"])
+	if match[2] != assetHashes["/static/css/app.css"] {
+		t.Errorf("hash %s, want %s", match[2], assetHashes["/static/css/app.css"])
 	}
-	resp, _ := c.do("GET", m[1], nil, nil)
-	if cc := resp.Header.Get("Cache-Control"); !strings.Contains(cc, "immutable") {
-		t.Errorf("hashed URL Cache-Control = %q", cc)
+	response, _ := client.sendForm("GET", match[1], nil, nil)
+	if cacheControl := response.Header.Get("Cache-Control"); !strings.Contains(cacheControl, "immutable") {
+		t.Errorf("hashed URL Cache-Control = %q", cacheControl)
 	}
-	resp, _ = c.do("GET", "/static/css/app.css?v=stale", nil, nil)
-	if cc := resp.Header.Get("Cache-Control"); cc != "public, max-age=86400" {
-		t.Errorf("unhashed URL Cache-Control = %q", cc)
+	response, _ = client.sendForm("GET", "/static/css/app.css?v=stale", nil, nil)
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "public, max-age=86400" {
+		t.Errorf("unhashed URL Cache-Control = %q", cacheControl)
 	}
-	for _, p := range []string{"/static/js/app.js", "/static/js/player.js", "/static/vendor/htmx.min.js", "/static/vendor/hls.light.min.js"} {
-		if !strings.HasPrefix(asset(p), p+"?v=") {
-			t.Errorf("asset(%s) = %s", p, asset(p))
+	for _, path := range []string{"/static/js/app.js", "/static/js/player.js", "/static/vendor/htmx.min.js", "/static/vendor/hls.light.min.js"} {
+		if !strings.HasPrefix(asset(path), path+"?v=") {
+			t.Errorf("asset(%s) = %s", path, asset(path))
 		}
 	}
 }
@@ -70,10 +70,10 @@ func TestStaticAssetsAreVersioned(t *testing.T) {
 // On phones the top bar's links are icons, so each has a name for screen
 // readers and a tooltip.
 func TestTopBarLinksHaveNames(t *testing.T) {
-	e := newEnv(t, nil)
-	admin := e.client()
+	environment := newEnvironment(t, nil)
+	admin := environment.client()
 	admin.register("alex")
-	_, page := admin.do("GET", "/", nil, nil)
+	_, page := admin.sendForm("GET", "/", nil, nil)
 	for _, name := range []string{"Previously watching", "My subscriptions", "Control panel", "Log out"} {
 		if !strings.Contains(page, `aria-label="`+name+`" title="`+name+`"`) {
 			t.Errorf("top bar link %q has no aria-label and title", name)
@@ -82,7 +82,7 @@ func TestTopBarLinksHaveNames(t *testing.T) {
 }
 
 func TestEpisodeNumbers(t *testing.T) {
-	for _, tc := range []struct {
+	for _, testCase := range []struct {
 		season, episode, end int
 		want                 string
 	}{
@@ -92,19 +92,19 @@ func TestEpisodeNumbers(t *testing.T) {
 		{0, 3, 0, "Special 3"},
 		{0, 1, 2, "Special 1–2"},
 	} {
-		m := store.Media{Season: tc.season, Episode: tc.episode, EpisodeEnd: tc.end}
-		if got := episodeLabel(m); got != tc.want {
-			t.Errorf("episodeLabel(S%dE%d, end %d) = %q, want %q", tc.season, tc.episode, tc.end, got, tc.want)
+		media := store.Media{Season: testCase.season, Episode: testCase.episode, EpisodeEnd: testCase.end}
+		if got := episodeLabel(media); got != testCase.want {
+			t.Errorf("episodeLabel(S%dE%d, end %d) = %q, want %q", testCase.season, testCase.episode, testCase.end, got, testCase.want)
 		}
 	}
-	m := store.Media{Title: "Encounter at Farpoint", CollectionName: "TNG", Season: 1, Episode: 1, EpisodeEnd: 2}
-	if got := displayTitle(m); got != "TNG · S1E1–2 · Encounter at Farpoint" {
+	media := store.Media{Title: "Encounter at Farpoint", CollectionName: "TNG", Season: 1, Episode: 1, EpisodeEnd: 2}
+	if got := displayTitle(media); got != "TNG · S1E1–2 · Encounter at Farpoint" {
 		t.Errorf("displayTitle = %q", got)
 	}
 }
 
 func TestFormatting(t *testing.T) {
-	for _, tc := range []struct {
+	for _, testCase := range []struct {
 		got, want string
 	}{
 		{duration(8), "8 s"}, {duration(2532), "42 min"}, {duration(3600), "1 h"}, {duration(3900), "1 h 5 min"},
@@ -117,8 +117,8 @@ func TestFormatting(t *testing.T) {
 		{seasonSummary(store.Collection{Year: "1987"}, []Season{{Number: 0}, {Number: 1}, {Number: 2}}), "2 Seasons, 1987"},
 		{seasonSummary(store.Collection{}, []Season{{Number: 0}}), "Specials"},
 	} {
-		if tc.got != tc.want {
-			t.Errorf("got %q, want %q", tc.got, tc.want)
+		if testCase.got != testCase.want {
+			t.Errorf("got %q, want %q", testCase.got, testCase.want)
 		}
 	}
 }

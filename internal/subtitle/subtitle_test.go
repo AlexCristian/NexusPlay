@@ -8,8 +8,8 @@ import (
 )
 
 func TestParseSRT(t *testing.T) {
-	in := "\xef\xbb\xbf1\r\n00:00:01,000 --> 00:00:04,250\r\nHello there!\r\n\r\n2\r\n00:01:05,5 --> 00:01:08,500\r\nTwo\r\nlines\r\n"
-	got, err := Parse([]byte(in))
+	input := "\xef\xbb\xbf1\r\n00:00:01,000 --> 00:00:04,250\r\nHello there!\r\n\r\n2\r\n00:01:05,5 --> 00:01:08,500\r\nTwo\r\nlines\r\n"
+	got, err := Parse([]byte(input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func TestParseSRT(t *testing.T) {
 }
 
 func TestParseVTT(t *testing.T) {
-	in := `WEBVTT - with a title
+	input := `WEBVTT - with a title
 
 NOTE this is a comment
 spanning two lines
@@ -38,7 +38,7 @@ First
 01:00:00.000 --> 01:00:01.500
 Last
 `
-	got, err := Parse([]byte(in))
+	got, err := Parse([]byte(input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,8 +52,8 @@ Last
 }
 
 func TestParseLatin1(t *testing.T) {
-	in := []byte("1\n00:00:01,000 --> 00:00:02,000\nCaf\xe9\n")
-	got, err := Parse(in)
+	input := []byte("1\n00:00:01,000 --> 00:00:02,000\nCaf\xe9\n")
+	got, err := Parse(input)
 	if err != nil {
 		t.Fatal(err)
 	}

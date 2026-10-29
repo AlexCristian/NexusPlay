@@ -20,33 +20,33 @@ func (store fakeStore) PosterNames(context.Context) (collections.Set[string], er
 }
 
 func TestSweepRemovesOnlyOldUnusedFiles(t *testing.T) {
-	dir := t.TempDir()
+	directory := t.TempDir()
 	old := time.Now().Add(-2 * time.Hour)
 	write := func(name string, mod time.Time) {
-		p := filepath.Join(dir, name)
-		if err := os.WriteFile(p, []byte("img"), 0o644); err != nil {
+		path := filepath.Join(directory, name)
+		if err := os.WriteFile(path, []byte("img"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		os.Chtimes(p, mod, mod)
+		os.Chtimes(path, mod, mod)
 	}
 	write("used.jpg", old)
 	write("unused.jpg", old)
 	write("new-upload.png", time.Now()) // not saved to a row yet
 	write(".poster-123", old)           // an interrupted download
-	os.Mkdir(filepath.Join(dir, "sub"), 0o755)
+	os.Mkdir(filepath.Join(directory, "sub"), 0o755)
 
-	s := NewSweeper(fakeStore{names: collections.NewSet("used.jpg")}, Config{Directory: dir}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	n, err := s.Sweep(context.Background())
+	sweeper := NewSweeper(fakeStore{names: collections.NewSet("used.jpg")}, Config{Directory: directory}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	removed, err := sweeper.Sweep(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	var left []string
-	entries, _ := os.ReadDir(dir)
-	for _, e := range entries {
-		left = append(left, e.Name())
+	entries, _ := os.ReadDir(directory)
+	for _, entry := range entries {
+		left = append(left, entry.Name())
 	}
 	want := []string{"new-upload.png", "sub", "used.jpg"}
-	if n != 2 || !slices.Equal(left, want) {
-		t.Errorf("removed %d, left %v; want 2 removed and %v left", n, left, want)
+	if removed != 2 || !slices.Equal(left, want) {
+		t.Errorf("removed %d, left %v; want 2 removed and %v left", removed, left, want)
 	}
 }

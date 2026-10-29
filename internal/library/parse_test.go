@@ -29,11 +29,11 @@ func TestParsePath(t *testing.T) {
 			Guess{Show: "Show", Title: "Episode 5", Season: 1, Episode: 5}},
 		{"Season 1/s01e04.mp4", Guess{Show: "Unknown show", Title: "Episode 4", Season: 1, Episode: 4}},
 	}
-	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
-			got := ParsePath(tt.path)
-			if got != tt.want {
-				t.Errorf("ParsePath(%q)\n got  %+v\n want %+v", tt.path, got, tt.want)
+	for _, testCase := range tests {
+		t.Run(testCase.path, func(t *testing.T) {
+			got := ParsePath(testCase.path)
+			if got != testCase.want {
+				t.Errorf("ParsePath(%q)\n got  %+v\n want %+v", testCase.path, got, testCase.want)
 			}
 		})
 	}
@@ -46,18 +46,18 @@ func TestMatchEpisode(t *testing.T) {
 		"s01e04":                                {season: 1, episode: 4},
 		"Cosmos S01E01E02 Standing Up":          {show: "Cosmos", title: "Standing Up", season: 1, episode: 1, end: 2},
 	} {
-		got, ok := matchEpisode(name)
-		if !ok || got != want {
-			t.Errorf("matchEpisode(%q) = %+v, %v; want %+v", name, got, ok, want)
+		got, isEpisode := matchEpisode(name)
+		if !isEpisode || got != want {
+			t.Errorf("matchEpisode(%q) = %+v, %v; want %+v", name, got, isEpisode, want)
 		}
 	}
-	if _, ok := matchEpisode("The Matrix (1999)"); ok {
+	if _, isEpisode := matchEpisode("The Matrix (1999)"); isEpisode {
 		t.Error("a film matched as an episode")
 	}
 }
 
-func TestShowFromDirs(t *testing.T) {
-	for dir, want := range map[string]struct {
+func TestShowFromDirectories(t *testing.T) {
+	for directory, want := range map[string]struct {
 		show   string
 		season int
 	}{
@@ -68,9 +68,9 @@ func TestShowFromDirs(t *testing.T) {
 		"TV/The.Expanse/Specials/":     {"Specials", 0}, // not a season folder
 		"Shows/House of Cards (2013)/": {"House of Cards (2013)", 0},
 	} {
-		show, season := showFromDirectories(dir)
+		show, season := showFromDirectories(directory)
 		if show != want.show || season != want.season {
-			t.Errorf("showFromDirs(%q) = %q, %d; want %q, %d", dir, show, season, want.show, want.season)
+			t.Errorf("showFromDirs(%q) = %q, %d; want %q, %d", directory, show, season, want.show, want.season)
 		}
 	}
 }

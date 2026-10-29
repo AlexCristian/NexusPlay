@@ -49,7 +49,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	listener, err := net.Listen("tcp", configuration.Addr)
+	listener, err := net.Listen("tcp", configuration.Address)
 	if err != nil {
 		application.Close()
 		return err
@@ -60,15 +60,15 @@ func run() error {
 
 // healthcheck lets a minimal container check itself without curl.
 func healthcheck() int {
-	addr := os.Getenv("NEXUSPLAY_ADDR")
-	if addr == "" {
-		addr = config.Defaults().Addr
+	address := os.Getenv("NEXUSPLAY_ADDR")
+	if address == "" {
+		address = config.Defaults().Address
 	}
-	if addr[0] == ':' {
-		addr = "127.0.0.1" + addr
+	if address[0] == ':' {
+		address = "127.0.0.1" + address
 	}
 	httpClient := &http.Client{Timeout: 3 * time.Second}
-	response, err := httpClient.Get("http://" + addr + "/healthz")
+	response, err := httpClient.Get("http://" + address + "/healthz")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

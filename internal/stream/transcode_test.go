@@ -16,7 +16,7 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/media"
 )
 
-func TestFFmpegArgs(t *testing.T) {
+func TestFFmpegArguments(t *testing.T) {
 	remux := ffmpegArguments("in.mkv", "/out", media.Format{VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p"})
 	if !slices.Contains(remux, "copy") || slices.Contains(remux, "libx264") {
 		t.Errorf("h264/aac should be copied, got %v", remux)
@@ -43,115 +43,115 @@ type fakeStarter struct {
 
 func newFakeStarter() *fakeStarter { return &fakeStarter{release: make(chan struct{})} }
 
-func (f *fakeStarter) Start(ctx context.Context, args []string) (Process, error) {
-	f.starts.Add(1)
-	playlist := args[len(args)-1]
-	dir := filepath.Dir(playlist)
-	os.WriteFile(filepath.Join(dir, "seg00000.ts"), []byte("segment"), 0o644)
+func (fakeStarter *fakeStarter) Start(ctx context.Context, arguments []string) (Process, error) {
+	fakeStarter.starts.Add(1)
+	playlist := arguments[len(arguments)-1]
+	directory := filepath.Dir(playlist)
+	os.WriteFile(filepath.Join(directory, "seg00000.ts"), []byte("segment"), 0o644)
 	os.WriteFile(playlist, []byte("#EXTM3U\n#EXTINF:6,\nseg00000.ts\n"), 0o644)
-	return &fakeProcess{ctx: ctx, f: f}, nil
+	return &fakeProcess{ctx: ctx, fakeStarter: fakeStarter}, nil
 }
 
 type fakeProcess struct {
-	ctx context.Context
-	f   *fakeStarter
+	ctx         context.Context
+	fakeStarter *fakeStarter
 }
 
-func (p *fakeProcess) Wait() error {
+func (fakeProcess *fakeProcess) Wait() error {
 	select {
-	case <-p.ctx.Done():
-		return p.ctx.Err()
-	case <-p.f.release:
-		return p.f.failWith
+	case <-fakeProcess.ctx.Done():
+		return fakeProcess.ctx.Err()
+	case <-fakeProcess.fakeStarter.release:
+		return fakeProcess.fakeStarter.failWith
 	}
 }
 
-func newTestManager(t *testing.T, f *fakeStarter, max int) *Manager {
+func newTestManager(t *testing.T, fakeStarter *fakeStarter, max int) *Manager {
 	t.Helper()
-	m, err := NewManager(f, Config{Directory: filepath.Join(t.TempDir(), "transcode"), Max: max},
+	manager, err := NewManager(fakeStarter, Config{Directory: filepath.Join(t.TempDir(), "transcode"), Max: max},
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return m
+	return manager
 }
 
 var h264 = media.Format{Path: "a.mkv", VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p"}
 
 func TestPlaylistReusesARunningTranscode(t *testing.T) {
-	f := newFakeStarter()
-	m := newTestManager(t, f, 2)
-	var wg sync.WaitGroup
+	fakeStarter := newFakeStarter()
+	manager := newTestManager(t, fakeStarter, 2)
+	var waitGroup sync.WaitGroup
 	for i := 0; i < 5; i++ {
-		wg.Go(func() {
-			if _, err := m.Playlist(context.Background(), 1, "a.mkv", h264); err != nil {
+		waitGroup.Go(func() {
+			if _, err := manager.Playlist(context.Background(), 1, "a.mkv", h264); err != nil {
 				t.Error(err)
 			}
 		})
 	}
-	wg.Wait()
-	if n := f.starts.Load(); n != 1 {
-		t.Errorf("%d ffmpeg processes for one file, want 1", n)
+	waitGroup.Wait()
+	if starts := fakeStarter.starts.Load(); starts != 1 {
+		t.Errorf("%d ffmpeg processes for one file, want 1", starts)
 	}
-	file, err := m.Segment(context.Background(), 1, "seg00000.ts")
+	file, err := manager.Segment(context.Background(), 1, "seg00000.ts")
 	if err != nil || filepath.Base(file) != "seg00000.ts" {
 		t.Errorf("Segment = %q, %v", file, err)
 	}
 	for _, bad := range []string{"../../x", "index.m3u8", "seg1.ts", ".ts"} {
-		if _, err := m.Segment(context.Background(), 1, bad); !errors.Is(err, ErrNoSegment) {
+		if _, err := manager.Segment(context.Background(), 1, bad); !errors.Is(err, ErrNoSegment) {
 			t.Errorf("Segment(%q) = %v, want ErrNoSegment", bad, err)
 		}
 	}
 }
 
 func TestTouchUnknownJob(t *testing.T) {
-	m := newTestManager(t, newFakeStarter(), 1)
-	if dir, ok := m.Touch(42); ok || dir != "" {
-		t.Errorf("Touch on no transcode = %q, %v", dir, ok)
+	manager := newTestManager(t, newFakeStarter(), 1)
+	if directory, found := manager.Touch(42); found || directory != "" {
+		t.Errorf("Touch on no transcode = %q, %v", directory, found)
 	}
-	if _, err := m.Segment(context.Background(), 42, "seg00000.ts"); !errors.Is(err, ErrNoSegment) {
+	if _, err := manager.Segment(context.Background(), 42, "seg00000.ts"); !errors.Is(err, ErrNoSegment) {
 		t.Errorf("Segment on no transcode = %v", err)
 	}
 }
 
 func TestStartWhenFullIsBusy(t *testing.T) {
-	f := newFakeStarter()
-	m := newTestManager(t, f, 1)
-	if _, err := m.Playlist(context.Background(), 1, "a.mkv", h264); err != nil {
+	fakeStarter := newFakeStarter()
+	manager := newTestManager(t, fakeStarter, 1)
+	if _, err := manager.Playlist(context.Background(), 1, "a.mkv", h264); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Playlist(context.Background(), 2, "b.mkv", h264); !errors.Is(err, ErrBusy) {
+	if _, err := manager.Playlist(context.Background(), 2, "b.mkv", h264); !errors.Is(err, ErrBusy) {
 		t.Errorf("second file at the limit: %v, want ErrBusy", err)
 	}
-	close(f.release) // the first one finishes: finished jobs do not count
+	close(fakeStarter.release) // the first one finishes: finished jobs do not count
 	time.Sleep(20 * time.Millisecond)
-	if _, err := m.Playlist(context.Background(), 2, "b.mkv", h264); err != nil {
+	if _, err := manager.Playlist(context.Background(), 2, "b.mkv", h264); err != nil {
 		t.Errorf("after the first finished: %v", err)
 	}
 }
 
 // A failed transcode is retried by the next request, in a fresh folder.
 func TestFailedTranscodeIsRetried(t *testing.T) {
-	f := newFakeStarter()
-	f.failWith = errors.New("ffmpeg: exit status 1: broken file")
-	close(f.release)
-	m := newTestManager(t, f, 1)
-	m.Playlist(context.Background(), 1, "a.mkv", h264) // fails or races to the playlist; either is fine
+	fakeStarter := newFakeStarter()
+	fakeStarter.failWith = errors.New("ffmpeg: exit status 1: broken file")
+	close(fakeStarter.release)
+	manager := newTestManager(t, fakeStarter, 1)
+	manager.Playlist(context.Background(), 1, "a.mkv", h264) // fails or races to the playlist; either is fine
 	time.Sleep(20 * time.Millisecond)
-	m.Playlist(context.Background(), 1, "a.mkv", h264)
-	if n := f.starts.Load(); n != 2 {
-		t.Errorf("%d starts, want a retry after the failure", n)
+	manager.Playlist(context.Background(), 1, "a.mkv", h264)
+	if starts := fakeStarter.starts.Load(); starts != 2 {
+		t.Errorf("%d starts, want a retry after the failure", starts)
 	}
 }
 
 // Evicting an old transcode must not delete the folder of a newer one for
 // the same media (each job has its own folder).
 func TestEvictionKeepsANewerJobsFolder(t *testing.T) {
-	f := newFakeStarter()
-	m := newTestManager(t, f, 2)
-	first, _ := m.Playlist(context.Background(), 1, "a.mkv", h264)
-	m.sweep(time.Now().Add(time.Hour)) // idle: evicted, removal in progress
-	second, err := m.Playlist(context.Background(), 1, "a.mkv", h264)
+	fakeStarter := newFakeStarter()
+	manager := newTestManager(t, fakeStarter, 2)
+	first, _ := manager.Playlist(context.Background(), 1, "a.mkv", h264)
+	manager.sweep(time.Now().Add(time.Hour)) // idle: evicted, removal in progress
+	second, err := manager.Playlist(context.Background(), 1, "a.mkv", h264)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,13 +169,13 @@ func TestEvictionKeepsANewerJobsFolder(t *testing.T) {
 
 // Shutdown stops every ffmpeg, waits for it and removes all output.
 func TestRunStopsAndCleansUpOnShutdown(t *testing.T) {
-	f := newFakeStarter()
-	m := newTestManager(t, f, 2)
+	fakeStarter := newFakeStarter()
+	manager := newTestManager(t, fakeStarter, 2)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- m.Run(ctx) }()
-	m.Playlist(context.Background(), 1, "a.mkv", h264)
-	m.Playlist(context.Background(), 2, "b.mkv", h264)
+	go func() { done <- manager.Run(ctx) }()
+	manager.Playlist(context.Background(), 1, "a.mkv", h264)
+	manager.Playlist(context.Background(), 2, "b.mkv", h264)
 	cancel()
 	select {
 	case err := <-done:
@@ -185,7 +185,7 @@ func TestRunStopsAndCleansUpOnShutdown(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Run did not return after cancel")
 	}
-	entries, _ := os.ReadDir(m.config.Directory)
+	entries, _ := os.ReadDir(manager.config.Directory)
 	if len(entries) != 0 {
 		t.Errorf("output left after shutdown: %v", entries)
 	}

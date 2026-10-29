@@ -256,7 +256,7 @@ func (scanner *Scanner) walk() (tree, error) {
 			return nil
 		}
 		relativePath = filepath.ToSlash(relativePath)
-		switch ext := strings.ToLower(path.Ext(relativePath)); {
+		switch extension := strings.ToLower(path.Ext(relativePath)); {
 		case media.IsVideo(relativePath):
 			info, err := entry.Info()
 			if err != nil {
@@ -264,7 +264,7 @@ func (scanner *Scanner) walk() (tree, error) {
 				return nil
 			}
 			mediaTree.videos = append(mediaTree.videos, found{relativePath: relativePath, absolutePath: filePath, info: info})
-		case ext == ".srt" || ext == ".vtt":
+		case extension == ".srt" || extension == ".vtt":
 			mediaTree.subtitlesByDirectory[path.Dir(relativePath)] = append(mediaTree.subtitlesByDirectory[path.Dir(relativePath)], relativePath)
 		}
 		return nil
@@ -570,33 +570,33 @@ func (scanner *Scanner) importAllSidecars(ctx context.Context, tree tree, known 
 // extracted subtitles with the same naming, so they come in here too.
 func (scanner *Scanner) importSidecars(ctx context.Context, mediaID int64, videoRelativePath string, candidates []string, imported collections.Set[string]) int {
 	importedCount := 0
-	for _, sub := range candidates {
-		if imported.Contains(sub) {
+	for _, subtitlePath := range candidates {
+		if imported.Contains(subtitlePath) {
 			continue
 		}
-		language, isSidecar := SidecarLanguage(videoRelativePath, sub)
+		language, isSidecar := SidecarLanguage(videoRelativePath, subtitlePath)
 		if !isSidecar {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(scanner.config.MediaDirectory, filepath.FromSlash(sub)))
+		data, err := os.ReadFile(filepath.Join(scanner.config.MediaDirectory, filepath.FromSlash(subtitlePath)))
 		if err != nil {
-			scanner.deps.Log.Warn("could not read subtitle", "path", sub, "err", err)
+			scanner.deps.Log.Warn("could not read subtitle", "path", subtitlePath, "err", err)
 			continue
 		}
 		cues, err := subtitle.Parse(data)
 		if err != nil {
-			scanner.deps.Log.Warn("could not parse subtitle", "path", sub, "err", err)
-			imported.Add(sub) // do not retry a broken file on every scan of this run
+			scanner.deps.Log.Warn("could not parse subtitle", "path", subtitlePath, "err", err)
+			imported.Add(subtitlePath) // do not retry a broken file on every scan of this run
 			continue
 		}
 		_, inserted, err := scanner.deps.Store.AddSubtitle(ctx, store.NewSubtitle{
-			MediaID: mediaID, Language: language, Label: subtitle.LanguageName(language), Source: sub, Cues: cues,
+			MediaID: mediaID, Language: language, Label: subtitle.LanguageName(language), Source: subtitlePath, Cues: cues,
 		})
 		if err != nil {
-			scanner.deps.Log.Warn("could not save subtitle", "path", sub, "err", err)
+			scanner.deps.Log.Warn("could not save subtitle", "path", subtitlePath, "err", err)
 			continue
 		}
-		imported.Add(sub)
+		imported.Add(subtitlePath)
 		if inserted {
 			importedCount++
 		}

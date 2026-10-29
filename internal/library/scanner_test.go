@@ -34,13 +34,13 @@ func TestScan(t *testing.T) {
 		t.Skip("ffmpeg/ffprobe not installed")
 	}
 	ctx := context.Background()
-	dir := t.TempDir()
-	media := filepath.Join(dir, "media")
-	st, err := store.Open(ctx, filepath.Join(dir, "db"))
+	directory := t.TempDir()
+	media := filepath.Join(directory, "media")
+	database, err := store.Open(ctx, filepath.Join(directory, "db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer database.Close()
 
 	makeVideo(t, filepath.Join(media, "Movies", "Alien (1979).mp4"))
 	makeVideo(t, filepath.Join(media, "Cosmos", "Season 1", "Cosmos.S01E02.mp4"))
@@ -52,47 +52,47 @@ func TestScan(t *testing.T) {
 	makeVideo(t, fresh)
 	os.Chtimes(fresh, time.Now(), time.Now())
 
-	sc := NewScanner(Deps{Store: st, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
-	res, err := sc.Scan(ctx)
+	scanner := NewScanner(Deps{Store: database, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
+	result, err := scanner.Scan(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Added != 2 || res.Subtitles != 1 || res.Waiting != 1 {
-		t.Fatalf("first scan = %+v, want 2 added, 1 subtitle, 1 waiting", res)
+	if result.Added != 2 || result.Subtitles != 1 || result.Waiting != 1 {
+		t.Fatalf("first scan = %+v, want 2 added, 1 subtitle, 1 waiting", result)
 	}
-	pending, _ := st.PendingMedia(ctx)
+	pending, _ := database.PendingMedia(ctx)
 	byPath := map[string]store.Media{}
-	for _, m := range pending {
-		byPath[m.Path] = m
+	for _, media := range pending {
+		byPath[media.Path] = media
 	}
 	alien := byPath["Movies/Alien (1979).mp4"]
 	if alien.Title != "Alien" || alien.Year != "1979" || alien.VideoCodec != "h264" || alien.Duration < 0.5 {
 		t.Errorf("movie = %+v", alien)
 	}
-	ep := byPath["Cosmos/Season 1/Cosmos.S01E02.mp4"]
-	if ep.Season != 1 || ep.Episode != 2 {
-		t.Errorf("episode = %+v", ep)
+	mediaItem := byPath["Cosmos/Season 1/Cosmos.S01E02.mp4"]
+	if mediaItem.Season != 1 || mediaItem.Episode != 2 {
+		t.Errorf("episode = %+v", mediaItem)
 	}
-	subs, _ := st.Subtitles(ctx, alien.ID)
+	subs, _ := database.Subtitles(ctx, alien.ID)
 	if len(subs) != 1 || subs[0].Language != "ro" || subs[0].Label != "Română" {
 		t.Errorf("sidecar subtitles = %+v", subs)
 	}
 
 	// A second scan changes nothing.
-	if res, _ := sc.Scan(ctx); res.Added+res.Removed+res.Subtitles != 0 {
-		t.Errorf("rescan = %+v, want no changes", res)
+	if result, _ := scanner.Scan(ctx); result.Added+result.Removed+result.Subtitles != 0 {
+		t.Errorf("rescan = %+v, want no changes", result)
 	}
 
 	// Deleted files are removed from the library.
 	os.Remove(filepath.Join(media, "Cosmos", "Season 1", "Cosmos.S01E02.mp4"))
-	if res, _ := sc.Scan(ctx); res.Removed != 1 {
-		t.Errorf("after deleting a file: %+v, want 1 removed", res)
+	if result, _ := scanner.Scan(ctx); result.Removed != 1 {
+		t.Errorf("after deleting a file: %+v, want 1 removed", result)
 	}
 
 	// An empty folder (an unmounted drive) must not wipe the library.
 	os.RemoveAll(filepath.Join(media, "Movies"))
-	if res, _ := sc.Scan(ctx); res.Removed != 0 {
-		t.Errorf("empty media folder removed %d items", res.Removed)
+	if result, _ := scanner.Scan(ctx); result.Removed != 0 {
+		t.Errorf("empty media folder removed %d items", result.Removed)
 	}
 }
 
@@ -106,18 +106,18 @@ func TestScanKeepsMediaInUnreadableFolders(t *testing.T) {
 		t.Skip("root ignores file permissions")
 	}
 	ctx := context.Background()
-	dir := t.TempDir()
-	media := filepath.Join(dir, "media")
-	st, err := store.Open(ctx, filepath.Join(dir, "db"))
+	directory := t.TempDir()
+	media := filepath.Join(directory, "media")
+	database, err := store.Open(ctx, filepath.Join(directory, "db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer database.Close()
 	makeVideo(t, filepath.Join(media, "Movies", "Alien (1979).mp4"))
 	makeVideo(t, filepath.Join(media, "Share", "Cosmos.S01E01.mp4"))
-	sc := NewScanner(Deps{Store: st, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
-	if res, err := sc.Scan(ctx); err != nil || res.Added != 2 {
-		t.Fatalf("first scan = %+v, %v", res, err)
+	scanner := NewScanner(Deps{Store: database, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
+	if result, err := scanner.Scan(ctx); err != nil || result.Added != 2 {
+		t.Fatalf("first scan = %+v, %v", result, err)
 	}
 
 	share := filepath.Join(media, "Share")
@@ -125,14 +125,14 @@ func TestScanKeepsMediaInUnreadableFolders(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Chmod(share, 0o755) })
-	res, err := sc.Scan(ctx)
+	result, err := scanner.Scan(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Removed != 0 {
-		t.Errorf("an unreadable folder removed %d items", res.Removed)
+	if result.Removed != 0 {
+		t.Errorf("an unreadable folder removed %d items", result.Removed)
 	}
-	if paths, _ := st.MediaPaths(ctx); len(paths) != 2 {
+	if paths, _ := database.MediaPaths(ctx); len(paths) != 2 {
 		t.Errorf("library = %v, want both items kept", paths)
 	}
 }

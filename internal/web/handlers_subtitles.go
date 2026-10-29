@@ -35,11 +35,11 @@ type subtitleStore interface {
 // visibleCue returns store.ErrNotFound unless the subtitle line belongs to
 // media the viewer can see.
 func (handlers *subtitleHandlers) visibleCue(ctx context.Context, viewer Viewer, cueID int64) error {
-	_, subID, err := handlers.store.CueByID(ctx, cueID)
+	_, subtitleID, err := handlers.store.CueByID(ctx, cueID)
 	if err != nil {
 		return err
 	}
-	track, err := handlers.store.SubtitleByID(ctx, subID)
+	track, err := handlers.store.SubtitleByID(ctx, subtitleID)
 	if err != nil {
 		return err
 	}
@@ -197,11 +197,11 @@ func voteOutcome(applied bool, err error, okMessage string) (reportNote, error) 
 // showVoteResult re-renders the report dialog after a proposal or vote. A
 // plain form post (scripts not loaded yet) goes back to the video instead.
 func (handlers *subtitleHandlers) showVoteResult(w http.ResponseWriter, r *http.Request, cueID int64, note reportNote) error {
-	cue, subID, err := handlers.store.CueByID(r.Context(), cueID)
+	cue, subtitleID, err := handlers.store.CueByID(r.Context(), cueID)
 	if err != nil {
 		return err
 	}
-	track, err := handlers.store.SubtitleByID(r.Context(), subID)
+	track, err := handlers.store.SubtitleByID(r.Context(), subtitleID)
 	if err != nil {
 		return err
 	}

@@ -7,29 +7,29 @@ import (
 	"time"
 )
 
-func lookup(env map[string]string) func(string) string {
-	return func(k string) string { return env[k] }
+func lookup(environment map[string]string) func(string) string {
+	return func(key string) string { return environment[key] }
 }
 
 func TestDefaults(t *testing.T) {
-	c, err := LoadFrom(lookup(nil))
+	config, err := LoadFrom(lookup(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Addr != ":8080" || !c.Convert || c.MaxConversions != 1 || c.MaxTranscodes != 2 ||
-		c.VotesRequired != 4 || c.ScanInterval != 5*time.Minute || c.RequireLogin || c.MaxAccounts != 10 {
-		t.Errorf("defaults = %+v", c)
+	if config.Address != ":8080" || !config.Convert || config.MaxConversions != 1 || config.MaxTranscodes != 2 ||
+		config.VotesRequired != 4 || config.ScanInterval != 5*time.Minute || config.RequireLogin || config.MaxAccounts != 10 {
+		t.Errorf("defaults = %+v", config)
 	}
-	if !filepath.IsAbs(c.MediaDirectory) || !filepath.IsAbs(c.DataDirectory) {
-		t.Errorf("folders must be absolute: %q %q", c.MediaDirectory, c.DataDirectory)
+	if !filepath.IsAbs(config.MediaDirectory) || !filepath.IsAbs(config.DataDirectory) {
+		t.Errorf("folders must be absolute: %q %q", config.MediaDirectory, config.DataDirectory)
 	}
-	if c.DatabasePath() != filepath.Join(c.DataDirectory, "nexusplay.db") {
-		t.Errorf("DBPath = %q", c.DatabasePath())
+	if config.DatabasePath() != filepath.Join(config.DataDirectory, "nexusplay.db") {
+		t.Errorf("DBPath = %q", config.DatabasePath())
 	}
 }
 
 func TestLoadFrom(t *testing.T) {
-	c, err := LoadFrom(lookup(map[string]string{
+	config, err := LoadFrom(lookup(map[string]string{
 		"NEXUSPLAY_ADDR":            "127.0.0.1:9000",
 		"NEXUSPLAY_MEDIA_DIR":       "/srv/media",
 		"NEXUSPLAY_SCAN_INTERVAL":   "1h",
@@ -41,9 +41,9 @@ func TestLoadFrom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Addr != "127.0.0.1:9000" || c.MediaDirectory != "/srv/media" || c.ScanInterval != time.Hour ||
-		c.MaxConversions != 3 || c.Convert || !c.RequireLogin || c.TMDBAPIKey != "abc" {
-		t.Errorf("config = %+v", c)
+	if config.Address != "127.0.0.1:9000" || config.MediaDirectory != "/srv/media" || config.ScanInterval != time.Hour ||
+		config.MaxConversions != 3 || config.Convert || !config.RequireLogin || config.TMDBAPIKey != "abc" {
+		t.Errorf("config = %+v", config)
 	}
 }
 
@@ -66,22 +66,22 @@ func TestLoadFromReportsEveryError(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	ok := Defaults()
-	if err := ok.Validate(); err != nil {
+	config := Defaults()
+	if err := config.Validate(); err != nil {
 		t.Errorf("defaults are invalid: %v", err)
 	}
 	for name, mutate := range map[string]func(*Config){
-		"no transcodes":         func(c *Config) { c.MaxTranscodes = 0 },
-		"negative conversions":  func(c *Config) { c.MaxConversions = -1 },
-		"scan every second":     func(c *Config) { c.ScanInterval = time.Second },
-		"negative scan":         func(c *Config) { c.ScanInterval = -time.Minute },
-		"no address":            func(c *Config) { c.Addr = "" },
-		"zero votes to approve": func(c *Config) { c.VotesRequired = 0 },
-		"negative accounts":     func(c *Config) { c.MaxAccounts = -1 },
+		"no transcodes":         func(config *Config) { config.MaxTranscodes = 0 },
+		"negative conversions":  func(config *Config) { config.MaxConversions = -1 },
+		"scan every second":     func(config *Config) { config.ScanInterval = time.Second },
+		"negative scan":         func(config *Config) { config.ScanInterval = -time.Minute },
+		"no address":            func(config *Config) { config.Address = "" },
+		"zero votes to approve": func(config *Config) { config.VotesRequired = 0 },
+		"negative accounts":     func(config *Config) { config.MaxAccounts = -1 },
 	} {
-		c := Defaults()
-		mutate(&c)
-		if err := c.Validate(); err == nil {
+		config := Defaults()
+		mutate(&config)
+		if err := config.Validate(); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}

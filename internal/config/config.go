@@ -12,7 +12,7 @@ import (
 // Config holds every runtime setting. Nothing is compiled in: each field has
 // a default and can be overridden with the NEXUSPLAY_* variable named beside it.
 type Config struct {
-	Addr           string        // NEXUSPLAY_ADDR
+	Address        string        // NEXUSPLAY_ADDR
 	MediaDirectory string        // NEXUSPLAY_MEDIA_DIR (made absolute)
 	DataDirectory  string        // NEXUSPLAY_DATA_DIR (made absolute)
 	ScanInterval   time.Duration // NEXUSPLAY_SCAN_INTERVAL
@@ -35,7 +35,7 @@ type Config struct {
 // Defaults returns the configuration used when no variable is set.
 func Defaults() Config {
 	return Config{
-		Addr:           ":8080",
+		Address:        ":8080",
 		MediaDirectory: "./media",
 		DataDirectory:  "./data",
 		ScanInterval:   5 * time.Minute,
@@ -89,7 +89,7 @@ type variable struct {
 // variables lists every setting read from the environment.
 func (config *Config) variables() []variable {
 	return []variable{
-		{"NEXUSPLAY_ADDR", text(&config.Addr)},
+		{"NEXUSPLAY_ADDR", text(&config.Address)},
 		{"NEXUSPLAY_MEDIA_DIR", text(&config.MediaDirectory)},
 		{"NEXUSPLAY_DATA_DIR", text(&config.DataDirectory)},
 		{"NEXUSPLAY_TMDB_API_KEY", text(&config.TMDBAPIKey)},
@@ -163,7 +163,7 @@ func (config Config) Validate() error {
 	if config.MaxAccounts < 0 {
 		errs = append(errs, fmt.Errorf("NEXUSPLAY_MAX_ACCOUNTS must be 0 (no limit) or more, not %d", config.MaxAccounts))
 	}
-	if config.Addr == "" {
+	if config.Address == "" {
 		errs = append(errs, errors.New("NEXUSPLAY_ADDR must not be empty"))
 	}
 	return errors.Join(errs...)

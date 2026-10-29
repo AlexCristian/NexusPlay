@@ -42,7 +42,7 @@ const (
 // browsers decode natively, which is broader than what NeedsConversion keeps.
 func Deliver(format Format) Delivery {
 	playable := false
-	switch ext(format.Path) {
+	switch extension(format.Path) {
 	case ".mp4", ".m4v":
 		playable = slices.Contains([]string{"h264", "av1", "vp9"}, format.VideoCodec) &&
 			slices.Contains([]string{"", "aac", "mp3", "opus", "flac"}, format.AudioCodec)
@@ -66,7 +66,7 @@ func Deliver(format Format) Delivery {
 // still converted.
 func NeedsConversion(format Format) bool {
 	switch {
-	case ext(format.Path) != ".mp4" && ext(format.Path) != ".m4v":
+	case extension(format.Path) != ".mp4" && extension(format.Path) != ".m4v":
 		return true
 	case format.VideoCodec != "h264" || !BrowserSafeH264(format.PixFmt):
 		return true
@@ -82,4 +82,4 @@ func BrowserSafeH264(pixFmt string) bool {
 	return pixFmt == "" || pixFmt == "yuv420p" || pixFmt == "yuvj420p"
 }
 
-func ext(name string) string { return strings.ToLower(path.Ext(name)) }
+func extension(name string) string { return strings.ToLower(path.Ext(name)) }
