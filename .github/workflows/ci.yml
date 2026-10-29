@@ -27,6 +27,12 @@ jobs:
           git diff --exit-code -- '*_templ.go'
       - name: Vet
         run: go vet ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.15.0
+      - name: House style
+        run: go run ./tools/housestyle/cmd/housestyle ./...
       - name: Test
         run: go test -race ./...
 

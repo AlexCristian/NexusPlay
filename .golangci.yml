@@ -1,0 +1,52 @@
+# golangci-lint configuration (v2 format). CI pins the golangci-lint
+# version in .github/workflows/ci.yml; run the same version locally:
+#
+#   golangci-lint run ./...
+#
+# The house style rules no published linter covers are checked by
+# tools/housestyle instead (see CLAUDE.md).
+version: "2"
+
+run:
+  # Lint the browser and ffmpeg tests in integration/ too.
+  build-tags:
+    - integration
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - godot
+    - gosec
+    - govet
+    - misspell
+    - nolintlint
+    - revive
+    - staticcheck
+  settings:
+    staticcheck:
+      # The default set, written out. ST1020, ST1021 and ST1022 want a doc
+      # comment to start with the plain name ("Client talks to…"); the house
+      # style starts it with the name in brackets ("[Client] talks to…").
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+    revive:
+      # Only receiver naming. The "exported" rule is off: it demands the
+      # plain-name comment start that the house style replaces.
+      rules:
+        - name: receiver-naming
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    # Generated files (with a "Code generated … DO NOT EDIT." header) are
+    # skipped; templ's output is listed too, in case its header changes.
+    generated: lax
+    paths:
+      - _templ\.go$
