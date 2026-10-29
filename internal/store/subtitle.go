@@ -1,14 +1,16 @@
 package store
 
-import (
-	_ "modernc.org/sqlite"
-)
-
-// Subtitle is one subtitle track for a media item.
+// [Subtitle] is one subtitle track of a media item.
 type Subtitle struct {
-	ID       int64
-	MediaID  int64
-	Language string // BCP 47 code, e.g. "en"
-	Label    string // shown in the player, e.g. "English"
-	Source   string // sidecar file it was imported from, if any
+	// [ID] identifies the track.
+	ID int64
+	// [MediaID] is the media item the track belongs to.
+	MediaID int64
+	// [Language] is the track's language code, such as "en".
+	Language string
+	// [Label] is the name shown in the player, such as "English".
+	Label string
+	// [Source] is the sidecar file the track was imported from, relative to the
+	// media folder, or "" for an upload.
+	Source string
 }

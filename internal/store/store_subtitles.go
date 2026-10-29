@@ -6,12 +6,22 @@ import (
 	"strings"
 
 	"github.com/AlexCristian/NexusPlay/internal/collections"
-	_ "modernc.org/sqlite"
 )
 
-// AddSubtitle stores a track and its cues. A track with a Source is imported
-// only once per media item: adding it again returns inserted == false and
-// changes nothing.
+// [AddSubtitle] stores a subtitle track and its lines in one transaction. A
+// track with a [NewSubtitle.Source] is stored only once per media item:
+// adding it again changes nothing.
+//
+// Parameters:
+//   - [ctx]: cancels the inserts.
+//   - [subtitle]: the track and its lines.
+//
+// Returns:
+//   - [int64] ([id]): the new track's ID, or 0 if it was not added.
+//   - [bool] ([inserted]): [true] if the track was added, [false] if a track
+//     from the same source already existed.
+//   - [error] ([err]): [nil] on success, or the database error, such as for
+//     a media item that does not exist.
 func (store *Store) AddSubtitle(ctx context.Context, subtitle NewSubtitle) (id int64, inserted bool, err error) {
 	err = store.withTransaction(ctx, func(transaction *sql.Tx) error {
 		result, err := transaction.ExecContext(ctx,
@@ -48,7 +58,16 @@ func (store *Store) AddSubtitle(ctx context.Context, subtitle NewSubtitle) (id i
 	return id, inserted, nil
 }
 
-// SubtitleSources returns the sidecar files that have already been imported.
+// [SubtitleSources] lists the sidecar files whose tracks have been imported,
+// so the scanner does not import them again.
+//
+// Parameters:
+//   - [ctx]: cancels the query.
+//
+// Returns:
+//   - [collections.Set[string]]: the sidecar paths, relative to the media
+//     folder.
+//   - [error]: [nil] on success, or the database error.
 func (store *Store) SubtitleSources(ctx context.Context) (collections.Set[string], error) {
 	sources, err := queryAll(ctx, store.database, scanString, `SELECT source FROM subtitles WHERE source <> ''`)
 	if err != nil {
@@ -57,19 +76,46 @@ func (store *Store) SubtitleSources(ctx context.Context) (collections.Set[string
 	return collections.NewSet(sources...), nil
 }
 
-// UpdateSubtitleLabel renames a track.
+// [UpdateSubtitleLabel] changes a track's language and the name shown in the
+// player.
+//
+// Parameters:
+//   - [ctx]: cancels the update.
+//   - [id]: the track.
+//   - [language]: the new language code, such as "en".
+//   - [label]: the new name, such as "English (SDH)".
+//
+// Returns:
+//   - [error]: [nil] on success, including when the track does not exist, or
+//     the database error.
 func (store *Store) UpdateSubtitleLabel(ctx context.Context, id int64, language, label string) error {
 	_, err := store.database.ExecContext(ctx, `UPDATE subtitles SET language = ?, label = ? WHERE id = ?`, language, label, id)
 	return err
 }
 
-// DeleteSubtitle removes a track and its cues.
+// [DeleteSubtitle] removes a track with its lines, proposals and votes.
+// Deleting one that does not exist is not an error.
+//
+// Parameters:
+//   - [ctx]: cancels the delete.
+//   - [id]: the track.
+//
+// Returns:
+//   - [error]: [nil] on success, or the database error.
 func (store *Store) DeleteSubtitle(ctx context.Context, id int64) error {
 	_, err := store.database.ExecContext(ctx, `DELETE FROM subtitles WHERE id = ?`, id)
 	return err
 }
 
-// Subtitles lists the tracks for a media item.
+// [Subtitles] lists a media item's tracks, by label.
+//
+// Parameters:
+//   - [ctx]: cancels the query.
+//   - [mediaID]: the media item.
+//
+// Returns:
+//   - [[]Subtitle]: the tracks, or [nil] if there are none.
+//   - [error]: [nil] on success, or the database error.
 func (store *Store) Subtitles(ctx context.Context, mediaID int64) ([]Subtitle, error) {
 	return queryAll(ctx, store.database, func(row rowScanner) (Subtitle, error) {
 		var subtitle Subtitle
@@ -78,7 +124,16 @@ func (store *Store) Subtitles(ctx context.Context, mediaID int64) ([]Subtitle, e
 	}, `SELECT id, media_id, language, label, source FROM subtitles WHERE media_id = ? ORDER BY label`, mediaID)
 }
 
-// SubtitleByID returns one track, or ErrNotFound.
+// [SubtitleByID] loads one track.
+//
+// Parameters:
+//   - [ctx]: cancels the query.
+//   - [id]: the track.
+//
+// Returns:
+//   - [Subtitle]: the track.
+//   - [error]: [nil] on success, [ErrNotFound] if it does not exist, or
+//     another database error.
 func (store *Store) SubtitleByID(ctx context.Context, id int64) (Subtitle, error) {
 	var subtitle Subtitle
 	err := store.database.QueryRowContext(ctx,
@@ -87,7 +142,16 @@ func (store *Store) SubtitleByID(ctx context.Context, id int64) (Subtitle, error
 	return subtitle, notFound(err)
 }
 
-// Cues returns a track's cues in order.
+// [Cues] lists a track's lines in order.
+//
+// Parameters:
+//   - [ctx]: cancels the query.
+//   - [subtitleID]: the track.
+//
+// Returns:
+//   - [[]Cue]: the lines with their current text, or [nil] if there are
+//     none.
+//   - [error]: [nil] on success, or the database error.
 func (store *Store) Cues(ctx context.Context, subtitleID int64) ([]Cue, error) {
 	return queryAll(ctx, store.database, func(row rowScanner) (Cue, error) {
 		var cue Cue
@@ -96,8 +160,19 @@ func (store *Store) Cues(ctx context.Context, subtitleID int64) ([]Cue, error) {
 	}, `SELECT id, start_ms, end_ms, text FROM subtitle_cues WHERE subtitle_id = ? ORDER BY idx`, subtitleID)
 }
 
-// CueAt returns the cue showing at a playback time, or the closest one
-// before it. It returns ErrNotFound when no cue starts at or before ms.
+// [CueAt] finds the line showing at a playback time, or else the last one
+// that started before it.
+//
+// Parameters:
+//   - [ctx]: cancels the query.
+//   - [subtitleID]: the track.
+//   - [milliseconds]: the playback time, in milliseconds from the start.
+//
+// Returns:
+//   - [Cue]: the line that started most recently at or before
+//     [milliseconds].
+//   - [error]: [nil] on success, [ErrNotFound] if no line starts at or
+//     before [milliseconds], or another database error.
 func (store *Store) CueAt(ctx context.Context, subtitleID, milliseconds int64) (Cue, error) {
 	var cue Cue
 	err := store.database.QueryRowContext(ctx, `
@@ -107,7 +182,17 @@ func (store *Store) CueAt(ctx context.Context, subtitleID, milliseconds int64) (
 	return cue, notFound(err)
 }
 
-// CueByID returns one cue and the ID of its track, or ErrNotFound.
+// [CueByID] loads one line and tells which track it belongs to.
+//
+// Parameters:
+//   - [ctx]: cancels the query.
+//   - [id]: the line.
+//
+// Returns:
+//   - [Cue]: the line.
+//   - [int64]: the ID of its track.
+//   - [error]: [nil] on success, [ErrNotFound] if it does not exist, or
+//     another database error.
 func (store *Store) CueByID(ctx context.Context, id int64) (Cue, int64, error) {
 	var cue Cue
 	var subtitleID int64
@@ -117,16 +202,33 @@ func (store *Store) CueByID(ctx context.Context, id int64) (Cue, int64, error) {
 	return cue, subtitleID, notFound(err)
 }
 
-// CueForChange returns the ID of the cue a proposal targets, or ErrNotFound
-// when the proposal no longer exists (applying a correction deletes every
-// proposal for its line).
+// [CueForChange] finds the line a proposal corrects.
+//
+// Parameters:
+//   - [ctx]: cancels the query.
+//   - [changeID]: the proposal.
+//
+// Returns:
+//   - [int64]: the line's ID.
+//   - [error]: [nil] on success; [ErrNotFound] when the proposal no longer
+//     exists, since applying a correction deletes every proposal for its
+//     line; or another database error.
 func (store *Store) CueForChange(ctx context.Context, changeID int64) (int64, error) {
 	var cueID int64
 	err := store.database.QueryRowContext(ctx, `SELECT cue_id FROM subtitle_changes WHERE id = ?`, changeID).Scan(&cueID)
 	return cueID, notFound(err)
 }
 
-// Changes lists the open proposals for a cue, most votes first.
+// [Changes] lists the open proposals for a line, most votes first.
+//
+// Parameters:
+//   - [ctx]: cancels the query.
+//   - [cueID]: the line.
+//   - [userID]: the viewer, for [Change.VotedByMe], or 0 for anonymous.
+//
+// Returns:
+//   - [[]Change]: the proposals, or [nil] if there are none.
+//   - [error]: [nil] on success, or the database error.
 func (store *Store) Changes(ctx context.Context, cueID, userID int64) ([]Change, error) {
 	return queryAll(ctx, store.database, func(row rowScanner) (Change, error) {
 		var change Change
@@ -140,12 +242,24 @@ func (store *Store) Changes(ctx context.Context, cueID, userID int64) ([]Change,
 		WHERE ch.cue_id = ? ORDER BY 5 DESC, ch.id`, userID, cueID)
 }
 
-// ProposeChange records a correction to a cue; the proposer's vote counts.
-// It reports whether the change was applied straight away (when one vote is
-// enough). An identical proposal from someone else becomes a vote for it.
+// [ProposeChange] records a user's correction to a line, with their vote. If
+// someone already proposed the same text, the user's vote goes to that
+// proposal instead. Once a proposal has enough votes it replaces the line.
 //
-// Errors: ErrNotFound if the cue does not exist, ErrUnchanged if text is the
-// line's current text, ErrAlreadyVoted if the user already voted on this line.
+// Parameters:
+//   - [ctx]: cancels the transaction.
+//   - [cueID]: the line.
+//   - [userID]: the proposer.
+//   - [text]: the corrected text; spaces around it are trimmed.
+//   - [votesRequired]: how many votes apply a proposal.
+//
+// Returns:
+//   - [bool]: [true] if the correction was applied straight away, such as
+//     when one vote is enough; [false] otherwise.
+//   - [error]: [nil] on success; [ErrNotFound] if the line does not exist;
+//     [ErrUnchanged] if [text] is the line's current text;
+//     [ErrAlreadyVoted] if the user already voted on this line; otherwise
+//     the database error.
 func (store *Store) ProposeChange(ctx context.Context, cueID, userID int64, text string, votesRequired int) (bool, error) {
 	text = strings.TrimSpace(text)
 	var applied bool
@@ -171,19 +285,27 @@ func (store *Store) ProposeChange(ctx context.Context, cueID, userID int64, text
 			return err
 		}
 		var err error
-		applied, err = voteTx(ctx, transaction, changeID, cueID, userID, votesRequired)
+		applied, err = voteInTransaction(ctx, transaction, changeID, cueID, userID, votesRequired)
 		return err
 	})
 	return applied, err
 }
 
-// VoteChange adds a user's vote to a proposal. Each user gets one vote per
-// line. When a proposal reaches votesRequired it replaces the line and every
-// competing proposal for that line is discarded; the result reports whether
-// that happened.
+// [VoteChange] adds a user's vote to a proposal. Each user gets one vote per
+// line. When a proposal reaches [votesRequired] votes it replaces the line,
+// and every proposal for that line is deleted.
 //
-// Errors: ErrNotFound if the proposal no longer exists, ErrAlreadyVoted if
-// the user already voted on this line.
+// Parameters:
+//   - [ctx]: cancels the transaction.
+//   - [changeID]: the proposal.
+//   - [userID]: the voter.
+//   - [votesRequired]: how many votes apply a proposal.
+//
+// Returns:
+//   - [bool]: [true] if this vote applied the proposal, [false] otherwise.
+//   - [error]: [nil] on success; [ErrNotFound] if the proposal no longer
+//     exists; [ErrAlreadyVoted] if the user already voted on this line;
+//     otherwise the database error.
 func (store *Store) VoteChange(ctx context.Context, changeID, userID int64, votesRequired int) (bool, error) {
 	var applied bool
 	err := store.withTransaction(ctx, func(transaction *sql.Tx) error {
@@ -195,7 +317,7 @@ func (store *Store) VoteChange(ctx context.Context, changeID, userID int64, vote
 			return err
 		}
 		var err error
-		applied, err = voteTx(ctx, transaction, changeID, cueID, userID, votesRequired)
+		applied, err = voteInTransaction(ctx, transaction, changeID, cueID, userID, votesRequired)
 		return err
 	})
 	return applied, err

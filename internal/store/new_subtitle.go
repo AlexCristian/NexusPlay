@@ -2,14 +2,20 @@ package store
 
 import (
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
-	_ "modernc.org/sqlite"
 )
 
-// NewSubtitle is a subtitle track to store.
+// [NewSubtitle] is a subtitle track to store with [Store.AddSubtitle].
 type NewSubtitle struct {
-	MediaID  int64
-	Language string // BCP 47 code, e.g. "en"
-	Label    string // shown in the player, e.g. "English"
-	Source   string // sidecar file it came from, relative to the media folder; "" for uploads
-	Cues     []subtitle.Cue
+	// [MediaID] is the media item the track belongs to.
+	MediaID int64
+	// [Language] is the track's language code, such as "en".
+	Language string
+	// [Label] is the name shown in the player, such as "English".
+	Label string
+	// [Source] is the sidecar file it came from, relative to the media folder,
+	// or "" for an upload. A track with a source is stored only once per media
+	// item.
+	Source string
+	// [Cues] are the track's lines, in order.
+	Cues []subtitle.Cue
 }

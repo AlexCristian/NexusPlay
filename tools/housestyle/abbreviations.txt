@@ -17,6 +17,7 @@ cb callback
 cfg config
 cmd command
 cnt count
+cols columns
 conf config
 conv conversion
 ctrl controller
@@ -81,6 +82,7 @@ svc service
 temp temporary
 tmp temporary
 tmpl template
+tx transaction
 typ type
 val value
 vals values

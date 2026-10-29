@@ -89,7 +89,7 @@ func TestConcurrentWriteTransactions(t *testing.T) {
 		}
 	}
 	admins := 0
-	users, _ := queryAll(ctx, store.database, scanUser, `SELECT `+userCols+` FROM users`)
+	users, _ := queryAll(ctx, store.database, scanUser, `SELECT `+userColumns+` FROM users`)
 	for _, user := range users {
 		if user.IsAdmin {
 			admins++

@@ -1,11 +1,9 @@
 package store
 
-import (
-	_ "modernc.org/sqlite"
-)
-
-// Resume is a partly watched item for the "Previously watching" list.
+// [Resume] is a partly watched item for the "Previously watching" list.
 type Resume struct {
-	Media    Media
+	// [Media] is the item.
+	Media Media
+	// [Position] is where playback stopped, in seconds from the start.
 	Position float64
 }

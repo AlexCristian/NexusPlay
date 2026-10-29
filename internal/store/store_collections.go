@@ -3,12 +3,20 @@ package store
 import (
 	"context"
 	"database/sql"
-
-	_ "modernc.org/sqlite"
 )
 
-// CreateCollection adds a collection. It returns ErrDuplicate if the name
-// is taken, ignoring letter case.
+// [CreateCollection] adds a collection. [canonicalCategory] tidies its
+// category.
+//
+// Parameters:
+//   - [ctx]: cancels the insert.
+//   - [collection]: the new collection; its [Collection.ID] and
+//     [Collection.CreatedAt] are ignored.
+//
+// Returns:
+//   - [int64] ([id]): the new collection's ID, or 0 if [error] is not [nil].
+//   - [error] ([err]): [nil] on success; [ErrDuplicate] if the name is
+//     taken, regardless of letter case; otherwise the database error.
 func (store *Store) CreateCollection(ctx context.Context, collection Collection) (id int64, err error) {
 	err = store.withTransaction(ctx, func(transaction *sql.Tx) error {
 		if collection.Category, err = canonicalCategory(ctx, transaction, collection.Category); err != nil {
@@ -29,8 +37,18 @@ func (store *Store) CreateCollection(ctx context.Context, collection Collection)
 	return id, err
 }
 
-// UpdateCollection saves a collection's fields. It returns ErrDuplicate if
-// another collection has the name.
+// [UpdateCollection] saves a collection's editable fields. [canonicalCategory]
+// tidies its category.
+//
+// Parameters:
+//   - [ctx]: cancels the update.
+//   - [id]: the collection.
+//   - [update]: the new values.
+//
+// Returns:
+//   - [error]: [nil] on success, including when the collection does not
+//     exist; [ErrDuplicate] if another collection has the name; otherwise the
+//     database error.
 func (store *Store) UpdateCollection(ctx context.Context, id int64, update CollectionUpdate) error {
 	return store.withTransaction(ctx, func(transaction *sql.Tx) error {
 		category, err := canonicalCategory(ctx, transaction, update.Category)
@@ -47,26 +65,59 @@ func (store *Store) UpdateCollection(ctx context.Context, id int64, update Colle
 	})
 }
 
-// DeleteCollection removes a collection; its media become standalone.
+// [DeleteCollection] removes a collection. Its media are kept and become
+// standalone; its subscriptions are removed. Deleting one that does not
+// exist is not an error.
+//
+// Parameters:
+//   - [ctx]: cancels the delete.
+//   - [id]: the collection.
+//
+// Returns:
+//   - [error]: [nil] on success, or the database error.
 func (store *Store) DeleteCollection(ctx context.Context, id int64) error {
 	_, err := store.database.ExecContext(ctx, `DELETE FROM collections WHERE id = ?`, id)
 	return err
 }
 
-// CollectionByID returns one collection, or ErrNotFound.
+// [CollectionByID] loads one collection.
+//
+// Parameters:
+//   - [ctx]: cancels the query.
+//   - [id]: the collection.
+//
+// Returns:
+//   - [Collection]: the collection.
+//   - [error]: [nil] on success, [ErrNotFound] if it does not exist, or
+//     another database error.
 func (store *Store) CollectionByID(ctx context.Context, id int64) (Collection, error) {
-	collection, err := scanCollection(store.database.QueryRowContext(ctx, `SELECT `+collectionCols+` FROM collections WHERE id = ?`, id))
+	collection, err := scanCollection(store.database.QueryRowContext(ctx, `SELECT `+collectionColumns+` FROM collections WHERE id = ?`, id))
 	return collection, notFound(err)
 }
 
-// CollectionByName returns one collection by name, case-insensitively, or
-// ErrNotFound.
+// [CollectionByName] finds a collection by name, regardless of letter case.
+//
+// Parameters:
+//   - [ctx]: cancels the query.
+//   - [name]: the collection's name.
+//
+// Returns:
+//   - [Collection]: the collection.
+//   - [error]: [nil] on success, [ErrNotFound] if no collection has that
+//     name, or another database error.
 func (store *Store) CollectionByName(ctx context.Context, name string) (Collection, error) {
-	collection, err := scanCollection(store.database.QueryRowContext(ctx, `SELECT `+collectionCols+` FROM collections WHERE name = ?`, name))
+	collection, err := scanCollection(store.database.QueryRowContext(ctx, `SELECT `+collectionColumns+` FROM collections WHERE name = ?`, name))
 	return collection, notFound(err)
 }
 
-// Collections lists every collection by name.
+// [Collections] lists every collection, by name regardless of letter case.
+//
+// Parameters:
+//   - [ctx]: cancels the query.
+//
+// Returns:
+//   - [[]Collection]: the collections, or [nil] if there are none.
+//   - [error]: [nil] on success, or the database error.
 func (store *Store) Collections(ctx context.Context) ([]Collection, error) {
-	return queryAll(ctx, store.database, scanCollection, `SELECT `+collectionCols+` FROM collections ORDER BY name COLLATE NOCASE`)
+	return queryAll(ctx, store.database, scanCollection, `SELECT `+collectionColumns+` FROM collections ORDER BY name COLLATE NOCASE`)
 }
