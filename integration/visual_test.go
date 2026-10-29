@@ -41,6 +41,9 @@ const (
 // caret, video frames (hidden, keeping their layout), how much of the video
 // the seek bar shows as buffered, and fallback system
 // fonts (monospace and form controls use the bundled Open Sans instead).
+// A full-page screenshot also goes past the window, below the fixed
+// starfield, where no browser shows anything: there the page's own color
+// (the top bar's, for Safari) would show, so it is the starfield's.
 const stabilize = `(() => {
   document.querySelectorAll('style[data-stabilize]').forEach(e => e.remove()); // a previous screenshot's
   const s = document.createElement('style');
@@ -48,7 +51,8 @@ const stabilize = `(() => {
   s.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; caret-color: transparent !important; }' +
     ' video { visibility: hidden !important; }' +
     ' .path, code, input, textarea, button, select { font-family: "Open Sans", sans-serif !important; }' +
-    ' .rail { --loaded: 0% !important; }';
+    ' .rail { --loaded: 0% !important; }' +
+    ' html { background-color: #02040c !important; }';
   document.head.appendChild(s);
   // Lazy images below the fold would never load in a headless screenshot.
   document.querySelectorAll('img[loading="lazy"]').forEach(i => { i.loading = 'eager'; });

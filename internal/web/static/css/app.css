@@ -111,6 +111,21 @@ body::before {
     radial-gradient(ellipse at 85% 75%, rgba(20, 60, 140, .5), transparent 60%),
     radial-gradient(ellipse at 50% 120%, rgba(10, 30, 90, .7), transparent 70%);
   background-size: 360px 280px, 360px 280px, 360px 280px, 360px 280px, 360px 280px, 360px 280px, 360px 280px, 100% 100%, 100% 100%, 100% 100%;
+  /* Opaque, so html's color (below) never shows through. */
+  background-color: #02040c;
+}
+
+/* Safari's own bar on a Mac. Safari colors it from the sticky top bar, but
+   stops looking once the page is clicked, so after Play it kept the old
+   color. A backdrop filter (blurring nothing) makes Safari skip the top bar
+   and use the page's background color instead, which it does follow. So
+   that color is the top bar's. Phones keep reading the top bar: Safari
+   there looks again after taps (see retintBrowserBar in player.js), and
+   the page color would also tint its bottom toolbar. */
+@media (not (pointer: coarse)) {
+  html { background-color: #c21f00; }
+  html:has(.top-bar.playing) { background-color: rgb(25, 25, 25); }
+  .top-bar { -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0); }
 }
 
 /* Long words and URLs wrap instead of pushing boxes wider. Table cells

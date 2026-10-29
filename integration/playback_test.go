@@ -91,10 +91,29 @@ func TestPlaybackScreens(t *testing.T) {
 		tb.t = t
 		tb.login(s, "alex")
 		tb.navigate(fmt.Sprintf("%s/watch/%d", s.URL, s.mediaID(barsMP4)))
+		// Safari on a Mac stops reading the top bar's color once the page
+		// is clicked, so the bar opts out (a backdrop filter) and Safari
+		// uses the page's color, which follows the bar's. The starfield
+		// stays opaque over it.
+		barColors := func(when string) {
+			var c struct{ Page, Bar, Filter, Stars string }
+			tb.eval(`document.querySelectorAll('style[data-stabilize]').forEach(e => e.remove())`, nil) // a screenshot's
+			tb.eval(`({page: getComputedStyle(document.documentElement).backgroundColor,
+				bar: getComputedStyle(document.getElementById('top-bar')).backgroundColor,
+				filter: getComputedStyle(document.getElementById('top-bar')).backdropFilter,
+				stars: getComputedStyle(document.body, '::before').backgroundColor})`, &c)
+			if c.Page != c.Bar || c.Filter == "none" || c.Stars != "rgb(2, 4, 12)" {
+				t.Errorf("%s: page color %s, top bar %s, its backdrop filter %s, starfield %s; want the page in the bar's color, a filter, and an opaque starfield",
+					when, c.Page, c.Bar, c.Filter, c.Stars)
+			}
+		}
+		barColors("before playing")
 		playUntil(tb, 1.5)
 		assertClearWhilePlaying(t, tb)
+		barColors("while playing")
 		compareScreenshot(t, "playback-playing", tb.screenshotWith(playingStabilize))
 		pauseAt(tb, 3)
+		barColors("after pausing")
 		compareScreenshot(t, "playback-paused", tb.screenshotWith(pausedStabilize))
 	})
 

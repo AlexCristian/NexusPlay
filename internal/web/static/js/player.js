@@ -146,8 +146,8 @@
   // the sticky top bar, but it only looks again when a fixed or sticky
   // element appears or disappears (opening a popover, say). So after the
   // top bar changes color, a fixed element shown for a moment makes it
-  // look: otherwise a popover opened while playing left Safari's bar dark
-  // after pausing.
+  // look. That is enough on phones; on a Mac Safari stops looking once the
+  // page is clicked, and app.css has it use the page's color instead.
   function retintBrowserBar() {
     var probe = document.createElement("div");
     probe.className = "retint-probe";
