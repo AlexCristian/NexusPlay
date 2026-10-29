@@ -1,0 +1,14 @@
+# Names shorter than three letters that are allowed, each followed by the
+# only type a variable with that name may have ("*" allows any type).
+# Everything else must be spelled out as a full word.
+#
+# One name per line: the name, a space, the type as go/types writes it. Blank
+# lines and lines starting with # are skipped. Names are compared in lower
+# case, so "id" also allows "ID". This file is built into the analyzer, so a
+# change takes effect on the next build.
+err error
+ctx context.Context
+i int
+w net/http.ResponseWriter
+r *net/http.Request
+id *

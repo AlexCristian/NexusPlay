@@ -1,0 +1,62 @@
+# Abbreviations that must not appear in names, each followed by the word to
+# use instead. A name is split into words ("tempFile" is "temp" and "file"),
+# and every word is looked up here.
+#
+# One abbreviation per line: the abbreviation, a space, the full word. Blank
+# lines and lines starting with # are skipped. This file is built into the
+# analyzer, so a change takes effect on the next build.
+abs absolute
+arg argument
+args arguments
+attr attribute
+btn button
+buf buffer
+cb callback
+cfg config
+cnt count
+conf config
+ctrl controller
+cur current
+db database
+decl declaration
+desc description
+dest destination
+dir directory
+dirs directories
+dst destination
+elem element
+ep episode
+eps episodes
+expr expression
+fn function
+hdr header
+ident identifier
+idx index
+img image
+impl implementation
+lang language
+lit literal
+mgr manager
+msg message
+num number
+nums numbers
+obj object
+opt option
+opts options
+pkg package
+pos position
+prev previous
+ptr pointer
+rel relative
+req request
+res result
+resp response
+ret result
+src source
+stmt statement
+str string
+svc service
+temp temporary
+tmp temporary
+val value
+vals values
