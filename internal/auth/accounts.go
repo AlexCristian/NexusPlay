@@ -12,30 +12,45 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-// ErrInvalidCredentials means the email or the password is wrong. It never
-// says which, so the login form does not reveal who has an account.
+// [ErrInvalidCredentials] is returned by [Accounts.Login] when the e-mail or
+// the password is wrong. It never says which, so the login form does not
+// reveal who has an account.
 var ErrInvalidCredentials = errors.New("wrong e-mail or password")
 
-// ErrRegistrationClosed means the install has as many accounts as
-// NEXUSPLAY_MAX_ACCOUNTS allows.
+// [ErrRegistrationClosed] is returned by [Accounts.Register] when the install
+// already has as many accounts as NEXUSPLAY_MAX_ACCOUNTS allows.
 var ErrRegistrationClosed = errors.New("registration is closed")
 
-// Accounts holds the rules for creating accounts and logging in. It is safe
-// for concurrent use.
+// [Accounts] holds the rules for creating accounts and logging in. Create one
+// with [NewAccounts]. It is safe for concurrent use.
 type Accounts struct {
-	users       UserStore
-	maxAccounts int // 0: no limit
-	log         *slog.Logger
-	verify      func(password, hash string) (bool, error) // VerifyPassword; replaced in tests
+	// [users] stores and finds accounts.
+	users UserStore
+	// [maxAccounts] is how many accounts may exist, or 0 for no limit.
+	maxAccounts int
+	// [log] records registrations and failed hash upgrades.
+	log *slog.Logger
+	// [verify] checks a password against a hash: [VerifyPassword], replaced in
+	// tests.
+	verify func(password, hash string) (bool, error)
 
-	// dummyHash is checked against when an email is unknown, so failed logins
-	// take as long whether or not the email is registered.
+	// [dummyHash] is checked against when an e-mail is unknown, so failed logins
+	// take as long whether or not the e-mail is registered.
 	dummyHash string
 }
 
-// NewAccounts returns the account rules. At most maxAccounts accounts can
-// exist (0 means no limit). It fails only if the system's random source is
-// broken.
+// [NewAccounts] creates the account rules. Hashing the timing-equalizer
+// password makes this take about as long as one login check.
+//
+// Parameters:
+//   - [users]: stores and finds accounts; normally the [store.Store].
+//   - [maxAccounts]: how many accounts may exist, or 0 for no limit.
+//   - [log]: where registrations and failed hash upgrades are logged.
+//
+// Returns:
+//   - [*Accounts]: the account rules, or [nil] if [error] is not [nil].
+//   - [error]: [nil] on success, or an error only if the system's random
+//     source is broken.
 func NewAccounts(users UserStore, maxAccounts int, log *slog.Logger) (*Accounts, error) {
 	hash, err := HashPassword("nexusplay-timing-equalizer")
 	if err != nil {
@@ -44,8 +59,17 @@ func NewAccounts(users UserStore, maxAccounts int, log *slog.Logger) (*Accounts,
 	return &Accounts{users: users, maxAccounts: maxAccounts, log: log, verify: VerifyPassword, dummyHash: hash}, nil
 }
 
-// RegistrationStatus reports whether registering is possible and whether
-// the next account would be the administrator.
+// [RegistrationStatus] tells the sign-up form whether registering is open and
+// whether the next account would become the administrator.
+//
+// Parameters:
+//   - [ctx]: cancels the database query.
+//
+// Returns:
+//   - [RegistrationStatus]: the current status. When [error] is not [nil] it
+//     reads as if there were no accounts and must not be used.
+//   - [error]: [nil] on success, or the database error from counting
+//     accounts.
 func (accounts *Accounts) RegistrationStatus(ctx context.Context) (RegistrationStatus, error) {
 	userCount, err := accounts.users.UserCount(ctx)
 	return RegistrationStatus{
@@ -55,10 +79,21 @@ func (accounts *Accounts) RegistrationStatus(ctx context.Context) (RegistrationS
 	}, err
 }
 
-// Register validates a registration and creates the account. The first
-// account becomes the administrator. It returns *ValidationError for bad
-// input, store.ErrDuplicate when the email or nickname is taken, and
-// ErrRegistrationClosed when the account limit is reached.
+// [Register] validates a sign-up and creates the account. Spaces around the
+// e-mail and nickname are trimmed first. The first account ever created
+// becomes the administrator, and each registration is logged.
+//
+// Parameters:
+//   - [ctx]: cancels the database work.
+//   - [registration]: what the sign-up form submitted.
+//
+// Returns:
+//   - [store.User]: the new account, or a zero [store.User] if [error] is not
+//     [nil].
+//   - [error]: [nil] on success; a [*ValidationError] naming the field for
+//     bad input (see [validate]); [store.ErrDuplicate] when the e-mail or
+//     nickname is taken; [ErrRegistrationClosed] when the account limit is
+//     reached; otherwise the hashing or database error.
 func (accounts *Accounts) Register(ctx context.Context, registration Registration) (store.User, error) {
 	registration.Email = strings.TrimSpace(registration.Email)
 	registration.Nickname = strings.TrimSpace(registration.Nickname)
@@ -80,6 +115,17 @@ func (accounts *Accounts) Register(ctx context.Context, registration Registratio
 	return user, nil
 }
 
+// [validate] checks a sign-up's fields: the e-mail must be a plain address
+// (no display name) of at most 254 bytes, the nickname 2 to 40 characters,
+// and the password at least 8 characters and at most 1024 bytes.
+//
+// Parameters:
+//   - [registration]: the sign-up, with spaces around the e-mail and
+//     nickname already trimmed.
+//
+// Returns:
+//   - [error]: [nil] if every field is valid, or a [*ValidationError] for
+//     the first field that is not, with a message to show the user.
 func validate(registration Registration) error {
 	if address, err := mail.ParseAddress(registration.Email); err != nil || address.Address != registration.Email || len(registration.Email) > 254 {
 		return &ValidationError{"email", "Enter a valid e-mail address."}
@@ -93,9 +139,23 @@ func validate(registration Registration) error {
 	return nil
 }
 
-// Login checks an email and password and returns the user, or
-// ErrInvalidCredentials. A correct password stored with weaker hashing
-// parameters is re-hashed on the way.
+// [Login] checks an e-mail and password and returns the account they belong
+// to. Spaces around the e-mail are trimmed. An unknown e-mail still costs one
+// password check, so the response time does not reveal who has an account. A
+// correct password stored with weaker hashing parameters is re-hashed on the
+// way (see [Accounts.rehash]).
+//
+// Parameters:
+//   - [ctx]: cancels the database work.
+//   - [email]: the e-mail address typed in.
+//   - [password]: the password typed in.
+//
+// Returns:
+//   - [store.User]: the account, or a zero [store.User] if [error] is not
+//     [nil].
+//   - [error]: [nil] on success; [ErrInvalidCredentials] if the e-mail is
+//     unknown or the password is wrong; otherwise a database error, or an
+//     error naming the user if their stored hash cannot be read.
 func (accounts *Accounts) Login(ctx context.Context, email, password string) (store.User, error) {
 	user, err := accounts.users.UserByEmail(ctx, strings.TrimSpace(email))
 	if errors.Is(err, store.ErrNotFound) {
@@ -119,8 +179,14 @@ func (accounts *Accounts) Login(ctx context.Context, email, password string) (st
 	return user, nil
 }
 
-// rehash upgrades a stored hash. It is best effort: the password was right,
-// so the login succeeds either way, and the next login tries again.
+// [rehash] replaces a user's stored hash with one made with the current
+// parameters. It is best effort: the password was right, so the login
+// succeeds either way; a failure is logged and the next login tries again.
+//
+// Parameters:
+//   - [ctx]: cancels the database update.
+//   - [userID]: the account whose hash is upgraded.
+//   - [password]: the password just verified for that account.
 func (accounts *Accounts) rehash(ctx context.Context, userID int64, password string) {
 	hash, err := HashPassword(password)
 	if err == nil {

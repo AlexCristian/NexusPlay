@@ -16,32 +16,62 @@ import (
 // Argon2id parameters, following the OWASP recommendation of 19 MiB memory,
 // 2 iterations and 1 degree of parallelism.
 const (
-	argonTime    = 2
-	argonMemory  = 19 * 1024
+	// [argonTime] is the number of Argon2id passes over memory, following
+	// OWASP's recommendation.
+	argonTime = 2
+	// [argonMemory] is the memory Argon2id uses per hash, in KiB: 19 MiB,
+	// following OWASP's recommendation.
+	argonMemory = 19 * 1024
+	// [argonThreads] is Argon2id's degree of parallelism.
 	argonThreads = 1
-	argonKeyLen  = 32
-	saltLen      = 16
+	// [argonKeyLength] is the length of the derived key, in bytes.
+	argonKeyLength = 32
+	// [saltLength] is the length of each hash's random salt, in bytes.
+	saltLength = 16
 )
 
-// ErrMismatch is returned when a password does not match its hash.
+// [ErrMismatch] is returned by [VerifyPassword] when a password does not
+// match its hash.
 var ErrMismatch = errors.New("password does not match")
 
-// HashPassword returns an encoded argon2id hash in the PHC string format.
+// [HashPassword] hashes a password for storage with Argon2id and a new random
+// salt, so hashing the same password twice gives different results.
+//
+// Parameters:
+//   - [password]: the password to hash.
+//
+// Returns:
+//   - [string]: the hash in the PHC string format, such as
+//     "$argon2id$v=19$m=19456,t=2,p=1$<salt>$<key>", which records its own
+//     parameters for [VerifyPassword]; or "" if [error] is not [nil].
+//   - [error]: [nil] on success, or an error only if the system's random
+//     source is broken.
 func HashPassword(password string) (string, error) {
-	salt := make([]byte, saltLen)
+	salt := make([]byte, saltLength)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
-	b64 := base64.RawStdEncoding
+	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLength)
+	encoding := base64.RawStdEncoding
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
-		argon2.Version, argonMemory, argonTime, argonThreads, b64.EncodeToString(salt), b64.EncodeToString(key)), nil
+		argon2.Version, argonMemory, argonTime, argonThreads, encoding.EncodeToString(salt), encoding.EncodeToString(key)), nil
 }
 
-// VerifyPassword checks a password against an encoded hash. It returns
-// ErrMismatch for a wrong password, and another error if the hash cannot be
-// read. needsRehash is true when the hash was made with weaker parameters
-// than the current ones.
+// [VerifyPassword] checks a password against a hash made by [HashPassword],
+// using the parameters recorded in the hash. The comparison takes the same
+// time however many bytes match.
+//
+// Parameters:
+//   - [password]: the password to check.
+//   - [encoded]: the stored hash in the PHC string format.
+//
+// Returns:
+//   - [bool] ([needsRehash]): [true] if the password matched but the hash was
+//     made with less memory or fewer passes than the current parameters, so
+//     it should be replaced; [false] otherwise.
+//   - [error]: [nil] if the password matches; [ErrMismatch] if it does not;
+//     another error if [encoded] is not an Argon2id hash of the current
+//     version or cannot be decoded.
 func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {
@@ -56,12 +86,12 @@ func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism); err != nil {
 		return false, errors.New("bad argon2 parameters")
 	}
-	b64 := base64.RawStdEncoding
-	salt, err := b64.DecodeString(parts[4])
+	encoding := base64.RawStdEncoding
+	salt, err := encoding.DecodeString(parts[4])
 	if err != nil {
 		return false, err
 	}
-	want, err := b64.DecodeString(parts[5])
+	want, err := encoding.DecodeString(parts[5])
 	if err != nil {
 		return false, err
 	}
@@ -72,7 +102,13 @@ func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 	return memory < argonMemory || iterations < argonTime, nil
 }
 
-// NewToken returns a random URL-safe token with 256 bits of entropy.
+// [NewToken] makes a random token for a session cookie or a CSRF form field.
+//
+// Returns:
+//   - [string]: 32 random bytes (256 bits) in URL-safe base64 without
+//     padding, 43 characters long; or "" if [error] is not [nil].
+//   - [error]: [nil] on success, or an error only if the system's random
+//     source is broken.
 func NewToken() (string, error) {
 	randomBytes := make([]byte, 32)
 	if _, err := rand.Read(randomBytes); err != nil {
@@ -81,8 +117,15 @@ func NewToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(randomBytes), nil
 }
 
-// HashToken is how session tokens are stored, so a leaked database does not
-// leak live sessions.
+// [HashToken] is how session tokens are stored, so a leaked database does not
+// leak live sessions: only the browser holds the token itself.
+//
+// Parameters:
+//   - [token]: a token from [NewToken].
+//
+// Returns:
+//   - [string]: the token's SHA-256 hash in lowercase hexadecimal, 64
+//     characters long.
 func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

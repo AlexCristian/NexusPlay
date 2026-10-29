@@ -17,8 +17,18 @@ var languageNamesFile string
 // language_names.txt.
 var languageNames = datafile.Table("language_names.txt", languageNamesFile)
 
-// LanguageName returns a display name for a language code, falling back to
-// the code itself.
+// [LanguageName] gets the name to label a subtitle track with, in the
+// language's own name, from language_names.txt.
+//
+// Parameters:
+//   - [code]: a language code such as "de", "ger" or "pt-BR". Case and
+//     spaces around it do not matter.
+//
+// Returns:
+//   - [string]: the display name for [code], such as "Deutsch"; for a code
+//     with a region or script ("pt-BR"), the name of its base language
+//     ("Português"); "Subtitles" for "" and "und" (undetermined); otherwise
+//     [code] in capitals, such as "XX".
 func LanguageName(code string) string {
 	code = strings.ToLower(strings.TrimSpace(code))
 	if name, found := languageNames[code]; found {
