@@ -10,8 +10,9 @@ import (
 )
 
 // [checkNames] reports every name declared in a file that is too short or
-// uses an abbreviation. Package names, import names, type parameters and "_"
-// are not checked.
+// uses an abbreviation. Package names, import names, type parameters, "_"
+// and embedded fields (whose name is their type's, declared elsewhere) are
+// not checked. It runs on test files too.
 //
 // Parameters:
 //   - [pass]: the package being analyzed, and where problems are reported.
@@ -29,7 +30,12 @@ func checkNames(pass *analysis.Pass, file *ast.File) {
 		if _, isImport := object.(*types.PkgName); isImport {
 			return true
 		}
-		if _, isTypeParameter := object.Type().(*types.TypeParam); isTypeParameter {
+		if typeName, isTypeName := object.(*types.TypeName); isTypeName {
+			if _, isTypeParameter := typeName.Type().(*types.TypeParam); isTypeParameter {
+				return true
+			}
+		}
+		if variable, isVariable := object.(*types.Var); isVariable && variable.Embedded() {
 			return true
 		}
 		if problem := nameProblem(identifier.Name, object.Type()); problem != "" {
@@ -106,7 +112,8 @@ func splitWords(name string) []string {
 //   - [bool]: [true] after an underscore, at an uppercase letter that
 //     follows a lowercase letter or digit ("temp|File"), and at the last
 //     uppercase letter of an acronym followed by a lowercase letter
-//     ("HTTP|Client"); [false] otherwise.
+//     ("HTTP|Client"), unless that lowercase letter is a lone plural "s"
+//     ("URLs", "IDs|By"); [false] otherwise.
 func startsWord(characters []rune, index int) bool {
 	current, previous := characters[index], characters[index-1]
 	if previous == '_' || current == '_' {
@@ -119,7 +126,30 @@ func startsWord(characters []rune, index int) bool {
 		return true
 	}
 	hasNext := index+1 < len(characters)
-	return unicode.IsUpper(previous) && hasNext && unicode.IsLower(characters[index+1])
+	if !unicode.IsUpper(previous) || !hasNext || !unicode.IsLower(characters[index+1]) {
+		return false
+	}
+	return !isPluralSuffix(characters, index+1)
+}
+
+// [isPluralSuffix] reports whether a lowercase "s" ends a word on its own,
+// as in the plural acronyms "URLs" and "IDsByName".
+//
+// Parameters:
+//   - [characters]: the name's characters.
+//   - [index]: the position in [characters] of the lowercase letter to
+//     check. It must be less than the length of [characters].
+//
+// Returns:
+//   - [bool]: [true] if the character at [index] is "s" and is the last
+//     character or is followed by anything but a lowercase letter; [false]
+//     otherwise.
+func isPluralSuffix(characters []rune, index int) bool {
+	if characters[index] != 's' {
+		return false
+	}
+	isLast := index+1 == len(characters)
+	return isLast || !unicode.IsLower(characters[index+1])
 }
 
 // [quote] wraps text in double quotes for a message.

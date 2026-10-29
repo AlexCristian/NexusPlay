@@ -6,6 +6,7 @@
 # lines and lines starting with # are skipped. This file is built into the
 # analyzer, so a change takes effect on the next build.
 abs absolute
+addr address
 arg argument
 args arguments
 attr attribute
@@ -13,8 +14,10 @@ btn button
 buf buffer
 cb callback
 cfg config
+cmd command
 cnt count
 conf config
+conv conversion
 ctrl controller
 cur current
 db database
@@ -25,9 +28,11 @@ dir directory
 dirs directories
 dst destination
 elem element
+env environment
 ep episode
 eps episodes
 expr expression
+ext extension
 fn function
 hdr header
 ident identifier
@@ -36,6 +41,7 @@ img image
 impl implementation
 lang language
 lit literal
+mem memory
 mgr manager
 msg message
 num number
@@ -46,17 +52,21 @@ opts options
 pkg package
 pos position
 prev previous
+proc process
 ptr pointer
 rel relative
 req request
 res result
 resp response
 ret result
+sec seconds
 src source
 stmt statement
 str string
+sub subtitle
 svc service
 temp temporary
 tmp temporary
+tmpl template
 val value
 vals values

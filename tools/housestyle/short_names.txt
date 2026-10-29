@@ -12,3 +12,8 @@ i int
 w net/http.ResponseWriter
 r *net/http.Request
 id *
+# Test code: the standard testing handles.
+t *testing.T
+b *testing.B
+f *testing.F
+m *testing.M

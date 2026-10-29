@@ -1,0 +1,10 @@
+# Lowercase words that always mean code, never English, so a comment must
+# write them in brackets wherever they appear outside quotes and code
+# blocks: "[nil]", never "nil". Ordinary words that are also Go names, such
+# as "true", "error" or "string", are not listed, because the check cannot
+# tell the code from the English.
+#
+# One word per line. Blank lines and lines starting with # are skipped. This
+# file is built into the analyzer, so a change takes effect on the next
+# build.
+nil

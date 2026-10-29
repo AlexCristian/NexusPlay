@@ -74,32 +74,47 @@ func checkPackageDoc(pass *analysis.Pass, file *ast.File) {
 //   - [pass]: the package being analyzed, and where problems are reported.
 //   - [function]: the function or method declaration to check.
 func checkFunctionDoc(pass *analysis.Pass, function *ast.FuncDecl) {
-	name := function.Name.Name
-	if !checkLeadingName(pass, function.Name.Pos(), function.Doc, name, receiverTypeName(function)+"."+name) {
-		return
+	names := []string{function.Name.Name}
+	if typeName := receiverTypeName(function); typeName != "" {
+		names = append(names, typeName+"."+function.Name.Name)
 	}
-	parameters, returns := docSections(function.Doc.Text())
+	if checkLeadingName(pass, function.Name.Pos(), function.Doc, names...) {
+		checkSignatureDoc(pass, function.Name.Pos(), function.Doc, function.Type)
+	}
+}
+
+// [checkSignatureDoc] reports "Parameters:" or "Returns:" lists of a doc
+// comment that do not match a function's signature. Type parameters, the
+// receiver and parameters named "_" or left unnamed need no entry.
+//
+// Parameters:
+//   - [pass]: the package being analyzed, and where problems are reported.
+//   - [position]: where in the file to report problems, the function's name.
+//   - [documentation]: the function's doc comment, which must not be [nil].
+//   - [signature]: the function's parameters and results.
+func checkSignatureDoc(pass *analysis.Pass, position token.Pos, documentation *ast.CommentGroup, signature *ast.FuncType) {
+	parameters, returns := docSections(documentation.Text())
 
 	var parameterNames []string
-	for _, field := range function.Type.Params.List {
+	for _, field := range signature.Params.List {
 		for _, fieldName := range field.Names {
 			if fieldName.Name != "_" {
 				parameterNames = append(parameterNames, fieldName.Name)
 			}
 		}
 	}
-	checkSection(pass, function.Name.Pos(), "Parameters", "parameter", parameters, parameterNames)
+	checkSection(pass, position, "Parameters", "parameter", parameters, parameterNames)
 
 	var returnTypes []string
-	if function.Type.Results != nil {
-		for _, field := range function.Type.Results.List {
+	if signature.Results != nil {
+		for _, field := range signature.Results.List {
 			typeText := expressionText(pass.Fset, field.Type)
 			for range max(1, len(field.Names)) {
 				returnTypes = append(returnTypes, typeText)
 			}
 		}
 	}
-	checkSection(pass, function.Name.Pos(), "Returns", "return value", returns, returnTypes)
+	checkSection(pass, position, "Returns", "return value", returns, returnTypes)
 }
 
 // [checkSection] compares one "Parameters:" or "Returns:" list with what the
@@ -142,7 +157,9 @@ func checkSection(pass *analysis.Pass, position token.Pos, heading, kind string,
 
 // [checkGeneralDeclarationDoc] reports types, struct fields, interface
 // methods, constants and variables whose doc comment is missing or does not
-// start with their name in brackets. Imports are not checked.
+// start with their name in brackets, and interface methods whose lists do
+// not match their signature. Imports, and variables named only "_" (such as
+// a check that a type implements an interface), are not checked.
 //
 // Parameters:
 //   - [pass]: the package being analyzed, and where problems are reported.
@@ -158,27 +175,30 @@ func checkGeneralDeclarationDoc(pass *analysis.Pass, declaration *ast.GenDecl) {
 			case *ast.StructType:
 				checkFieldDocs(pass, typeExpression.Fields)
 			case *ast.InterfaceType:
-				checkFieldDocs(pass, typeExpression.Methods)
+				checkInterfaceDocs(pass, specification.Name.Name, typeExpression.Methods)
 			}
 		case *ast.ValueSpec:
 			documentation := specificationDoc(declaration, specification.Doc)
 			var names []string
 			for _, name := range specification.Names {
-				names = append(names, name.Name)
+				if name.Name != "_" {
+					names = append(names, name.Name)
+				}
 			}
-			checkLeadingName(pass, specification.Names[0].Pos(), documentation, names...)
+			if len(names) > 0 {
+				checkLeadingName(pass, specification.Names[0].Pos(), documentation, names...)
+			}
 		}
 	}
 }
 
-// [checkFieldDocs] reports struct fields and interface methods whose doc
-// comment is missing or does not start with their name in brackets. An
-// embedded field's name is its type's name.
+// [checkFieldDocs] reports struct fields whose doc comment is missing or
+// does not start with their name in brackets. An embedded field's name is
+// its type's name.
 //
 // Parameters:
 //   - [pass]: where problems are reported.
-//   - [fields]: the fields of a struct type or the methods of an interface
-//     type.
+//   - [fields]: the fields of a struct type.
 func checkFieldDocs(pass *analysis.Pass, fields *ast.FieldList) {
 	for _, field := range fields.List {
 		var names []string
@@ -192,8 +212,40 @@ func checkFieldDocs(pass *analysis.Pass, fields *ast.FieldList) {
 	}
 }
 
+// [checkInterfaceDocs] reports interface methods whose doc comment is
+// missing, does not start with their name in brackets, or has
+// "Parameters:" or "Returns:" lists that do not match the method's
+// signature. An embedded interface, such as [io.Reader], needs a doc comment
+// that starts with its type's name. Type constraint elements, such as
+// "~int | ~string", are not checked.
+//
+// Parameters:
+//   - [pass]: the package being analyzed, and where problems are reported.
+//   - [interfaceName]: the name of the interface type, so a method's
+//     comment may also start with the qualified name, such as
+//     [Fetcher.Fetch].
+//   - [methods]: the methods and embedded elements of the interface type.
+func checkInterfaceDocs(pass *analysis.Pass, interfaceName string, methods *ast.FieldList) {
+	for _, method := range methods.List {
+		if len(method.Names) == 0 {
+			if typeName := embeddedTypeName(method.Type); typeName != "" {
+				checkLeadingName(pass, method.Pos(), method.Doc, typeName)
+			}
+			continue
+		}
+		name := method.Names[0]
+		if !checkLeadingName(pass, name.Pos(), method.Doc, name.Name, interfaceName+"."+name.Name) {
+			continue
+		}
+		if signature, isSignature := method.Type.(*ast.FuncType); isSignature {
+			checkSignatureDoc(pass, name.Pos(), method.Doc, signature)
+		}
+	}
+}
+
 // [checkLeadingName] reports a doc comment that is missing or does not start
-// with one of the given names in brackets.
+// with one of the given names in brackets. A comment that holds only
+// directives, such as "//go:embed", counts as missing.
 //
 // Parameters:
 //   - [pass]: where problems are reported.
@@ -206,7 +258,7 @@ func checkFieldDocs(pass *analysis.Pass, fields *ast.FieldList) {
 //   - [bool]: [true] if the comment exists, even if it starts wrongly, so
 //     callers can go on to check the rest of it; [false] if it is missing.
 func checkLeadingName(pass *analysis.Pass, position token.Pos, documentation *ast.CommentGroup, names ...string) bool {
-	if documentation == nil {
+	if documentation == nil || strings.TrimSpace(documentation.Text()) == "" {
 		pass.Reportf(position, "[%s] has no doc comment", names[0])
 		return false
 	}
