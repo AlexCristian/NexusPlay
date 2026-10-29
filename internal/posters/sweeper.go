@@ -64,7 +64,7 @@ func (sweeper *Sweeper) Sweep(ctx context.Context) (int, error) {
 	cutoff := sweeper.now().Add(-sweeper.config.MinAge)
 	removed := 0
 	for _, entry := range entries {
-		if !entry.Type().IsRegular() || inUse[entry.Name()] {
+		if !entry.Type().IsRegular() || inUse.Contains(entry.Name()) {
 			continue
 		}
 		info, err := entry.Info()

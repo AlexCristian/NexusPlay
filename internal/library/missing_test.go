@@ -3,6 +3,8 @@ package library
 import (
 	"slices"
 	"testing"
+
+	"github.com/AlexCristian/NexusPlay/internal/collections"
 )
 
 func TestMissingMediaKeepsUnreadableFolders(t *testing.T) {
@@ -14,7 +16,7 @@ func TestMissingMediaKeepsUnreadableFolders(t *testing.T) {
 		"Shows/XY/E1.mp4":         5, // a sibling whose name merely starts the same: deleted
 		"Broken.mp4":              6, // a file whose details could not be read
 	}
-	onDisk := map[string]bool{"Movies/A.mp4": true}
+	onDisk := collections.NewSet("Movies/A.mp4")
 	unreadable := []string{"Shows/X", "Broken.mp4"}
 
 	got := missingMedia(known, onDisk, unreadable)

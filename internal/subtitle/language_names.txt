@@ -1,0 +1,49 @@
+# Display names for subtitle language codes, in each language's own name.
+# Used by LanguageName for track labels; a code not listed here is shown
+# in capitals ("XX").
+#
+# One code per line: the lowercase code, a space, the display name. Blank
+# lines and lines starting with # are skipped. This file is built into the
+# program, so a change takes effect on the next build.
+
+# Two-letter ISO 639-1 codes.
+ar العربية
+bg Български
+cs Čeština
+da Dansk
+de Deutsch
+el Ελληνικά
+en English
+es Español
+fi Suomi
+fr Français
+he עברית
+hr Hrvatski
+hu Magyar
+it Italiano
+ja 日本語
+ko 한국어
+nl Nederlands
+no Norsk
+pl Polski
+pt Português
+ro Română
+ru Русский
+sk Slovenčina
+sr Srpski
+sv Svenska
+tr Türkçe
+uk Українська
+zh 中文
+
+# Three-letter ISO 639-2 codes common in sidecar file names.
+eng English
+rum Română
+ron Română
+fre Français
+fra Français
+ger Deutsch
+deu Deutsch
+spa Español
+ita Italiano
+por Português

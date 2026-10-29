@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/AlexCristian/NexusPlay/internal/collections"
 	_ "modernc.org/sqlite"
 )
 
@@ -48,16 +49,12 @@ func (store *Store) AddSubtitle(ctx context.Context, subtitle NewSubtitle) (id i
 }
 
 // SubtitleSources returns the sidecar files that have already been imported.
-func (store *Store) SubtitleSources(ctx context.Context) (map[string]bool, error) {
+func (store *Store) SubtitleSources(ctx context.Context) (collections.Set[string], error) {
 	sources, err := queryAll(ctx, store.database, scanString, `SELECT source FROM subtitles WHERE source <> ''`)
 	if err != nil {
-		return nil, err
+		return collections.Set[string]{}, err
 	}
-	out := make(map[string]bool, len(sources))
-	for _, source := range sources {
-		out[source] = true
-	}
-	return out, nil
+	return collections.NewSet(sources...), nil
 }
 
 // UpdateSubtitleLabel renames a track.

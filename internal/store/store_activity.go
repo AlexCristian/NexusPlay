@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/AlexCristian/NexusPlay/internal/collections"
 	_ "modernc.org/sqlite"
 )
 
@@ -61,21 +62,21 @@ func (store *Store) IsWatched(ctx context.Context, userID, mediaID int64) (bool,
 }
 
 // WatchedIn returns the set of media in a collection a user finished.
-func (store *Store) WatchedIn(ctx context.Context, userID, collectionID int64) (map[int64]bool, error) {
+func (store *Store) WatchedIn(ctx context.Context, userID, collectionID int64) (collections.Set[int64], error) {
 	rows, err := store.database.QueryContext(ctx, `
 		SELECT w.media_id FROM watched w JOIN media m ON m.id = w.media_id
 		WHERE w.user_id = ? AND m.collection_id = ?`, userID, collectionID)
 	if err != nil {
-		return nil, err
+		return collections.Set[int64]{}, err
 	}
 	defer rows.Close()
-	out := map[int64]bool{}
+	out := collections.NewSet[int64]()
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			return nil, err
+			return collections.Set[int64]{}, err
 		}
-		out[id] = true
+		out.Add(id)
 	}
 	return out, rows.Err()
 }

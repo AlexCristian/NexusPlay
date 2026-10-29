@@ -1,0 +1,11 @@
+# Confirmations shown on the control panel after an action, chosen by the
+# "done" parameter of the redirect back to /admin (/admin?done=scan). An
+# unknown value shows no confirmation.
+#
+# One message per line: the parameter's value, a space, the message. Blank
+# lines and lines starting with # are skipped. This file is built into the
+# program, so a change takes effect on the next build.
+scan Scan started. New files appear here within a minute.
+published Published.
+deleted Collection deleted.
+retry Queued for another conversion attempt.

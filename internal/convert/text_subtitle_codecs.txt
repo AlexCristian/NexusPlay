@@ -1,0 +1,13 @@
+# Subtitle codecs, as ffprobe names them, that hold text and can therefore
+# be converted to SRT. Subtitle streams in any other codec are bitmaps (DVD
+# and Blu-ray subtitles) and are dropped.
+#
+# One codec per line. Blank lines and lines starting with # are skipped. This
+# file is built into the program, so a change takes effect on the next build.
+subrip
+srt
+ass
+ssa
+mov_text
+webvtt
+text

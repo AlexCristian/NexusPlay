@@ -268,7 +268,7 @@ func TestSidecarImportIsIdempotent(t *testing.T) {
 		t.Errorf("%d tracks after importing the same sidecar twice, want 1", len(subs))
 	}
 	srcs, _ := s.SubtitleSources(ctx)
-	if !srcs["m.en.srt"] {
+	if !srcs.Contains("m.en.srt") {
 		t.Error("source not recorded")
 	}
 }
@@ -453,7 +453,7 @@ func TestPosterNames(t *testing.T) {
 	s.UpdateMedia(ctx, id, MediaUpdate{Title: "M", Poster: "film.jpg"}, false)
 	mustMedia(t, s, "none.mp4")
 	got, err := s.PosterNames(ctx)
-	if err != nil || len(got) != 2 || !got["show.jpg"] || !got["film.jpg"] {
+	if err != nil || got.Len() != 2 || !got.Contains("show.jpg") || !got.Contains("film.jpg") {
 		t.Errorf("PosterNames = %v, %v", got, err)
 	}
 }

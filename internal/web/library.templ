@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/AlexCristian/NexusPlay/internal/collections"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
@@ -112,7 +113,7 @@ templ tileBody(t store.Tile) {
 	</span>
 }
 
-templ collectionDialog(v Viewer, c store.Collection, seasons []Season, subscribed bool, watched map[int64]bool) {
+templ collectionDialog(v Viewer, c store.Collection, seasons []Season, subscribed bool, watched collections.Set[int64]) {
 	<div class="collection">
 		<header class="collection-header">
 			<div class="poster-wrapper">
@@ -155,7 +156,7 @@ templ collectionDialog(v Viewer, c store.Collection, seasons []Season, subscribe
 									<td>{ episodeNumbers(e) }</td>
 									<td>
 										<a href={ watchURL(e.ID) }>{ e.Title }</a>
-										if watched[e.ID] {
+										if watched.Contains(e.ID) {
 											<span class="watched" title="Watched">
 												@icon("check")
 											</span>

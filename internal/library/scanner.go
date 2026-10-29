@@ -13,6 +13,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/AlexCristian/NexusPlay/internal/collections"
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/media"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
@@ -359,9 +360,9 @@ func (scanner *Scanner) applyChanges(ctx context.Context, tree tree, probed []pr
 		scanner.deps.Log.Warn("media folder has no videos; skipping removals in case it is unmounted", "dir", scanner.config.MediaDirectory)
 		return added, 0, known, nil
 	}
-	onDisk := make(map[string]bool, len(tree.videos))
+	onDisk := collections.NewSet[string]()
 	for _, video := range tree.videos {
-		onDisk[video.relativePath] = true
+		onDisk.Add(video.relativePath)
 	}
 	removed := 0
 	for _, relativePath := range missingMedia(known, onDisk, tree.unreadable) {
@@ -385,10 +386,10 @@ func exists(path string) bool {
 // missingMedia returns the paths of known media whose files are gone: not
 // seen on disk, and not inside a path that could not be read (whose files
 // may well still exist).
-func missingMedia(known map[string]int64, onDisk map[string]bool, unreadable []string) []string {
+func missingMedia(known map[string]int64, onDisk collections.Set[string], unreadable []string) []string {
 	var gone []string
 	for path := range known {
-		if !onDisk[path] && !underAny(path, unreadable) {
+		if !onDisk.Contains(path) && !underAny(path, unreadable) {
 			gone = append(gone, path)
 		}
 	}
@@ -567,10 +568,10 @@ func (scanner *Scanner) importAllSidecars(ctx context.Context, tree tree, known 
 // importSidecars imports subtitle files named after a video, such as
 // "Movie.srt" or "Movie.en.vtt" next to "Movie.mp4". The converter writes
 // extracted subtitles with the same naming, so they come in here too.
-func (scanner *Scanner) importSidecars(ctx context.Context, mediaID int64, videoRelativePath string, candidates []string, imported map[string]bool) int {
+func (scanner *Scanner) importSidecars(ctx context.Context, mediaID int64, videoRelativePath string, candidates []string, imported collections.Set[string]) int {
 	importedCount := 0
 	for _, sub := range candidates {
-		if imported[sub] {
+		if imported.Contains(sub) {
 			continue
 		}
 		language, isSidecar := SidecarLanguage(videoRelativePath, sub)
@@ -585,7 +586,7 @@ func (scanner *Scanner) importSidecars(ctx context.Context, mediaID int64, video
 		cues, err := subtitle.Parse(data)
 		if err != nil {
 			scanner.deps.Log.Warn("could not parse subtitle", "path", sub, "err", err)
-			imported[sub] = true // do not retry a broken file on every scan of this run
+			imported.Add(sub) // do not retry a broken file on every scan of this run
 			continue
 		}
 		_, inserted, err := scanner.deps.Store.AddSubtitle(ctx, store.NewSubtitle{
@@ -595,7 +596,7 @@ func (scanner *Scanner) importSidecars(ctx context.Context, mediaID int64, video
 			scanner.deps.Log.Warn("could not save subtitle", "path", sub, "err", err)
 			continue
 		}
-		imported[sub] = true
+		imported.Add(sub)
 		if inserted {
 			importedCount++
 		}

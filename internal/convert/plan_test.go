@@ -137,3 +137,14 @@ func TestCheckConverted(t *testing.T) {
 		t.Errorf("unknown source duration: %v", err)
 	}
 }
+
+func TestTextSubtitleCodecsLoaded(t *testing.T) {
+	for _, codec := range []string{"subrip", "ass", "mov_text", "webvtt"} {
+		if !textSubtitleCodecs.Contains(codec) {
+			t.Errorf("text_subtitle_codecs.txt does not have %q", codec)
+		}
+	}
+	if textSubtitleCodecs.Contains("hdmv_pgs_subtitle") {
+		t.Error("a bitmap codec counts as text")
+	}
+}

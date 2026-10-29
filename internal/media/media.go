@@ -1,18 +1,23 @@
 package media
 
 import (
+	_ "embed"
 	"path"
 	"slices"
 	"strings"
+
+	"github.com/AlexCristian/NexusPlay/internal/datafile"
 )
 
-// videoTypes maps the video file extensions NexusPlay picks up to the MIME
-// type it serves them with.
-var videoTypes = map[string]string{
-	".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm",
-	".mkv": "video/x-matroska", ".mov": "video/quicktime", ".avi": "video/x-msvideo",
-	".ts": "video/mp2t", ".wmv": "video/x-ms-wmv",
-}
+// [videoTypesFile] is the contents of video_types.txt, built into the program
+// by the compiler. The build fails if the file is missing.
+//
+//go:embed video_types.txt
+var videoTypesFile string
+
+// [videoTypes] maps the video file extensions NexusPlay picks up to the MIME
+// type it serves them with, from video_types.txt.
+var videoTypes = datafile.Table("video_types.txt", videoTypesFile)
 
 // IsVideo reports whether a file name has a video extension NexusPlay uses.
 func IsVideo(name string) bool {

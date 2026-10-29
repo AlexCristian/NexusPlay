@@ -48,3 +48,15 @@ func TestFileTypes(t *testing.T) {
 		}
 	}
 }
+
+func TestVideoTypesLoaded(t *testing.T) {
+	if mimeType, known := MIMEType("Movie.MKV"); !known || mimeType != "video/x-matroska" {
+		t.Errorf("MIMEType(Movie.MKV) = %q, %v; want video/x-matroska", mimeType, known)
+	}
+	if IsVideo("poster.jpg") {
+		t.Error("IsVideo(poster.jpg) = true; want false")
+	}
+	if len(videoTypes) != 8 {
+		t.Errorf("video_types.txt loaded %d extensions; want 8", len(videoTypes))
+	}
+}

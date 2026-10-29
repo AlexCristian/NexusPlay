@@ -1,0 +1,10 @@
+# The image types accepted as poster uploads, and the file extension an
+# upload of each type is saved with. The type is detected from the file's
+# content, not its name; an upload of any other type is rejected.
+#
+# One type per line: the MIME type, a space, the extension with its dot.
+# Blank lines and lines starting with # are skipped. This file is built into
+# the program, so a change takes effect on the next build.
+image/jpeg .jpg
+image/png .png
+image/webp .webp

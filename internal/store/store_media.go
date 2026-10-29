@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AlexCristian/NexusPlay/internal/collections"
 	_ "modernc.org/sqlite"
 )
 
@@ -214,17 +215,13 @@ func (store *Store) IncrementViews(ctx context.Context, id int64) error {
 }
 
 // PosterNames returns the poster files any media or collection uses.
-func (store *Store) PosterNames(ctx context.Context) (map[string]bool, error) {
+func (store *Store) PosterNames(ctx context.Context) (collections.Set[string], error) {
 	names, err := queryAll(ctx, store.database, scanString,
 		`SELECT poster FROM media WHERE poster <> '' UNION SELECT poster FROM collections WHERE poster <> ''`)
 	if err != nil {
-		return nil, err
+		return collections.Set[string]{}, err
 	}
-	out := make(map[string]bool, len(names))
-	for _, name := range names {
-		out[name] = true
-	}
-	return out, nil
+	return collections.NewSet(names...), nil
 }
 
 // Categories groups everything published into categories. Media in a

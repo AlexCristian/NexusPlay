@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"io"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/AlexCristian/NexusPlay/internal/auth"
+	"github.com/AlexCristian/NexusPlay/internal/datafile"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
@@ -102,13 +104,15 @@ func (handlers *adminHandlers) controlPanel(w http.ResponseWriter, r *http.Reque
 	return nil
 }
 
-// doneMessages confirm an action after the redirect back to /admin?done=.
-var doneMessages = map[string]string{
-	"scan":      "Scan started. New files appear here within a minute.",
-	"published": "Published.",
-	"deleted":   "Collection deleted.",
-	"retry":     "Queued for another conversion attempt.",
-}
+// [doneMessagesFile] is the contents of done_messages.txt, built into the
+// program by the compiler. The build fails if the file is missing.
+//
+//go:embed done_messages.txt
+var doneMessagesFile string
+
+// [doneMessages] confirm an action after the redirect back to /admin?done=,
+// from done_messages.txt.
+var doneMessages = datafile.Table("done_messages.txt", doneMessagesFile)
 
 // conversionView is the converter's status and the recorded failures.
 func (handlers *adminHandlers) conversionView(ctx context.Context) (ConversionView, error) {

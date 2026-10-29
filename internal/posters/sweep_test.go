@@ -9,11 +9,15 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/AlexCristian/NexusPlay/internal/collections"
 )
 
-type fakeStore map[string]bool
+type fakeStore struct{ names collections.Set[string] }
 
-func (f fakeStore) PosterNames(context.Context) (map[string]bool, error) { return f, nil }
+func (store fakeStore) PosterNames(context.Context) (collections.Set[string], error) {
+	return store.names, nil
+}
 
 func TestSweepRemovesOnlyOldUnusedFiles(t *testing.T) {
 	dir := t.TempDir()
@@ -31,7 +35,7 @@ func TestSweepRemovesOnlyOldUnusedFiles(t *testing.T) {
 	write(".poster-123", old)           // an interrupted download
 	os.Mkdir(filepath.Join(dir, "sub"), 0o755)
 
-	s := NewSweeper(fakeStore{"used.jpg": true}, Config{Directory: dir}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s := NewSweeper(fakeStore{names: collections.NewSet("used.jpg")}, Config{Directory: dir}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	n, err := s.Sweep(context.Background())
 	if err != nil {
 		t.Fatal(err)

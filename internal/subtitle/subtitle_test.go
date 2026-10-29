@@ -107,3 +107,14 @@ func TestLanguageName(t *testing.T) {
 		}
 	}
 }
+
+func TestLanguageNamesLoaded(t *testing.T) {
+	for code, want := range map[string]string{"de": "Deutsch", "ger": "Deutsch", "ja": "日本語", "pt-br": "Português", "xx": "XX", "": "Subtitles"} {
+		if got := LanguageName(code); got != want {
+			t.Errorf("LanguageName(%q) = %q; want %q", code, got, want)
+		}
+	}
+	if len(languageNames) < 38 {
+		t.Errorf("language_names.txt loaded %d codes; want at least 38", len(languageNames))
+	}
+}

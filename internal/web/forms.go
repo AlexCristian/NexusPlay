@@ -6,12 +6,14 @@ package web
 // handler shows in the form again.
 
 import (
+	_ "embed"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/AlexCristian/NexusPlay/internal/datafile"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
 )
@@ -133,7 +135,15 @@ type posterUpload struct {
 	ext  string // from the content, not the file name
 }
 
-var posterTypes = map[string]string{"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+// [posterTypesFile] is the contents of poster_types.txt, built into the
+// program by the compiler. The build fails if the file is missing.
+//
+//go:embed poster_types.txt
+var posterTypesFile string
+
+// [posterTypes] maps the image types accepted as poster uploads to the
+// extension each is saved with, from poster_types.txt.
+var posterTypes = datafile.Table("poster_types.txt", posterTypesFile)
 
 // decodePoster reads the poster upload and the "Remove the current poster"
 // box, which cannot both be used at once.

@@ -187,3 +187,12 @@ func TestDecodeSubtitleUpload(t *testing.T) {
 		})
 	}
 }
+
+func TestDataFilesLoaded(t *testing.T) {
+	if posterTypes["image/png"] != ".png" || len(posterTypes) != 3 {
+		t.Errorf("poster_types.txt loaded %v; want jpeg, png and webp", posterTypes)
+	}
+	if doneMessages["scan"] != "Scan started. New files appear here within a minute." || len(doneMessages) != 4 {
+		t.Errorf("done_messages.txt loaded %v", doneMessages)
+	}
+}

@@ -1,11 +1,13 @@
 package convert
 
 import (
+	_ "embed"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/AlexCristian/NexusPlay/internal/datafile"
 	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/media"
 )
@@ -20,10 +22,16 @@ type Plan struct {
 	DroppedOther int            // data and attachment streams (fonts, timecodes)
 }
 
-// textSubtitleCodecs can be converted to SRT; others are bitmaps (DVD, Blu-ray).
-var textSubtitleCodecs = map[string]bool{
-	"subrip": true, "srt": true, "ass": true, "ssa": true, "mov_text": true, "webvtt": true, "text": true,
-}
+// [textSubtitleCodecsFile] is the contents of text_subtitle_codecs.txt,
+// built into the program by the compiler. The build fails if the file is
+// missing.
+//
+//go:embed text_subtitle_codecs.txt
+var textSubtitleCodecsFile string
+
+// [textSubtitleCodecs] holds the subtitle codecs that can be converted to
+// SRT, from text_subtitle_codecs.txt; others are bitmaps (DVD, Blu-ray).
+var textSubtitleCodecs = datafile.Set(textSubtitleCodecsFile)
 
 // MakePlan decides what to copy, what to re-encode and what to extract.
 // videoBase is the video's file name without its extension. It returns
@@ -43,7 +51,7 @@ func MakePlan(probe ffmpeg.Probe, videoBase string) (Plan, error) {
 		case "audio":
 			plan.Audio = append(plan.Audio, planAudio(stream))
 		case "subtitle":
-			if textSubtitleCodecs[stream.Codec] {
+			if textSubtitleCodecs.Contains(stream.Codec) {
 				plan.Subtitles = append(plan.Subtitles, SubtitlePlan{Stream: stream})
 			} else {
 				plan.DroppedSubs++

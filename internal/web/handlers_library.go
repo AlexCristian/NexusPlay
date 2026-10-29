@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/AlexCristian/NexusPlay/internal/collections"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
@@ -23,7 +24,7 @@ type libraryStore interface {
 	Search(ctx context.Context, userID int64, query string, limit int) ([]store.Category, error)
 	CollectionByID(ctx context.Context, id int64) (store.Collection, error)
 	CollectionEpisodes(ctx context.Context, collectionID int64) ([]store.Media, error)
-	WatchedIn(ctx context.Context, userID, collectionID int64) (map[int64]bool, error)
+	WatchedIn(ctx context.Context, userID, collectionID int64) (collections.Set[int64], error)
 	IsSubscribed(ctx context.Context, userID, collectionID int64) (bool, error)
 	ToggleSubscription(ctx context.Context, userID, collectionID int64) (bool, error)
 	InProgress(ctx context.Context, userID int64, limit int) ([]store.Resume, error)
@@ -114,7 +115,7 @@ func (handlers *libraryHandlers) collection(w http.ResponseWriter, r *http.Reque
 	}
 	currentViewer := viewer(r)
 	var subscribed bool
-	watched := map[int64]bool{}
+	watched := collections.NewSet[int64]()
 	if currentViewer.User != nil {
 		if subscribed, err = handlers.store.IsSubscribed(ctx, currentViewer.ID(), id); err != nil {
 			return err
