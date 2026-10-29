@@ -12,14 +12,23 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/media"
 )
 
-// Plan is how one file will be converted.
+// [Plan] is how one file will be converted, as decided by [MakePlan].
 type Plan struct {
-	Video            ffmpeg.Stream
-	CopyVideo        bool
-	Audio            []AudioPlan
-	Subtitles        []SubtitlePlan // text subtitles extracted to .srt files next to the video
-	DroppedSubtitles int            // image-based subtitles MP4 cannot hold
-	DroppedOther     int            // data and attachment streams (fonts, timecodes)
+	// [Video] is the original's main video stream.
+	Video ffmpeg.Stream
+	// [CopyVideo] is [true] when the video is already browser-safe H.264 and is
+	// copied unchanged; otherwise it is re-encoded.
+	CopyVideo bool
+	// [Audio] lists every audio track, in the original's order.
+	Audio []AudioPlan
+	// [Subtitles] lists the text subtitles extracted to SRT files next to the
+	// video.
+	Subtitles []SubtitlePlan
+	// [DroppedSubtitles] counts the image-based subtitles, which MP4 cannot hold.
+	DroppedSubtitles int
+	// [DroppedOther] counts the data and attachment streams left out, such as
+	// fonts and timecodes.
+	DroppedOther int
 }
 
 // [textSubtitleCodecsFile] is the contents of text_subtitle_codecs.txt,
@@ -33,9 +42,21 @@ var textSubtitleCodecsFile string
 // SRT, from text_subtitle_codecs.txt; others are bitmaps (DVD, Blu-ray).
 var textSubtitleCodecs = datafile.Set(textSubtitleCodecsFile)
 
-// MakePlan decides what to copy, what to re-encode and what to extract.
-// videoBase is the video's file name without its extension. It returns
-// ffmpeg.ErrNoVideo if src has no video stream.
+// [MakePlan] decides what to copy, what to re-encode and what to extract.
+// Every audio track is kept, text subtitles are extracted, and other video
+// streams (cover art, a second angle) are left out. The video is copied
+// only if it is H.264 in a known pixel format that [media.BrowserSafeH264]
+// accepts; an empty pixel format is treated as unknown here.
+//
+// Parameters:
+//   - [probe]: the original's probe.
+//   - [videoBase]: the video's file name without its extension, used to
+//     name the subtitle files.
+//
+// Returns:
+//   - [Plan]: the plan, or a zero [Plan] if [error] is not [nil].
+//   - [error]: [nil] on success, or [ffmpeg.ErrNoVideo] if [probe] has no
+//     video stream.
 func MakePlan(probe ffmpeg.Probe, videoBase string) (Plan, error) {
 	var plan Plan
 	video, hasVideo := probe.Video()
@@ -68,6 +89,15 @@ func MakePlan(probe ffmpeg.Probe, videoBase string) (Plan, error) {
 	return plan, nil
 }
 
+// [planAudio] decides how one audio track goes into the MP4.
+//
+// Parameters:
+//   - [stream]: the original's audio stream.
+//
+// Returns:
+//   - [AudioPlan]: the plan: copy AAC and MP3; otherwise re-encode to AAC
+//     with at most 6 channels (2 if unknown) at 64 kbit/s per channel, at
+//     least 128.
 func planAudio(stream ffmpeg.Stream) AudioPlan {
 	audioPlan := AudioPlan{Stream: stream, Copy: stream.Codec == "aac" || stream.Codec == "mp3"}
 	audioPlan.Channels = stream.Channels
@@ -85,8 +115,14 @@ func planAudio(stream ffmpeg.Stream) AudioPlan {
 	return audioPlan
 }
 
-// nameSubtitles names sidecar files the way the scanner reads them back:
+// [nameSubtitles] names the SRT files the way the scanner reads them back:
 // "Movie.en.srt", and "Movie.track2.en.srt" for a second English track.
+// Languages that are not plain codes become "und" (see [safeLanguage]).
+//
+// Parameters:
+//   - [subtitles]: the tracks to name; each one's [SubtitlePlan.File] is
+//     set.
+//   - [base]: the video's file name without its extension.
 func nameSubtitles(subtitles []SubtitlePlan, base string) {
 	seen := map[string]int{}
 	for i := range subtitles {
@@ -100,14 +136,22 @@ func nameSubtitles(subtitles []SubtitlePlan, base string) {
 	}
 }
 
-// languageTag matches the language codes that go into sidecar file names:
-// ISO 639 codes such as "en", "eng" or "pt-br".
+// [languageTag] matches the language codes allowed in subtitle file names:
+// ISO 639 codes with an optional subtag, such as "en", "eng" or "pt-br".
 var languageTag = regexp.MustCompile(`^[a-z]{2,3}(-[a-z0-9]{2,8})?$`)
 
-// safeLanguage returns the stream's language tag if it is a plain language
-// code, and "und" otherwise. The tag comes from the media file itself, so it
-// is untrusted: without this check a tag like "../../etc/x" would make the
-// sidecar path escape the video's folder.
+// [safeLanguage] makes a stream's language tag safe to put in a file name.
+// The tag comes from the media file itself, so it is untrusted: without this
+// check a tag like "../../etc/x" would make the subtitle's path escape the
+// video's folder.
+//
+// Parameters:
+//   - [tag]: the stream's language tag. Case and spaces around it do not
+//     matter.
+//
+// Returns:
+//   - [string]: [tag] lowercased if it is a plain language code (see
+//     [languageTag]), "und" otherwise.
 func safeLanguage(tag string) string {
 	tag = strings.ToLower(strings.TrimSpace(tag))
 	if languageTag.MatchString(tag) {
@@ -116,7 +160,19 @@ func safeLanguage(tag string) string {
 	return "und"
 }
 
-// ConvertArguments builds the ffmpeg command that writes the MP4.
+// [ConvertArguments] builds the ffmpeg arguments that write the MP4: the
+// main video and every audio track, copied or re-encoded as planned (video
+// to H.264 high profile, CRF 20, 8-bit 4:2:0), with the original's default
+// audio track marked default, metadata and chapters kept, no subtitles or
+// data, and the index at the front so playback can start before the file is
+// downloaded.
+//
+// Parameters:
+//   - [source]: the original's path.
+//   - [outputPath]: where to write the MP4; an existing file is overwritten.
+//
+// Returns:
+//   - [[]string]: ffmpeg's arguments, without the program name.
 func (plan Plan) ConvertArguments(source, outputPath string) []string {
 	arguments := []string{"-nostdin", "-hide_banner", "-loglevel", "error",
 		"-i", source, "-map", fmt.Sprintf("0:%d", plan.Video.Index)}
@@ -158,7 +214,17 @@ func (plan Plan) ConvertArguments(source, outputPath string) []string {
 		"-max_muxing_queue_size", "9999", "-movflags", "+faststart", "-f", "mp4", "-y", outputPath)
 }
 
-// SubtitleArguments builds the ffmpeg command that extracts one text subtitle as SRT.
+// [SubtitleArguments] builds the ffmpeg arguments that extract one text
+// subtitle track as SRT.
+//
+// Parameters:
+//   - [source]: the original's path.
+//   - [subtitlePlan]: the track to extract.
+//   - [outputPath]: where to write the SRT file; an existing file is
+//     overwritten.
+//
+// Returns:
+//   - [[]string]: ffmpeg's arguments, without the program name.
 func SubtitleArguments(source string, subtitlePlan SubtitlePlan, outputPath string) []string {
 	return []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-i", source,
 		"-map", fmt.Sprintf("0:%d", subtitlePlan.Stream.Index), "-c:s", "srt", "-f", "srt", "-y", outputPath}

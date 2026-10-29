@@ -13,39 +13,62 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-// Converter works through the queue of files that need converting, at most
-// Max at a time, newest first, and deletes each original once its MP4 is
-// verified and in the library. Conversions run at low CPU priority so
-// playback stays smooth. Build it with New; it is safe for concurrent use.
+// [Converter] works through the queue of files that need converting, at most
+// [Config.Max] at a time, newest first, and deletes each original once its
+// MP4 is checked and in the library. Conversions run at low CPU priority so
+// playback stays smooth. Create one with [New] and start it with
+// [Converter.Run]. It is safe for concurrent use.
 //
 // A file's state, from the control panel's point of view:
-//   - queued: needs converting (media.NeedsConversion) and has not failed;
+//   - queued: needs converting ([media.NeedsConversion]) and has not failed;
 //   - running: being converted now;
-//   - postponed: skipped for noSpaceRetry because the disk was full;
+//   - postponed: skipped for [noSpaceRetry] because the disk was too full;
 //   - failed: recorded in the database until an administrator retries it.
 //
-// Only "failed" is stored; the queue is computed from the library.
+// Only "failed" is stored; the queue is computed from the library each time.
 type Converter struct {
+	// [dependencies] are the database, ffmpeg, scanner and log.
 	dependencies Dependencies
-	config       Config
-	now          func() time.Time
-	wake         chan struct{}
+	// [config] holds the settings, with defaults filled in.
+	config Config
+	// [now] tells the time, for postponing and timing. Tests replace it.
+	now func() time.Time
+	// [wake] carries requests from [Converter.Wake] to [Converter.Run]. It holds
+	// at most one, since one look at the queue answers any number of requests.
+	wake chan struct{}
 
-	mutex       sync.Mutex // guards everything below
-	active      map[int64]*job
-	waitUntil   map[int64]time.Time // postponed files
-	unavailable string              // why Run stopped before converting anything
+	// [mutex] guards [active], [waitUntil] and [unavailable], and each active
+	// job's progress.
+	mutex sync.Mutex
+	// [active] maps the media ID of each running conversion to its job.
+	active map[int64]*job
+	// [waitUntil] maps the media ID of each postponed file to when it may be
+	// tried again.
+	waitUntil map[int64]time.Time
+	// [unavailable] explains why [Converter.Run] stopped before converting
+	// anything, or is "" if it did not.
+	unavailable string
 }
 
-// job is one conversion in progress.
+// [job] is one conversion in progress. Its [job.duration] and [job.done]
+// change while it runs; read and write them only while holding the
+// converter's [Converter.mutex].
 type job struct {
-	media    store.Media
-	duration float64 // seconds; from the probe once known
-	done     float64 // seconds converted so far
+	// [media] is the file being converted, as it was when the job started.
+	media store.Media
+	// [duration] is the file's length in seconds: from the database at first,
+	// then from the probe once it has run.
+	duration float64
+	// [done] is how many seconds of the file have been converted so far.
+	done float64
 }
 
-// percent is how far the job has got, 0 to 99 (100 only once it is done).
-// The caller holds the converter's mutex.
+// [percent] tells how far the job has got. The caller must hold the
+// converter's [Converter.mutex].
+//
+// Returns:
+//   - [int]: from 0 to 99, or 0 while the length is not known. It never
+//     reaches 100, since a finished job is no longer listed.
 func (job *job) percent() int {
 	if job.duration <= 0 {
 		return 0
@@ -53,7 +76,15 @@ func (job *job) percent() int {
 	return int(math.Min(99, job.done/job.duration*100))
 }
 
-// New returns a converter. Call Run to start working through the queue.
+// [New] creates a converter. Nothing runs until [Converter.Run].
+//
+// Parameters:
+//   - [dependencies]: the database, ffmpeg, scanner and log.
+//   - [config]: the media folder and limits. A [Config.Max] below 1 becomes
+//     1, and a [nil] [Config.FreeSpace] asks the operating system.
+//
+// Returns:
+//   - [*Converter]: the new converter.
 func New(dependencies Dependencies, config Config) *Converter {
 	if config.Max < 1 {
 		config.Max = 1
@@ -67,7 +98,8 @@ func New(dependencies Dependencies, config Config) *Converter {
 	}
 }
 
-// Wake asks the converter to look at the queue now (after a scan found new files).
+// [Wake] asks the converter to look at the queue now, such as after a scan
+// found new files, instead of at its next minute. It never blocks.
 func (converter *Converter) Wake() {
 	select {
 	case converter.wake <- struct{}{}:
@@ -75,9 +107,22 @@ func (converter *Converter) Wake() {
 	}
 }
 
-// Run processes the queue until ctx ends, and returns after every running
-// conversion has stopped. If the media folder is not writable it returns at
-// once and Status says why.
+// [Run] works through the queue until [ctx] ends: it looks again every
+// minute, whenever [Converter.Wake] is called, and whenever a conversion
+// finishes. At start it deletes files left by interrupted conversions. It
+// blocks, so call it in its own goroutine; once [ctx] ends it returns after
+// every running conversion has stopped.
+//
+// If the media folder is not writable it logs a warning and returns at
+// once, and [Converter.Status] tells the administrator why.
+//
+// Parameters:
+//   - [ctx]: stops the converter, and kills running conversions, when it is
+//     cancelled.
+//
+// Returns:
+//   - [error]: always [nil]; problems are logged and shown in
+//     [Converter.Status].
 func (converter *Converter) Run(ctx context.Context) error {
 	if err := checkWritable(converter.config.MediaDirectory); err != nil {
 		converter.mutex.Lock()
@@ -107,9 +152,15 @@ func (converter *Converter) Run(ctx context.Context) error {
 	}
 }
 
-// fill starts conversions until Max are running or the queue is empty. Only
-// Run calls it, so the free-slot count cannot change underneath it except by
-// jobs finishing, which only frees more.
+// [fill] starts conversions from the front of the queue until [Config.Max]
+// are running or the queue is empty, each in its own goroutine. Only
+// [Converter.Run] calls it, so the number of free slots can only grow
+// underneath it, as jobs finish. A queue that cannot be read is logged.
+//
+// Parameters:
+//   - [ctx]: passed to each conversion; cancelling it stops them.
+//   - [waitGroup]: tracks the started conversions, so [Converter.Run] can
+//     wait for them.
 func (converter *Converter) fill(ctx context.Context, waitGroup *sync.WaitGroup) {
 	converter.mutex.Lock()
 	free := converter.config.Max - len(converter.active)
@@ -149,8 +200,17 @@ func (converter *Converter) fill(ctx context.Context, waitGroup *sync.WaitGroup)
 	}
 }
 
-// queue lists the IDs of files waiting for conversion, newest first,
-// leaving out running ones. It also counts postponed ones.
+// [queue] works out which files are waiting for conversion.
+//
+// Parameters:
+//   - [ctx]: cancels the database query.
+//
+// Returns:
+//   - [[]int64] ([queued]): the media IDs that need converting and are
+//     neither running nor postponed, newest first.
+//   - [int] ([postponed]): how many files that need converting are
+//     postponed because the disk was too full.
+//   - [error]: [nil] on success, or the database error.
 func (converter *Converter) queue(ctx context.Context) (queued []int64, postponed int, err error) {
 	candidates, err := converter.dependencies.Store.ConversionCandidates(ctx)
 	if err != nil {
@@ -172,7 +232,17 @@ func (converter *Converter) queue(ctx context.Context) (queued []int64, postpone
 	return queued, postponed, nil
 }
 
-// Status reports what the converter is doing.
+// [Status] reports what the converter is doing, for the control panel.
+//
+// Parameters:
+//   - [ctx]: cancels the database query for the queue.
+//
+// Returns:
+//   - [Status]: the running conversions and the queue's size, or only
+//     [Status.Unavailable] if conversion could not start. If [error] is not
+//     [nil], the running conversions are still listed but the counts are 0.
+//   - [error]: [nil] on success, or the database error from reading the
+//     queue.
 func (converter *Converter) Status(ctx context.Context) (Status, error) {
 	converter.mutex.Lock()
 	status := Status{Unavailable: converter.unavailable}
@@ -188,9 +258,15 @@ func (converter *Converter) Status(ctx context.Context) (Status, error) {
 	return status, err
 }
 
-// runJob converts one file and records the outcome. Shutdown, a changed
-// source and a full disk are not failures; anything else is recorded so the
-// control panel can show it.
+// [runJob] converts one file and records the outcome. A shutdown and a file
+// that changed while converting are logged only; a disk too full postpones
+// the file for [noSpaceRetry]; any other error is recorded with
+// [Store.SetConvertFailed] so the control panel can show it. After a
+// success it asks for a rescan to import the extracted subtitles.
+//
+// Parameters:
+//   - [ctx]: stops the conversion when cancelled.
+//   - [job]: the conversion to run.
 func (converter *Converter) runJob(ctx context.Context, job *job) {
 	media := job.media
 	start := converter.now()
@@ -220,18 +296,35 @@ func (converter *Converter) runJob(ctx context.Context, job *job) {
 	}
 }
 
+// [percent] reads a job's progress while holding the lock.
+//
+// Parameters:
+//   - [job]: a running conversion.
+//
+// Returns:
+//   - [int]: as [job.percent] describes.
 func (converter *Converter) percent(job *job) int {
 	converter.mutex.Lock()
 	defer converter.mutex.Unlock()
 	return job.percent()
 }
 
+// [setProgress] records how much of a job's file has been converted.
+//
+// Parameters:
+//   - [job]: a running conversion.
+//   - [seconds]: the seconds converted so far, as ffmpeg reports it.
 func (converter *Converter) setProgress(job *job, seconds float64) {
 	converter.mutex.Lock()
 	job.done = seconds
 	converter.mutex.Unlock()
 }
 
+// [setDuration] records a job's file length once the probe knows it.
+//
+// Parameters:
+//   - [job]: a running conversion.
+//   - [seconds]: the file's length in seconds; 0 or less is ignored.
 func (converter *Converter) setDuration(job *job, seconds float64) {
 	if seconds > 0 {
 		converter.mutex.Lock()
