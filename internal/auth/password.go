@@ -55,9 +55,9 @@ func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil || version != argon2.Version {
 		return false, errors.New("unsupported argon2 version")
 	}
-	var mem, t uint32
-	var p uint8
-	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &mem, &t, &p); err != nil {
+	var mem, iterations uint32
+	var parallelism uint8
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &mem, &iterations, &parallelism); err != nil {
 		return false, errors.New("bad argon2 parameters")
 	}
 	b64 := base64.RawStdEncoding
@@ -69,20 +69,20 @@ func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	got := argon2.IDKey([]byte(password), salt, t, mem, p, uint32(len(want)))
+	got := argon2.IDKey([]byte(password), salt, iterations, mem, parallelism, uint32(len(want)))
 	if subtle.ConstantTimeCompare(got, want) != 1 {
 		return false, ErrMismatch
 	}
-	return mem < argonMemory || t < argonTime, nil
+	return mem < argonMemory || iterations < argonTime, nil
 }
 
 // NewToken returns a random URL-safe token with 256 bits of entropy.
 func NewToken() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
+	randomBytes := make([]byte, 32)
+	if _, err := rand.Read(randomBytes); err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	return base64.RawURLEncoding.EncodeToString(randomBytes), nil
 }
 
 // HashToken is how session tokens are stored, so a leaked database does not

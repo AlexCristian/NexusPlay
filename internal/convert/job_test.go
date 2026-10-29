@@ -27,7 +27,7 @@ type fakeTools struct {
 }
 
 func (f *fakeTools) Probe(ctx context.Context, file string) (ffmpeg.Probe, error) {
-	if strings.HasSuffix(file, tmpSuffix) {
+	if strings.HasSuffix(file, temporarySuffix) {
 		return f.converted, nil
 	}
 	return ffmpeg.Probe{Duration: 60, Container: "matroska,webm", Streams: []ffmpeg.Stream{
@@ -90,7 +90,7 @@ func newJobFixture(t *testing.T, tools *fakeTools, free uint64) jobFixture {
 	m, _ := st.MediaByID(ctx, id)
 	lib := &fakeLibrary{}
 	c := New(Deps{Store: st, Tools: tools, Library: lib, Log: slog.New(slog.NewTextHandler(io.Discard, nil))},
-		Config{MediaDir: mediaDir, FreeSpace: func(string) (uint64, error) { return free, nil }})
+		Config{MediaDirectory: mediaDir, FreeSpace: func(string) (uint64, error) { return free, nil }})
 	return jobFixture{c: c, st: st, lib: lib, tools: tools, media: m, dir: mediaDir}
 }
 

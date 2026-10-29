@@ -197,7 +197,7 @@ func startServer(t *testing.T, o serverOpts) *server {
 		o.ffmpeg = "ffmpeg"
 	}
 	cfg := config.Config{
-		MediaDir: media, DataDir: filepath.Join(dir, "data"),
+		MediaDirectory: media, DataDirectory: filepath.Join(dir, "data"),
 		ScanInterval: time.Hour, VotesRequired: 2, MaxTranscodes: o.maxTranscodes,
 		FFmpegPath: o.ffmpeg, FFprobePath: "ffprobe",
 		Convert: o.convert, MaxConversions: 1,

@@ -47,7 +47,7 @@ func episodeByTitle(episodes []metadata.Episode, title string, number int) (meta
 	bestScore := 0.0
 	for _, episode := range episodes {
 		score := similarity(wantedWords, titleWords(episode.Title))
-		closer := abs(episode.Number-number) < abs(best.Number-number)
+		closer := absolute(episode.Number-number) < absolute(best.Number-number)
 		if score > bestScore || (score == bestScore && score > 0 && closer) {
 			best, bestScore = episode, score
 		}
@@ -177,14 +177,14 @@ func similarity(first, second collections.Set[string]) float64 {
 	return 2 * float64(shared) / float64(first.Len()+second.Len())
 }
 
-// [abs] gives the absolute value of a whole number.
+// [absolute] gives the absolute value of a whole number.
 //
 // Parameters:
 //   - [number]: any [int].
 //
 // Returns:
 //   - [int]: [number] if it is 0 or more, and -[number] otherwise.
-func abs(number int) int {
+func absolute(number int) int {
 	if number < 0 {
 		return -number
 	}

@@ -17,16 +17,16 @@ var assetHashes = hashStatic()
 
 func hashStatic() map[string]string {
 	out := map[string]string{}
-	fs.WalkDir(staticFiles, "static", func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+	fs.WalkDir(staticFiles, "static", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
 			return nil // the embedded tree has no unreadable entries
 		}
-		data, err := staticFiles.ReadFile(p)
+		data, err := staticFiles.ReadFile(path)
 		if err != nil {
 			return nil
 		}
 		sum := sha256.Sum256(data)
-		out["/"+p] = hex.EncodeToString(sum[:])[:10]
+		out["/"+path] = hex.EncodeToString(sum[:])[:10]
 		return nil
 	})
 	return out
@@ -35,8 +35,8 @@ func hashStatic() map[string]string {
 // asset returns the URL of a static file with its content hash, such as
 // /static/css/app.css?v=1a2b3c4d5e.
 func asset(path string) string {
-	if h, ok := assetHashes[path]; ok {
-		return path + "?v=" + h
+	if hash, found := assetHashes[path]; found {
+		return path + "?v=" + hash
 	}
 	return path
 }
@@ -46,7 +46,7 @@ func asset(path string) string {
 // day otherwise (fonts, which the stylesheet links without a hash).
 func cacheStatic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if v := r.URL.Query().Get("v"); v != "" && v == assetHashes[strings.TrimSuffix(r.URL.Path, "/")] {
+		if version := r.URL.Query().Get("v"); version != "" && version == assetHashes[strings.TrimSuffix(r.URL.Path, "/")] {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
 			w.Header().Set("Cache-Control", "public, max-age=86400")

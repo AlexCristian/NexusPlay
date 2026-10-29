@@ -25,7 +25,7 @@ type accountHandlers struct {
 // accountService checks credentials and creates accounts (auth.Accounts).
 type accountService interface {
 	RegistrationStatus(ctx context.Context) (auth.RegistrationStatus, error)
-	Register(ctx context.Context, in auth.Registration) (store.User, error)
+	Register(ctx context.Context, registration auth.Registration) (store.User, error)
 	Login(ctx context.Context, email, password string) (store.User, error)
 }
 
@@ -46,136 +46,136 @@ func safeNext(next string) string {
 	if next == "" {
 		return "/"
 	}
-	for _, r := range next {
-		if r < 0x20 || r == 0x7f || r == '\\' {
+	for _, character := range next {
+		if character < 0x20 || character == 0x7f || character == '\\' {
 			return "/"
 		}
 	}
-	u, err := url.Parse(next)
-	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || u.Opaque != "" {
+	parsedURL, err := url.Parse(next)
+	if err != nil || parsedURL.Scheme != "" || parsedURL.Host != "" || parsedURL.User != nil || parsedURL.Opaque != "" {
 		return "/"
 	}
-	if !strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") {
+	if !strings.HasPrefix(parsedURL.Path, "/") || strings.HasPrefix(parsedURL.Path, "//") {
 		return "/"
 	}
-	out := u.EscapedPath()
-	if u.RawQuery != "" {
-		out += "?" + u.RawQuery
+	out := parsedURL.EscapedPath()
+	if parsedURL.RawQuery != "" {
+		out += "?" + parsedURL.RawQuery
 	}
 	return out
 }
 
 // loginPage handles GET /login, as a page or (htmx) a dialog.
-func (h *accountHandlers) loginPage(w http.ResponseWriter, r *http.Request) error {
+func (handlers *accountHandlers) loginPage(w http.ResponseWriter, r *http.Request) error {
 	next := r.URL.Query().Get("next")
 	if next == "" && isHTMX(r) {
 		next = currentURL(r) // opened as a dialog: come back to the same page
 	}
-	return h.respond(w, r, http.StatusOK, "Log in", loginForm("", "", safeNext(next)), authPage)
+	return handlers.respond(w, r, http.StatusOK, "Log in", loginForm("", "", safeNext(next)), authPage)
 }
 
 // registerPage handles GET /register, as a page or (htmx) a dialog.
-func (h *accountHandlers) registerPage(w http.ResponseWriter, r *http.Request) error {
-	st, err := h.accounts.RegistrationStatus(r.Context())
+func (handlers *accountHandlers) registerPage(w http.ResponseWriter, r *http.Request) error {
+	status, err := handlers.accounts.RegistrationStatus(r.Context())
 	if err != nil {
 		return err
 	}
-	return h.respond(w, r, http.StatusOK, "Register", registerForm("", "", "", st), authPage)
+	return handlers.respond(w, r, http.StatusOK, "Register", registerForm("", "", "", status), authPage)
 }
 
 // rejectAuthForm shows a login or registration form again with its error.
 // A full page carries the failure status; an htmx dialog needs 200, because
 // htmx only swaps in successful responses.
-func (h *accountHandlers) rejectAuthForm(w http.ResponseWriter, r *http.Request, status int, title string, form templ.Component) error {
+func (handlers *accountHandlers) rejectAuthForm(w http.ResponseWriter, r *http.Request, status int, title string, form templ.Component) error {
 	if isHTMX(r) {
 		status = http.StatusOK
 	}
-	return h.respond(w, r, status, title, form, authPage)
+	return handlers.respond(w, r, status, title, form, authPage)
 }
 
 // login handles POST /login from the login form or dialog.
-func (h *accountHandlers) login(w http.ResponseWriter, r *http.Request) error {
+func (handlers *accountHandlers) login(w http.ResponseWriter, r *http.Request) error {
 	email := strings.TrimSpace(r.FormValue("email"))
 	next := safeNext(r.FormValue("next"))
-	u, err := h.accounts.Login(r.Context(), email, r.FormValue("password"))
+	user, err := handlers.accounts.Login(r.Context(), email, r.FormValue("password"))
 	if errors.Is(err, auth.ErrInvalidCredentials) {
-		return h.rejectAuthForm(w, r, http.StatusUnauthorized, "Log in", loginForm("Wrong e-mail or password.", email, next))
+		return handlers.rejectAuthForm(w, r, http.StatusUnauthorized, "Log in", loginForm("Wrong e-mail or password.", email, next))
 	}
 	if err != nil {
 		return err
 	}
-	if err := h.startSession(w, r, u.ID); err != nil {
+	if err := handlers.startSession(w, r, user.ID); err != nil {
 		return err
 	}
-	h.redirect(w, r, next)
+	handlers.redirect(w, r, next)
 	return nil
 }
 
 // register handles POST /register. The first account becomes the administrator.
-func (h *accountHandlers) register(w http.ResponseWriter, r *http.Request) error {
-	in := auth.Registration{Email: r.FormValue("email"), Nickname: r.FormValue("nickname"), Password: r.FormValue("password")}
-	u, err := h.accounts.Register(r.Context(), in)
+func (handlers *accountHandlers) register(w http.ResponseWriter, r *http.Request) error {
+	registration := auth.Registration{Email: r.FormValue("email"), Nickname: r.FormValue("nickname"), Password: r.FormValue("password")}
+	user, err := handlers.accounts.Register(r.Context(), registration)
 	var invalid *auth.ValidationError
-	var msg string
+	var message string
 	status := http.StatusBadRequest
 	switch {
 	case errors.As(err, &invalid):
-		msg = invalid.Msg
+		message = invalid.Message
 	case errors.Is(err, store.ErrDuplicate):
-		msg = "That e-mail or nickname is already registered."
+		message = "That e-mail or nickname is already registered."
 	case errors.Is(err, auth.ErrRegistrationClosed):
 		status = http.StatusForbidden // the form below says why
 	case err != nil:
 		return err
 	default:
-		if err := h.startSession(w, r, u.ID); err != nil {
+		if err := handlers.startSession(w, r, user.ID); err != nil {
 			return err
 		}
-		h.redirect(w, r, "/")
+		handlers.redirect(w, r, "/")
 		return nil
 	}
-	st, err := h.accounts.RegistrationStatus(r.Context())
+	registrationStatus, err := handlers.accounts.RegistrationStatus(r.Context())
 	if err != nil {
 		return err
 	}
-	form := registerForm(msg, strings.TrimSpace(in.Email), strings.TrimSpace(in.Nickname), st)
-	return h.rejectAuthForm(w, r, status, "Register", form)
+	form := registerForm(message, strings.TrimSpace(registration.Email), strings.TrimSpace(registration.Nickname), registrationStatus)
+	return handlers.rejectAuthForm(w, r, status, "Register", form)
 }
 
 // logout handles POST /logout.
-func (h *accountHandlers) logout(w http.ResponseWriter, r *http.Request) error {
-	if c, err := r.Cookie(sessionCookie); err == nil {
+func (handlers *accountHandlers) logout(w http.ResponseWriter, r *http.Request) error {
+	if cookie, err := r.Cookie(sessionCookie); err == nil {
 		// The cookie is cleared below regardless: the user asked to leave. A
 		// session row left behind expires on its own.
-		if err := h.sessions.End(r.Context(), c.Value); err != nil {
-			h.log.Warn("could not delete a session on logout", "err", err)
+		if err := handlers.sessions.End(r.Context(), cookie.Value); err != nil {
+			handlers.log.Warn("could not delete a session on logout", "err", err)
 		}
 	}
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode})
-	h.redirect(w, r, "/")
+		HttpOnly: true, Secure: handlers.secureCookies, SameSite: http.SameSiteLaxMode})
+	handlers.redirect(w, r, "/")
 	return nil
 }
 
 // startSession logs a user in: a new session and its cookie.
-func (h *accountHandlers) startSession(w http.ResponseWriter, r *http.Request, userID int64) error {
-	token, expires, err := h.sessions.Start(r.Context(), userID)
+func (handlers *accountHandlers) startSession(w http.ResponseWriter, r *http.Request, userID int64) error {
+	token, expires, err := handlers.sessions.Start(r.Context(), userID)
 	if err != nil {
 		return err
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: token, Path: "/", Expires: expires,
-		HttpOnly: true, Secure: h.secureCookies, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: handlers.secureCookies, SameSite: http.SameSiteLaxMode,
 	})
 	return nil
 }
 
 // redirect sends the browser elsewhere, whether the request came from htmx or a plain form.
-func (h *accountHandlers) redirect(w http.ResponseWriter, r *http.Request, to string) {
+func (handlers *accountHandlers) redirect(w http.ResponseWriter, r *http.Request, target string) {
 	if isHTMX(r) {
-		w.Header().Set("HX-Redirect", to)
+		w.Header().Set("HX-Redirect", target)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	http.Redirect(w, r, to, http.StatusSeeOther)
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }

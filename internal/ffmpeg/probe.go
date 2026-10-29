@@ -34,39 +34,39 @@ var ErrNoVideo = errors.New("no video stream")
 
 // Video returns the main video stream: the first video stream that is not
 // cover art.
-func (p Probe) Video() (Stream, bool) {
-	for _, s := range p.Streams {
-		if s.Type == "video" && !s.AttachPic && !isImageCodec(s.Codec) {
-			return s, true
+func (probe Probe) Video() (Stream, bool) {
+	for _, stream := range probe.Streams {
+		if stream.Type == "video" && !stream.AttachPic && !isImageCodec(stream.Codec) {
+			return stream, true
 		}
 	}
 	return Stream{}, false
 }
 
 // Audio returns the first audio stream.
-func (p Probe) Audio() (Stream, bool) {
-	for _, s := range p.Streams {
-		if s.Type == "audio" {
-			return s, true
+func (probe Probe) Audio() (Stream, bool) {
+	for _, stream := range probe.Streams {
+		if stream.Type == "audio" {
+			return stream, true
 		}
 	}
 	return Stream{}, false
 }
 
 // Count returns how many streams of a type the file has.
-func (p Probe) Count(typ string) int {
-	n := 0
-	for _, s := range p.Streams {
-		if s.Type == typ {
-			n++
+func (probe Probe) Count(typ string) int {
+	count := 0
+	for _, stream := range probe.Streams {
+		if stream.Type == typ {
+			count++
 		}
 	}
-	return n
+	return count
 }
 
 // VideoCodec and AudioCodec return the main streams' codecs, or "" if absent.
-func (p Probe) VideoCodec() string { v, _ := p.Video(); return v.Codec }
-func (p Probe) AudioCodec() string { a, _ := p.Audio(); return a.Codec }
+func (probe Probe) VideoCodec() string { stream, _ := probe.Video(); return stream.Codec }
+func (probe Probe) AudioCodec() string { stream, _ := probe.Audio(); return stream.Codec }
 
 // isImageCodec reports codecs used for cover art that some files store
 // without the attached_pic flag.
@@ -76,8 +76,8 @@ func isImageCodec(codec string) bool {
 
 // Probe inspects a media file with ffprobe. Failures of ffprobe itself are
 // *ExitError.
-func (t Tools) Probe(ctx context.Context, file string) (Probe, error) {
-	cmd := command(ctx, t.FFprobe, "-v", "error", "-print_format", "json",
+func (tools Tools) Probe(ctx context.Context, file string) (Probe, error) {
+	cmd := command(ctx, tools.FFprobe, "-v", "error", "-print_format", "json",
 		"-show_format", "-show_streams", file)
 	stderr := &lastLineWriter{}
 	cmd.Stderr = stderr
@@ -110,14 +110,14 @@ func parseProbe(out []byte) (Probe, error) {
 	if err := json.Unmarshal(out, &raw); err != nil {
 		return Probe{}, fmt.Errorf("reading ffprobe output: %w", err)
 	}
-	p := Probe{Container: raw.Format.FormatName}
-	p.Duration, _ = strconv.ParseFloat(raw.Format.Duration, 64) // "N/A" for some files: 0 means unknown
-	for _, s := range raw.Streams {
-		p.Streams = append(p.Streams, Stream{
-			Index: s.Index, Type: s.CodecType, Codec: s.CodecName, PixFmt: s.PixFmt, Channels: s.Channels,
-			Language: strings.ToLower(s.Tags["language"]), Title: s.Tags["title"],
-			Default: s.Disposition["default"] == 1, AttachPic: s.Disposition["attached_pic"] == 1,
+	probe := Probe{Container: raw.Format.FormatName}
+	probe.Duration, _ = strconv.ParseFloat(raw.Format.Duration, 64) // "N/A" for some files: 0 means unknown
+	for _, rawStream := range raw.Streams {
+		probe.Streams = append(probe.Streams, Stream{
+			Index: rawStream.Index, Type: rawStream.CodecType, Codec: rawStream.CodecName, PixFmt: rawStream.PixFmt, Channels: rawStream.Channels,
+			Language: strings.ToLower(rawStream.Tags["language"]), Title: rawStream.Tags["title"],
+			Default: rawStream.Disposition["default"] == 1, AttachPic: rawStream.Disposition["attached_pic"] == 1,
 		})
 	}
-	return p, nil
+	return probe, nil
 }

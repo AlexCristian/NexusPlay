@@ -20,29 +20,29 @@ import (
 // collections and subtitle tracks, scans and the conversion queue.
 type adminHandlers struct {
 	responder
-	store       adminStore
-	meta        metadataLookup
-	refresher   metadataRefresher
-	scanner     scanTrigger
-	conversions Conversions
-	posterDir   string
+	store           adminStore
+	meta            metadataLookup
+	refresher       metadataRefresher
+	scanner         scanTrigger
+	conversions     Conversions
+	posterDirectory string
 }
 
 // adminStore is the part of the database the control panel edits.
 type adminStore interface {
 	mediaGetter
 	PendingMedia(ctx context.Context) ([]store.Media, error)
-	UpdateMedia(ctx context.Context, id int64, u store.MediaUpdate, publish bool) error
+	UpdateMedia(ctx context.Context, id int64, update store.MediaUpdate, publish bool) error
 	Collections(ctx context.Context) ([]store.Collection, error)
 	CategoryNames(ctx context.Context) ([]string, error)
 	CollectionByID(ctx context.Context, id int64) (store.Collection, error)
 	CollectionByName(ctx context.Context, name string) (store.Collection, error)
-	CreateCollection(ctx context.Context, c store.Collection) (id int64, err error)
-	UpdateCollection(ctx context.Context, id int64, u store.CollectionUpdate) error
+	CreateCollection(ctx context.Context, collection store.Collection) (id int64, err error)
+	UpdateCollection(ctx context.Context, id int64, update store.CollectionUpdate) error
 	DeleteCollection(ctx context.Context, id int64) error
 	Subtitles(ctx context.Context, mediaID int64) ([]store.Subtitle, error)
 	SubtitleByID(ctx context.Context, id int64) (store.Subtitle, error)
-	AddSubtitle(ctx context.Context, t store.NewSubtitle) (id int64, inserted bool, err error)
+	AddSubtitle(ctx context.Context, subtitle store.NewSubtitle) (id int64, inserted bool, err error)
 	UpdateSubtitleLabel(ctx context.Context, id int64, language, label string) error
 	DeleteSubtitle(ctx context.Context, id int64) error
 	ConversionFailures(ctx context.Context) ([]store.ConversionFailure, error)
@@ -69,35 +69,35 @@ type scanTrigger interface {
 
 // mediaFromPath loads the media named by {id}. Administrators see
 // unpublished media too, so there is no visibility check.
-func (h *adminHandlers) mediaFromPath(r *http.Request) (store.Media, error) {
+func (handlers *adminHandlers) mediaFromPath(r *http.Request) (store.Media, error) {
 	id, err := pathID(r)
 	if err != nil {
 		return store.Media{}, err
 	}
-	return h.store.MediaByID(r.Context(), id)
+	return handlers.store.MediaByID(r.Context(), id)
 }
 
 // controlPanel handles GET /admin: media waiting to be published, the
 // collections, and the conversion queue.
-func (h *adminHandlers) controlPanel(w http.ResponseWriter, r *http.Request) error {
+func (handlers *adminHandlers) controlPanel(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	pending, err := h.store.PendingMedia(ctx)
+	pending, err := handlers.store.PendingMedia(ctx)
 	if err != nil {
 		return err
 	}
-	colls, err := h.store.Collections(ctx)
+	colls, err := handlers.store.Collections(ctx)
 	if err != nil {
 		return err
 	}
-	cats, err := h.store.CategoryNames(ctx)
+	cats, err := handlers.store.CategoryNames(ctx)
 	if err != nil {
 		return err
 	}
-	conv, err := h.conversionView(ctx)
+	conv, err := handlers.conversionView(ctx)
 	if err != nil {
 		return err
 	}
-	h.render(w, r, http.StatusOK, controlPanel(newPage(r, "Control panel"), pending, colls, cats, h.meta.Enabled(), conv,
+	handlers.render(w, r, http.StatusOK, controlPanel(newPage(r, "Control panel"), pending, colls, cats, handlers.meta.Enabled(), conv,
 		doneMessages[r.URL.Query().Get("done")]))
 	return nil
 }
@@ -111,150 +111,150 @@ var doneMessages = map[string]string{
 }
 
 // conversionView is the converter's status and the recorded failures.
-func (h *adminHandlers) conversionView(ctx context.Context) (ConversionView, error) {
-	var v ConversionView
+func (handlers *adminHandlers) conversionView(ctx context.Context) (ConversionView, error) {
+	var view ConversionView
 	var err error
-	if v.Status, err = h.conversions.Status(ctx); err != nil {
-		return v, err
+	if view.Status, err = handlers.conversions.Status(ctx); err != nil {
+		return view, err
 	}
-	v.Failures, err = h.store.ConversionFailures(ctx)
-	return v, err
+	view.Failures, err = handlers.store.ConversionFailures(ctx)
+	return view, err
 }
 
 // conversionsPanel handles GET /admin/conversions, polled by the control
 // panel while conversions run.
-func (h *adminHandlers) conversionsPanel(w http.ResponseWriter, r *http.Request) error {
-	v, err := h.conversionView(r.Context())
+func (handlers *adminHandlers) conversionsPanel(w http.ResponseWriter, r *http.Request) error {
+	view, err := handlers.conversionView(r.Context())
 	if err != nil {
 		return err
 	}
-	h.render(w, r, http.StatusOK, conversionsSection(viewer(r).CSRF, v))
+	handlers.render(w, r, http.StatusOK, conversionsSection(viewer(r).CSRF, view))
 	return nil
 }
 
 // retryConversion handles POST /admin/media/{id}/retry-conversion.
-func (h *adminHandlers) retryConversion(w http.ResponseWriter, r *http.Request) error {
+func (handlers *adminHandlers) retryConversion(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r)
 	if err != nil {
 		return err
 	}
-	if err := h.store.RetryConversion(r.Context(), id); err != nil {
+	if err := handlers.store.RetryConversion(r.Context(), id); err != nil {
 		return err
 	}
-	h.conversions.Wake()
+	handlers.conversions.Wake()
 	http.Redirect(w, r, "/admin?done=retry", http.StatusSeeOther)
 	return nil
 }
 
 // scanNow handles POST /admin/scan.
-func (h *adminHandlers) scanNow(w http.ResponseWriter, r *http.Request) error {
-	h.scanner.Trigger()
+func (handlers *adminHandlers) scanNow(w http.ResponseWriter, r *http.Request) error {
+	handlers.scanner.Trigger()
 	http.Redirect(w, r, "/admin?done=scan", http.StatusSeeOther)
 	return nil
 }
 
 // mediaForm fills the edit form for m. For media not yet published it
 // pre-fills the collection and category from the file name.
-func (h *adminHandlers) mediaForm(ctx context.Context, m store.Media) (MediaForm, error) {
-	f := MediaForm{Media: m, CollectionName: m.CollectionName, MetaEnabled: h.meta.Enabled()}
+func (handlers *adminHandlers) mediaForm(ctx context.Context, media store.Media) (MediaForm, error) {
+	form := MediaForm{Media: media, CollectionName: media.CollectionName, MetaEnabled: handlers.meta.Enabled()}
 	var err error
-	if f.Collections, err = h.store.Collections(ctx); err != nil {
-		return f, err
+	if form.Collections, err = handlers.store.Collections(ctx); err != nil {
+		return form, err
 	}
-	if f.Categories, err = h.store.CategoryNames(ctx); err != nil {
-		return f, err
+	if form.Categories, err = handlers.store.CategoryNames(ctx); err != nil {
+		return form, err
 	}
-	if f.Subtitles, err = h.store.Subtitles(ctx, m.ID); err != nil {
-		return f, err
+	if form.Subtitles, err = handlers.store.Subtitles(ctx, media.ID); err != nil {
+		return form, err
 	}
-	if !m.Published {
+	if !media.Published {
 		// Prefill from the file name: an episode's show becomes its collection.
-		g := guessFor(m)
-		if g.IsEpisode() && f.CollectionName == "" {
-			f.CollectionName = g.Show
-			for _, c := range f.Collections {
-				if strings.EqualFold(c.Name, g.Show) {
-					f.CollectionName = c.Name
+		guess := guessFor(media)
+		if guess.IsEpisode() && form.CollectionName == "" {
+			form.CollectionName = guess.Show
+			for _, collection := range form.Collections {
+				if strings.EqualFold(collection.Name, guess.Show) {
+					form.CollectionName = collection.Name
 				}
 			}
 		}
-		if f.Media.Category == "" && !g.IsEpisode() {
-			f.Media.Category = "Movies"
+		if form.Media.Category == "" && !guess.IsEpisode() {
+			form.Media.Category = "Movies"
 		}
 	}
-	return f, nil
+	return form, nil
 }
 
 // editMediaPage handles GET /admin/media/{id}.
-func (h *adminHandlers) editMediaPage(w http.ResponseWriter, r *http.Request) error {
-	m, err := h.mediaFromPath(r)
+func (handlers *adminHandlers) editMediaPage(w http.ResponseWriter, r *http.Request) error {
+	media, err := handlers.mediaFromPath(r)
 	if err != nil {
 		return err
 	}
-	f, err := h.mediaForm(r.Context(), m)
+	form, err := handlers.mediaForm(r.Context(), media)
 	if err != nil {
 		return err
 	}
-	f.Saved = r.URL.Query().Get("saved") == "1"
-	f.Refreshed = r.URL.Query().Get("refreshed") == "1"
-	h.render(w, r, http.StatusOK, editMediaPage(newPage(r, "Edit "+m.Title), f))
+	form.Saved = r.URL.Query().Get("saved") == "1"
+	form.Refreshed = r.URL.Query().Get("refreshed") == "1"
+	handlers.render(w, r, http.StatusOK, editMediaPage(newPage(r, "Edit "+media.Title), form))
 	return nil
 }
 
 // showMediaFormError shows the edit page again when err is a *formError,
 // and returns any other error unchanged.
-func (h *adminHandlers) showMediaFormError(w http.ResponseWriter, r *http.Request, m store.Media, err error) error {
-	var fe *formError
-	if !errors.As(err, &fe) {
+func (handlers *adminHandlers) showMediaFormError(w http.ResponseWriter, r *http.Request, media store.Media, err error) error {
+	var formErr *formError
+	if !errors.As(err, &formErr) {
 		return err
 	}
-	f, ferr := h.mediaForm(r.Context(), m)
+	form, ferr := handlers.mediaForm(r.Context(), media)
 	if ferr != nil {
 		return ferr
 	}
-	f.Error = fe.msg
-	h.render(w, r, http.StatusBadRequest, editMediaPage(newPage(r, "Edit "+m.Title), f))
+	form.Error = formErr.message
+	handlers.render(w, r, http.StatusBadRequest, editMediaPage(newPage(r, "Edit "+media.Title), form))
 	return nil
 }
 
 // saveMedia handles POST /admin/media/{id}: the edit form, whose second
 // button also publishes.
-func (h *adminHandlers) saveMedia(w http.ResponseWriter, r *http.Request) error {
-	m, err := h.mediaFromPath(r)
+func (handlers *adminHandlers) saveMedia(w http.ResponseWriter, r *http.Request) error {
+	media, err := handlers.mediaFromPath(r)
 	if err != nil {
 		return err
 	}
-	in, err := decodeMediaForm(r)
+	input, err := decodeMediaForm(r)
 	if err != nil {
-		return h.showMediaFormError(w, r, m, err)
+		return handlers.showMediaFormError(w, r, media, err)
 	}
-	if err := h.applyMediaInput(r.Context(), m, in); err != nil {
+	if err := handlers.applyMediaInput(r.Context(), media, input); err != nil {
 		return err
 	}
-	if in.publish {
+	if input.publish {
 		http.Redirect(w, r, "/admin?done=published", http.StatusSeeOther)
 	} else {
-		http.Redirect(w, r, "/admin/media/"+itoa(m.ID)+"?saved=1", http.StatusSeeOther)
+		http.Redirect(w, r, "/admin/media/"+itoa(media.ID)+"?saved=1", http.StatusSeeOther)
 	}
 	return nil
 }
 
 // applyMediaInput saves a decoded edit form: it finds or creates the
 // collection, stores the poster, then updates the media.
-func (h *adminHandlers) applyMediaInput(ctx context.Context, m store.Media, in mediaInput) error {
-	u := in.update
-	if in.collection != "" {
-		c, err := h.findOrCreateCollection(ctx, in.collection, u.Category, showYearGuess(m, in.collection))
+func (handlers *adminHandlers) applyMediaInput(ctx context.Context, media store.Media, input mediaInput) error {
+	update := input.update
+	if input.collection != "" {
+		collection, err := handlers.findOrCreateCollection(ctx, input.collection, update.Category, showYearGuess(media, input.collection))
 		if err != nil {
 			return err
 		}
-		u.CollectionID = c.ID
+		update.CollectionID = collection.ID
 	}
 	var err error
-	if u.Poster, err = h.savePoster(in.poster); err != nil {
+	if update.Poster, err = handlers.savePoster(input.poster); err != nil {
 		return err
 	}
-	return h.store.UpdateMedia(ctx, m.ID, u, in.publish)
+	return handlers.store.UpdateMedia(ctx, media.ID, update, input.publish)
 }
 
 // showYearGuess is the year a new collection for m starts with: the year in
@@ -262,56 +262,56 @@ func (h *adminHandlers) applyMediaInput(ctx context.Context, m store.Media, in m
 // file is an episode of that show. Never the media's own year, which for an
 // episode is the year it aired, not the year the show began; without a
 // folder year, TMDB fills the year in.
-func showYearGuess(m store.Media, collection string) string {
-	g := guessFor(m)
-	if g.IsEpisode() && strings.EqualFold(g.Show, collection) {
-		return g.Year
+func showYearGuess(media store.Media, collection string) string {
+	guess := guessFor(media)
+	if guess.IsEpisode() && strings.EqualFold(guess.Show, collection) {
+		return guess.Year
 	}
 	return ""
 }
 
 // findOrCreateCollection returns the named collection, creating it (with
 // TMDB details when available) if it does not exist yet.
-func (h *adminHandlers) findOrCreateCollection(ctx context.Context, name, category, year string) (store.Collection, error) {
-	c, err := h.store.CollectionByName(ctx, name)
+func (handlers *adminHandlers) findOrCreateCollection(ctx context.Context, name, category, year string) (store.Collection, error) {
+	collection, err := handlers.store.CollectionByName(ctx, name)
 	if err == nil || !errors.Is(err, store.ErrNotFound) {
-		return c, err
+		return collection, err
 	}
 	if category == "" {
 		category = "TV Shows"
 	}
-	c = store.Collection{Name: name, Category: category, Year: year}
-	h.fillFromTMDB(ctx, &c)
-	if c.ID, err = h.store.CreateCollection(ctx, c); errors.Is(err, store.ErrDuplicate) {
-		return h.store.CollectionByName(ctx, name)
+	collection = store.Collection{Name: name, Category: category, Year: year}
+	handlers.fillFromTMDB(ctx, &collection)
+	if collection.ID, err = handlers.store.CreateCollection(ctx, collection); errors.Is(err, store.ErrDuplicate) {
+		return handlers.store.CollectionByName(ctx, name)
 	}
-	return c, err
+	return collection, err
 }
 
 // fillCollectionUpdate applies a TMDB lookup to an edit of existing. The
 // lookup only fills empty fields: an existing poster is kept unless the
 // administrator removed it, in which case the lookup may supply a new one.
-func (h *adminHandlers) fillCollectionUpdate(ctx context.Context, existing store.Collection, u *store.CollectionUpdate) {
-	c := store.Collection{Name: u.Name, Year: u.Year, Overview: u.Overview, Poster: u.Poster}
-	if c.Poster == "" && !u.RemovePoster {
-		c.Poster = existing.Poster
+func (handlers *adminHandlers) fillCollectionUpdate(ctx context.Context, existing store.Collection, update *store.CollectionUpdate) {
+	collection := store.Collection{Name: update.Name, Year: update.Year, Overview: update.Overview, Poster: update.Poster}
+	if collection.Poster == "" && !update.RemovePoster {
+		collection.Poster = existing.Poster
 	}
-	h.fillFromTMDB(ctx, &c)
-	u.Year, u.Overview = c.Year, c.Overview
-	if c.Poster != existing.Poster || u.RemovePoster {
-		u.Poster = c.Poster
-		u.RemovePoster = c.Poster == ""
+	handlers.fillFromTMDB(ctx, &collection)
+	update.Year, update.Overview = collection.Year, collection.Overview
+	if collection.Poster != existing.Poster || update.RemovePoster {
+		update.Poster = collection.Poster
+		update.RemovePoster = collection.Poster == ""
 	}
 }
 
 // lookupCollection finds a collection on TMDB. A "Movies" collection is a
 // series of films, so it is searched as a TMDB collection and then as a
 // film; anything else is searched as a TV show first, then the same way.
-func (h *adminHandlers) lookupCollection(ctx context.Context, name, category string) (metadata.Info, error) {
+func (handlers *adminHandlers) lookupCollection(ctx context.Context, name, category string) (metadata.Info, error) {
 	films := func() (metadata.Info, error) {
-		info, err := h.meta.Collection(ctx, name)
+		info, err := handlers.meta.Collection(ctx, name)
 		if errors.Is(err, metadata.ErrNoMatch) {
-			info, err = h.meta.Movie(ctx, name, "")
+			info, err = handlers.meta.Movie(ctx, name, "")
 			info.Year = "" // the first film's year is not the collection's
 		}
 		return info, err
@@ -319,7 +319,7 @@ func (h *adminHandlers) lookupCollection(ctx context.Context, name, category str
 	if isFilmCategory(category) {
 		return films()
 	}
-	info, err := h.meta.Show(ctx, name, "")
+	info, err := handlers.meta.Show(ctx, name, "")
 	if errors.Is(err, metadata.ErrNoMatch) {
 		return films()
 	}
@@ -337,51 +337,51 @@ func isFilmCategory(category string) bool {
 
 // fillFromTMDB fills a collection's empty fields from TMDB, when lookups
 // are on. A failed lookup is logged and leaves c unchanged.
-func (h *adminHandlers) fillFromTMDB(ctx context.Context, c *store.Collection) {
-	if !h.meta.Enabled() {
+func (handlers *adminHandlers) fillFromTMDB(ctx context.Context, collection *store.Collection) {
+	if !handlers.meta.Enabled() {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	info, err := h.lookupCollection(ctx, c.Name, c.Category)
+	info, err := handlers.lookupCollection(ctx, collection.Name, collection.Category)
 	if err != nil {
 		if !errors.Is(err, metadata.ErrNoMatch) {
-			h.log.Warn("collection lookup failed", "name", c.Name, "err", err)
+			handlers.log.Warn("collection lookup failed", "name", collection.Name, "err", err)
 		}
 		return
 	}
-	if c.Year == "" {
-		c.Year = info.Year
+	if collection.Year == "" {
+		collection.Year = info.Year
 	}
-	if c.Overview == "" {
-		c.Overview = info.Overview
+	if collection.Overview == "" {
+		collection.Overview = info.Overview
 	}
-	if c.Poster == "" {
-		c.Poster = info.Poster
+	if collection.Poster == "" {
+		collection.Poster = info.Poster
 	}
 }
 
 // savePoster stores an uploaded poster under a new random name and returns
 // the name, or "" when p is nil.
-func (h *adminHandlers) savePoster(p *posterUpload) (string, error) {
-	if p == nil {
+func (handlers *adminHandlers) savePoster(upload *posterUpload) (string, error) {
+	if upload == nil {
 		return "", nil
 	}
-	f, err := p.file.Open()
+	file, err := upload.file.Open()
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer file.Close()
 	token, err := auth.NewToken()
 	if err != nil {
 		return "", err
 	}
-	name := "upload-" + token[:16] + p.ext
-	out, err := os.OpenFile(filepath.Join(h.posterDir, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	name := "upload-" + token[:16] + upload.ext
+	out, err := os.OpenFile(filepath.Join(handlers.posterDirectory, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return "", err
 	}
-	if _, err := io.Copy(out, f); err != nil {
+	if _, err := io.Copy(out, file); err != nil {
 		out.Close()
 		return "", err
 	}
@@ -391,110 +391,110 @@ func (h *adminHandlers) savePoster(p *posterUpload) (string, error) {
 // refreshMetadata handles POST /admin/media/{id}/refresh-metadata: look the
 // item up on TMDB again and take its title, year, description and poster,
 // even if it is published. Problems are shown on the edit page.
-func (h *adminHandlers) refreshMetadata(w http.ResponseWriter, r *http.Request) error {
-	m, err := h.mediaFromPath(r)
+func (handlers *adminHandlers) refreshMetadata(w http.ResponseWriter, r *http.Request) error {
+	media, err := handlers.mediaFromPath(r)
 	if err != nil {
 		return err
 	}
-	err = h.refresher.RefreshMetadata(r.Context(), m.ID)
+	err = handlers.refresher.RefreshMetadata(r.Context(), media.ID)
 	switch {
 	case errors.Is(err, metadata.ErrDisabled):
 		err = formErr("Metadata lookups are off. Set NEXUSPLAY_TMDB_API_KEY to use them.")
 	case errors.Is(err, metadata.ErrNoMatch):
 		err = formErr("TMDB has nothing for this item. Check its title, collection, season and episode, save, and try again.")
 	case err != nil && !errors.Is(err, store.ErrNotFound) && r.Context().Err() == nil:
-		h.log.Warn("metadata refresh failed", "media", m.ID, "err", err)
+		handlers.log.Warn("metadata refresh failed", "media", media.ID, "err", err)
 		err = formErr("The lookup failed: " + err.Error() + ". Try again in a minute.")
 	}
 	if err != nil {
-		return h.showMediaFormError(w, r, m, err)
+		return handlers.showMediaFormError(w, r, media, err)
 	}
-	http.Redirect(w, r, "/admin/media/"+itoa(m.ID)+"?refreshed=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/media/"+itoa(media.ID)+"?refreshed=1", http.StatusSeeOther)
 	return nil
 }
 
 // uploadSubtitle handles POST /admin/media/{id}/subtitles: an SRT or
 // WebVTT file for the video.
-func (h *adminHandlers) uploadSubtitle(w http.ResponseWriter, r *http.Request) error {
-	m, err := h.mediaFromPath(r)
+func (handlers *adminHandlers) uploadSubtitle(w http.ResponseWriter, r *http.Request) error {
+	media, err := handlers.mediaFromPath(r)
 	if err != nil {
 		return err
 	}
-	lang, cues, err := decodeSubtitleUpload(r)
+	language, cues, err := decodeSubtitleUpload(r)
 	if err != nil {
-		return h.showMediaFormError(w, r, m, err)
+		return handlers.showMediaFormError(w, r, media, err)
 	}
 	// An upload has no source, so it is always inserted.
-	_, _, err = h.store.AddSubtitle(r.Context(), store.NewSubtitle{MediaID: m.ID, Language: lang, Label: subtitle.LanguageName(lang), Cues: cues})
+	_, _, err = handlers.store.AddSubtitle(r.Context(), store.NewSubtitle{MediaID: media.ID, Language: language, Label: subtitle.LanguageName(language), Cues: cues})
 	if err != nil {
 		return err
 	}
-	http.Redirect(w, r, "/admin/media/"+itoa(m.ID)+"?saved=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/media/"+itoa(media.ID)+"?saved=1", http.StatusSeeOther)
 	return nil
 }
 
 // saveSubtitle handles POST /admin/subtitles/{id}: a track's language and label.
-func (h *adminHandlers) saveSubtitle(w http.ResponseWriter, r *http.Request) error {
+func (handlers *adminHandlers) saveSubtitle(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r)
 	if err != nil {
 		return err
 	}
-	t, err := h.store.SubtitleByID(r.Context(), id)
+	subtitle, err := handlers.store.SubtitleByID(r.Context(), id)
 	if err != nil {
 		return err
 	}
-	lang := strings.ToLower(strings.TrimSpace(r.FormValue("language")))
+	language := strings.ToLower(strings.TrimSpace(r.FormValue("language")))
 	label := strings.TrimSpace(r.FormValue("label"))
-	if lang == "" || label == "" {
+	if language == "" || label == "" {
 		return &statusError{status: http.StatusBadRequest, title: "Missing fields",
-			msg: "A subtitle track needs a language code and a label."}
+			message: "A subtitle track needs a language code and a label."}
 	}
-	if err := h.store.UpdateSubtitleLabel(r.Context(), id, lang, label); err != nil {
+	if err := handlers.store.UpdateSubtitleLabel(r.Context(), id, language, label); err != nil {
 		return err
 	}
-	http.Redirect(w, r, "/admin/media/"+itoa(t.MediaID)+"?saved=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/media/"+itoa(subtitle.MediaID)+"?saved=1", http.StatusSeeOther)
 	return nil
 }
 
 // deleteSubtitle handles POST /admin/subtitles/{id}/delete.
-func (h *adminHandlers) deleteSubtitle(w http.ResponseWriter, r *http.Request) error {
+func (handlers *adminHandlers) deleteSubtitle(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r)
 	if err != nil {
 		return err
 	}
-	t, err := h.store.SubtitleByID(r.Context(), id)
+	subtitle, err := handlers.store.SubtitleByID(r.Context(), id)
 	if err != nil {
 		return err
 	}
-	if err := h.store.DeleteSubtitle(r.Context(), id); err != nil {
+	if err := handlers.store.DeleteSubtitle(r.Context(), id); err != nil {
 		return err
 	}
-	http.Redirect(w, r, "/admin/media/"+itoa(t.MediaID)+"?saved=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/media/"+itoa(subtitle.MediaID)+"?saved=1", http.StatusSeeOther)
 	return nil
 }
 
 // createCollection handles POST /admin/collections, from the control panel.
-func (h *adminHandlers) createCollection(w http.ResponseWriter, r *http.Request) error {
+func (handlers *adminHandlers) createCollection(w http.ResponseWriter, r *http.Request) error {
 	const title = "Could not create the collection"
-	in, err := decodeCollectionForm(r)
-	var fe *formError
-	if errors.As(err, &fe) {
-		return &statusError{status: http.StatusBadRequest, title: title, msg: fe.msg}
+	input, err := decodeCollectionForm(r)
+	var formErr *formError
+	if errors.As(err, &formErr) {
+		return &statusError{status: http.StatusBadRequest, title: title, message: formErr.message}
 	}
 	if err != nil {
 		return err
 	}
-	u := in.update
-	c := store.Collection{Name: u.Name, Category: u.Category, Year: u.Year, Overview: u.Overview}
-	if c.Poster, err = h.savePoster(in.poster); err != nil {
+	update := input.update
+	collection := store.Collection{Name: update.Name, Category: update.Category, Year: update.Year, Overview: update.Overview}
+	if collection.Poster, err = handlers.savePoster(input.poster); err != nil {
 		return err
 	}
-	if in.lookup {
-		h.fillFromTMDB(r.Context(), &c)
+	if input.lookup {
+		handlers.fillFromTMDB(r.Context(), &collection)
 	}
-	id, err := h.store.CreateCollection(r.Context(), c)
+	id, err := handlers.store.CreateCollection(r.Context(), collection)
 	if errors.Is(err, store.ErrDuplicate) {
-		return &statusError{status: http.StatusConflict, title: title, msg: "A collection with that name already exists."}
+		return &statusError{status: http.StatusConflict, title: title, message: "A collection with that name already exists."}
 	}
 	if err != nil {
 		return err
@@ -504,47 +504,47 @@ func (h *adminHandlers) createCollection(w http.ResponseWriter, r *http.Request)
 }
 
 // editCollectionPage handles GET /admin/collections/{id}.
-func (h *adminHandlers) editCollectionPage(w http.ResponseWriter, r *http.Request) error {
+func (handlers *adminHandlers) editCollectionPage(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r)
 	if err != nil {
 		return err
 	}
-	c, err := h.store.CollectionByID(r.Context(), id)
+	collection, err := handlers.store.CollectionByID(r.Context(), id)
 	if err != nil {
 		return err
 	}
-	cats, err := h.store.CategoryNames(r.Context())
+	cats, err := handlers.store.CategoryNames(r.Context())
 	if err != nil {
 		return err
 	}
-	h.render(w, r, http.StatusOK, editCollectionPage(newPage(r, "Edit "+c.Name), c, cats, h.meta.Enabled(), ""))
+	handlers.render(w, r, http.StatusOK, editCollectionPage(newPage(r, "Edit "+collection.Name), collection, cats, handlers.meta.Enabled(), ""))
 	return nil
 }
 
 // saveCollection handles POST /admin/collections/{id}.
-func (h *adminHandlers) saveCollection(w http.ResponseWriter, r *http.Request) error {
+func (handlers *adminHandlers) saveCollection(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r)
 	if err != nil {
 		return err
 	}
-	existing, err := h.store.CollectionByID(r.Context(), id)
+	existing, err := handlers.store.CollectionByID(r.Context(), id)
 	if err != nil {
 		return err
 	}
-	in, err := decodeCollectionForm(r)
+	input, err := decodeCollectionForm(r)
 	if err != nil {
-		return h.showCollectionFormError(w, r, existing, in.update, err)
+		return handlers.showCollectionFormError(w, r, existing, input.update, err)
 	}
-	u := in.update
-	if u.Poster, err = h.savePoster(in.poster); err != nil {
+	update := input.update
+	if update.Poster, err = handlers.savePoster(input.poster); err != nil {
 		return err
 	}
-	if in.lookup {
-		h.fillCollectionUpdate(r.Context(), existing, &u)
+	if input.lookup {
+		handlers.fillCollectionUpdate(r.Context(), existing, &update)
 	}
-	err = h.store.UpdateCollection(r.Context(), id, u)
+	err = handlers.store.UpdateCollection(r.Context(), id, update)
 	if errors.Is(err, store.ErrDuplicate) {
-		return h.showCollectionFormError(w, r, existing, u, formErr("Another collection already has that name."))
+		return handlers.showCollectionFormError(w, r, existing, update, formErr("Another collection already has that name."))
 	}
 	if err != nil {
 		return err
@@ -555,28 +555,28 @@ func (h *adminHandlers) saveCollection(w http.ResponseWriter, r *http.Request) e
 
 // showCollectionFormError shows the edit page again, with what was typed,
 // when err is a *formError, and returns any other error unchanged.
-func (h *adminHandlers) showCollectionFormError(w http.ResponseWriter, r *http.Request, c store.Collection, typed store.CollectionUpdate, err error) error {
-	var fe *formError
-	if !errors.As(err, &fe) {
+func (handlers *adminHandlers) showCollectionFormError(w http.ResponseWriter, r *http.Request, collection store.Collection, typed store.CollectionUpdate, err error) error {
+	var formErr *formError
+	if !errors.As(err, &formErr) {
 		return err
 	}
-	cats, err := h.store.CategoryNames(r.Context())
+	cats, err := handlers.store.CategoryNames(r.Context())
 	if err != nil {
 		return err
 	}
-	c.Name, c.Category, c.Year, c.Overview = typed.Name, typed.Category, typed.Year, typed.Overview
-	h.render(w, r, http.StatusBadRequest, editCollectionPage(newPage(r, "Edit collection"), c, cats, h.meta.Enabled(), fe.msg))
+	collection.Name, collection.Category, collection.Year, collection.Overview = typed.Name, typed.Category, typed.Year, typed.Overview
+	handlers.render(w, r, http.StatusBadRequest, editCollectionPage(newPage(r, "Edit collection"), collection, cats, handlers.meta.Enabled(), formErr.message))
 	return nil
 }
 
 // deleteCollection handles POST /admin/collections/{id}/delete. Its media
 // stays in the library, outside any collection.
-func (h *adminHandlers) deleteCollection(w http.ResponseWriter, r *http.Request) error {
+func (handlers *adminHandlers) deleteCollection(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r)
 	if err != nil {
 		return err
 	}
-	if err := h.store.DeleteCollection(r.Context(), id); err != nil {
+	if err := handlers.store.DeleteCollection(r.Context(), id); err != nil {
 		return err
 	}
 	http.Redirect(w, r, "/admin?done=deleted", http.StatusSeeOther)

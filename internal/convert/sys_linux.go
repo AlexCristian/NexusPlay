@@ -3,10 +3,10 @@ package convert
 import "syscall"
 
 // freeBytes reports the space available in the folder's file system.
-func freeBytes(dir string) (uint64, error) {
-	var st syscall.Statfs_t
-	if err := syscall.Statfs(dir, &st); err != nil {
+func freeBytes(directory string) (uint64, error) {
+	var fileSystemStats syscall.Statfs_t
+	if err := syscall.Statfs(directory, &fileSystemStats); err != nil {
 		return 0, err
 	}
-	return st.Bavail * uint64(st.Bsize), nil
+	return fileSystemStats.Bavail * uint64(fileSystemStats.Bsize), nil
 }

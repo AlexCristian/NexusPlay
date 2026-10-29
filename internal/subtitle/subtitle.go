@@ -36,52 +36,52 @@ func Parse(data []byte) ([]Cue, error) {
 	text := strings.ReplaceAll(string(data), "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 
-	sc := bufio.NewScanner(strings.NewReader(text))
-	sc.Buffer(make([]byte, 64*1024), 1024*1024)
-	var p parser
-	for sc.Scan() {
-		if err := p.line(sc.Text()); err != nil {
+	scanner := bufio.NewScanner(strings.NewReader(text))
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	var cueParser parser
+	for scanner.Scan() {
+		if err := cueParser.line(scanner.Text()); err != nil {
 			return nil, err
 		}
 	}
-	p.flush()
-	if err := sc.Err(); err != nil {
+	cueParser.flush()
+	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	if len(p.cues) == 0 {
+	if len(cueParser.cues) == 0 {
 		return nil, ErrNoCues
 	}
-	return p.cues, nil
+	return cueParser.cues, nil
 }
 
 // parser reads SRT and WebVTT a line at a time. Both formats are blocks
 // separated by blank lines; a cue block is an optional identifier, a timing
 // line and the text.
 type parser struct {
-	cues   []Cue
-	cur    *Cue     // the cue being read, once its timing line is seen
-	text   []string // its text lines so far
-	inNote bool     // inside a WebVTT header, NOTE, STYLE or REGION block
+	cues    []Cue
+	current *Cue     // the cue being read, once its timing line is seen
+	text    []string // its text lines so far
+	inNote  bool     // inside a WebVTT header, NOTE, STYLE or REGION block
 }
 
-func (p *parser) line(line string) error {
+func (parser *parser) line(line string) error {
 	trimmed := strings.TrimSpace(line)
 	switch {
 	case trimmed == "":
-		p.flush()
-		p.inNote = false
-	case p.inNote:
-	case p.cur != nil:
-		p.text = append(p.text, line)
+		parser.flush()
+		parser.inNote = false
+	case parser.inNote:
+	case parser.current != nil:
+		parser.text = append(parser.text, line)
 	case strings.HasPrefix(trimmed, "WEBVTT"), strings.HasPrefix(trimmed, "STYLE"),
 		strings.HasPrefix(trimmed, "REGION"), strings.HasPrefix(trimmed, "NOTE"):
-		p.inNote = true
+		parser.inNote = true
 	case strings.Contains(trimmed, "-->"):
 		start, end, err := parseTiming(trimmed)
 		if err != nil {
 			return err
 		}
-		p.cur = &Cue{StartMS: start, EndMS: end}
+		parser.current = &Cue{StartMS: start, EndMS: end}
 	default:
 		// A cue identifier (an SRT index or VTT id): skip it.
 	}
@@ -89,14 +89,14 @@ func (p *parser) line(line string) error {
 }
 
 // flush ends the current block, keeping its cue if it has text.
-func (p *parser) flush() {
-	if p.cur != nil {
-		p.cur.Text = strings.TrimSpace(strings.Join(p.text, "\n"))
-		if p.cur.Text != "" {
-			p.cues = append(p.cues, *p.cur)
+func (parser *parser) flush() {
+	if parser.current != nil {
+		parser.current.Text = strings.TrimSpace(strings.Join(parser.text, "\n"))
+		if parser.current.Text != "" {
+			parser.cues = append(parser.cues, *parser.current)
 		}
 	}
-	p.cur, p.text = nil, nil
+	parser.current, parser.text = nil, nil
 }
 
 // parseTiming reads a "start --> end [settings]" line.
@@ -118,70 +118,70 @@ func parseTiming(line string) (int64, int64, error) {
 }
 
 // parseTimestamp accepts hh:mm:ss.mmm, mm:ss.mmm and the SRT comma form.
-func parseTimestamp(s string) (int64, error) {
-	s = strings.Replace(s, ",", ".", 1)
+func parseTimestamp(timestamp string) (int64, error) {
+	timestamp = strings.Replace(timestamp, ",", ".", 1)
 	var frac int64
-	if i := strings.IndexByte(s, '.'); i >= 0 {
-		f := s[i+1:]
-		for len(f) < 3 {
-			f += "0"
+	if i := strings.IndexByte(timestamp, '.'); i >= 0 {
+		fraction := timestamp[i+1:]
+		for len(fraction) < 3 {
+			fraction += "0"
 		}
-		n, err := strconv.ParseInt(f[:3], 10, 64)
+		fractionMilliseconds, err := strconv.ParseInt(fraction[:3], 10, 64)
 		if err != nil {
-			return 0, fmt.Errorf("bad timestamp %q", s)
+			return 0, fmt.Errorf("bad timestamp %q", timestamp)
 		}
-		frac, s = n, s[:i]
+		frac, timestamp = fractionMilliseconds, timestamp[:i]
 	}
-	fields := strings.Split(s, ":")
+	fields := strings.Split(timestamp, ":")
 	if len(fields) < 2 || len(fields) > 3 {
-		return 0, fmt.Errorf("bad timestamp %q", s)
+		return 0, fmt.Errorf("bad timestamp %q", timestamp)
 	}
 	var total int64
-	for _, f := range fields {
-		n, err := strconv.ParseInt(f, 10, 64)
+	for _, field := range fields {
+		fieldValue, err := strconv.ParseInt(field, 10, 64)
 		if err != nil {
-			return 0, fmt.Errorf("bad timestamp %q", s)
+			return 0, fmt.Errorf("bad timestamp %q", timestamp)
 		}
-		total = total*60 + n
+		total = total*60 + fieldValue
 	}
 	return total*1000 + frac, nil
 }
 
 // WriteVTT renders cues as a WebVTT document.
 func WriteVTT(cues []Cue) []byte {
-	var b bytes.Buffer
-	b.WriteString("WEBVTT\n\n")
-	for _, c := range cues {
-		fmt.Fprintf(&b, "%s --> %s\n%s\n\n", formatTimestamp(c.StartMS), formatTimestamp(c.EndMS), sanitizeCueText(c.Text))
+	var buffer bytes.Buffer
+	buffer.WriteString("WEBVTT\n\n")
+	for _, cue := range cues {
+		fmt.Fprintf(&buffer, "%s --> %s\n%s\n\n", formatTimestamp(cue.StartMS), formatTimestamp(cue.EndMS), sanitizeCueText(cue.Text))
 	}
-	return b.Bytes()
+	return buffer.Bytes()
 }
 
-func formatTimestamp(ms int64) string {
-	h := ms / 3600000
-	m := ms / 60000 % 60
-	s := ms / 1000 % 60
-	return fmt.Sprintf("%02d:%02d:%02d.%03d", h, m, s, ms%1000)
+func formatTimestamp(milliseconds int64) string {
+	hours := milliseconds / 3600000
+	minutes := milliseconds / 60000 % 60
+	seconds := milliseconds / 1000 % 60
+	return fmt.Sprintf("%02d:%02d:%02d.%03d", hours, minutes, seconds, milliseconds%1000)
 }
 
 // sanitizeCueText keeps a cue from breaking out of its block: "-->" and blank
 // lines would otherwise start a new cue.
-func sanitizeCueText(t string) string {
-	t = strings.ReplaceAll(t, "-->", "->")
+func sanitizeCueText(text string) string {
+	text = strings.ReplaceAll(text, "-->", "->")
 	var out []string
-	for _, l := range strings.Split(t, "\n") {
-		if strings.TrimSpace(l) != "" {
-			out = append(out, l)
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) != "" {
+			out = append(out, line)
 		}
 	}
 	return strings.Join(out, "\n")
 }
 
 // latin1ToUTF8 maps each byte to the code point of the same value.
-func latin1ToUTF8(b []byte) []byte {
+func latin1ToUTF8(latin1 []byte) []byte {
 	var out bytes.Buffer
-	for _, c := range b {
-		out.WriteRune(rune(c))
+	for _, character := range latin1 {
+		out.WriteRune(rune(character))
 	}
 	return out.Bytes()
 }

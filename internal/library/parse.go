@@ -35,31 +35,31 @@ type Guess struct {
 }
 
 // IsEpisode reports whether the path looked like a TV episode.
-func (g Guess) IsEpisode() bool { return g.Show != "" }
+func (guess Guess) IsEpisode() bool { return guess.Show != "" }
 
 var (
 	// The last group holds more episode numbers of a file with several:
 	// "S01E01E02", "S01E01-E02" or "S01E01-02".
-	episodeRe = regexp.MustCompile(`(?i)(?:^|[\s._\-\[(])s(\d{1,2})[\s._\-]*e(\d{1,3})((?:[\s._\-]*e\d{1,3}|-\d{1,3}\b)*)`)
-	digitsRe  = regexp.MustCompile(`\d+`)
-	crossRe   = regexp.MustCompile(`(?i)(?:^|[\s._\-])(\d{1,2})x(\d{2,3})(?:$|[\s._\-])`)
-	yearRe    = regexp.MustCompile(`(?:^|[\s.(\[_\-])((?:19|20)\d{2})(?:$|[\s.)\]_\-])`)
-	seasonDir = regexp.MustCompile(`(?i)^(?:season|series|s)[\s._\-]*(\d{1,2})$`)
-	junkRe    = regexp.MustCompile(`(?i)[\s._\-\[(](?:480p|576p|720p|1080p|2160p|4k|bluray|blu-ray|brrip|bdrip|web-?dl|webrip|hdtv|dvdrip|x264|x265|h\.?264|h\.?265|hevc|aac|ac3|dts|proper|repack|extended|remastered)(?:[\s._\-\])]|$).*$`)
+	episodeRe              = regexp.MustCompile(`(?i)(?:^|[\s._\-\[(])s(\d{1,2})[\s._\-]*e(\d{1,3})((?:[\s._\-]*e\d{1,3}|-\d{1,3}\b)*)`)
+	digitsRe               = regexp.MustCompile(`\d+`)
+	crossRe                = regexp.MustCompile(`(?i)(?:^|[\s._\-])(\d{1,2})x(\d{2,3})(?:$|[\s._\-])`)
+	yearRe                 = regexp.MustCompile(`(?:^|[\s.(\[_\-])((?:19|20)\d{2})(?:$|[\s.)\]_\-])`)
+	seasonDirectoryPattern = regexp.MustCompile(`(?i)^(?:season|series|s)[\s._\-]*(\d{1,2})$`)
+	junkRe                 = regexp.MustCompile(`(?i)[\s._\-\[(](?:480p|576p|720p|1080p|2160p|4k|bluray|blu-ray|brrip|bdrip|web-?dl|webrip|hdtv|dvdrip|x264|x265|h\.?264|h\.?265|hevc|aac|ac3|dts|proper|repack|extended|remastered)(?:[\s._\-\])]|$).*$`)
 )
 
 // ParsePath guesses title, year and episode numbers from a path relative to
 // the media folder, such as "Doctor Who/Season 2/Doctor.Who.S02E03.mkv" or
 // "Movies/The Matrix (1999).mp4".
-func ParsePath(rel string) Guess {
-	rel = strings.ReplaceAll(rel, "\\", "/")
-	dir, file := path.Split(rel)
+func ParsePath(relativePath string) Guess {
+	relativePath = strings.ReplaceAll(relativePath, "\\", "/")
+	directory, file := path.Split(relativePath)
 	name := strings.TrimSuffix(file, path.Ext(file))
-	ep, ok := matchEpisode(name)
-	if !ok {
+	match, isEpisode := matchEpisode(name)
+	if !isEpisode {
 		return parseMovie(name)
 	}
-	return episodeGuess(ep, dir)
+	return episodeGuess(match, directory)
 }
 
 // episodeMatch is what an episode file name says on its own.
@@ -77,28 +77,28 @@ var episodePatterns = []*regexp.Regexp{episodeRe, crossRe}
 // matchEpisode reports whether a file name (without extension) names a TV
 // episode.
 func matchEpisode(name string) (episodeMatch, bool) {
-	for _, re := range episodePatterns {
-		m := re.FindStringSubmatchIndex(name)
-		if m == nil {
+	for _, pattern := range episodePatterns {
+		match := pattern.FindStringSubmatchIndex(name)
+		if match == nil {
 			continue
 		}
 		// Atoi cannot fail: the patterns only capture digits.
-		season, _ := strconv.Atoi(name[m[2]:m[3]])
-		episode, _ := strconv.Atoi(name[m[4]:m[5]])
-		ep := episodeMatch{
-			show:    clean(name[:m[0]]),
-			title:   clean(junkRe.ReplaceAllString(name[m[1]:], "")),
+		season, _ := strconv.Atoi(name[match[2]:match[3]])
+		episode, _ := strconv.Atoi(name[match[4]:match[5]])
+		episodeGuess := episodeMatch{
+			show:    clean(name[:match[0]]),
+			title:   clean(junkRe.ReplaceAllString(name[match[1]:], "")),
 			season:  season,
 			episode: episode,
 		}
-		if len(m) > 7 && m[6] >= 0 {
-			if more := digitsRe.FindAllString(name[m[6]:m[7]], -1); len(more) > 0 {
+		if len(match) > 7 && match[6] >= 0 {
+			if more := digitsRe.FindAllString(name[match[6]:match[7]], -1); len(more) > 0 {
 				if last, _ := strconv.Atoi(more[len(more)-1]); last > episode {
-					ep.end = last
+					episodeGuess.end = last
 				}
 			}
 		}
-		return ep, true
+		return episodeGuess, true
 	}
 	return episodeMatch{}, false
 }
@@ -108,103 +108,103 @@ func matchEpisode(name string) (episodeMatch, bool) {
 // Odyssey 1968"), and so may a year that has not happened yet ("Blade Runner
 // 2049").
 func parseMovie(name string) Guess {
-	var g Guess
+	var guess Guess
 	trimmed := junkRe.ReplaceAllString(name, "")
-	ms := yearRe.FindAllStringSubmatchIndex(trimmed, -1)
-	for i := len(ms) - 1; i >= 0; i-- {
-		m := ms[i]
-		if m[0] > 0 && plausibleYear(trimmed[m[2]:m[3]]) {
-			g.Year = trimmed[m[2]:m[3]]
-			trimmed = trimmed[:m[0]]
+	matches := yearRe.FindAllStringSubmatchIndex(trimmed, -1)
+	for i := len(matches) - 1; i >= 0; i-- {
+		match := matches[i]
+		if match[0] > 0 && plausibleYear(trimmed[match[2]:match[3]]) {
+			guess.Year = trimmed[match[2]:match[3]]
+			trimmed = trimmed[:match[0]]
 			break
 		}
 	}
-	g.Title = clean(trimmed)
-	if g.Title == "" {
-		g.Title = clean(name)
+	guess.Title = clean(trimmed)
+	if guess.Title == "" {
+		guess.Title = clean(name)
 	}
-	return g
+	return guess
 }
 
 // episodeGuess completes an episode match with what its folders say. The
 // show name comes from the file name, or else from the nearest folder; the
 // year from either, when they name the same show.
-func episodeGuess(ep episodeMatch, dir string) Guess {
-	g := Guess{Title: ep.title, Season: ep.season, Episode: ep.episode, EpisodeEnd: ep.end}
-	folder, folderSeason := showFromDirs(dir)
-	if g.Season == 0 { // "S00E05" is a special; a "Season 2" folder knows better
-		g.Season = folderSeason
+func episodeGuess(match episodeMatch, directory string) Guess {
+	guess := Guess{Title: match.title, Season: match.season, Episode: match.episode, EpisodeEnd: match.end}
+	folder, folderSeason := showFromDirectories(directory)
+	if guess.Season == 0 { // "S00E05" is a special; a "Season 2" folder knows better
+		guess.Season = folderSeason
 	}
 	folderShow, folderYear := splitYear(folder)
-	showName, showYear := splitYear(ep.show)
+	showName, showYear := splitYear(match.show)
 	switch {
 	case showName == "":
-		g.Show, g.Year = folderShow, folderYear
+		guess.Show, guess.Year = folderShow, folderYear
 	case strings.EqualFold(showName, folderShow):
-		g.Show, g.Year = showName, firstNonEmpty(showYear, folderYear)
+		guess.Show, guess.Year = showName, firstNonEmpty(showYear, folderYear)
 	default:
-		g.Show, g.Year = showName, showYear
+		guess.Show, guess.Year = showName, showYear
 	}
-	if g.Show == "" {
-		g.Show = "Unknown show"
+	if guess.Show == "" {
+		guess.Show = "Unknown show"
 	}
-	if g.Title == "" {
-		g.Title = "Episode " + strconv.Itoa(g.Episode)
+	if guess.Title == "" {
+		guess.Title = "Episode " + strconv.Itoa(guess.Episode)
 	}
-	return g
+	return guess
 }
 
-// showFromDirs reads the folders above an episode, nearest first: "Season
+// showFromDirectories reads the folders above an episode, nearest first: "Season
 // 2"-style folders give the season, and the nearest other folder's name is
 // the show, returned as is (it may carry a year, as in "Cosmos (2014)").
-func showFromDirs(dir string) (show string, season int) {
-	dirs := strings.Split(strings.Trim(dir, "/"), "/")
-	for i := len(dirs) - 1; i >= 0; i-- {
-		d := dirs[i]
-		if d == "" {
+func showFromDirectories(directory string) (show string, season int) {
+	directories := strings.Split(strings.Trim(directory, "/"), "/")
+	for i := len(directories) - 1; i >= 0; i-- {
+		directory := directories[i]
+		if directory == "" {
 			continue
 		}
-		if sm := seasonDir.FindStringSubmatch(d); sm != nil {
+		if seasonMatch := seasonDirectoryPattern.FindStringSubmatch(directory); seasonMatch != nil {
 			if season == 0 {
-				season, _ = strconv.Atoi(sm[1])
+				season, _ = strconv.Atoi(seasonMatch[1])
 			}
 			continue
 		}
-		return d, season
+		return directory, season
 	}
 	return "", season
 }
 
 // plausibleYear reports whether a four-digit year could be a release year:
 // no later than next year (films are announced ahead of release).
-func plausibleYear(y string) bool {
-	n, err := strconv.Atoi(y)
-	return err == nil && n <= time.Now().Year()+1
+func plausibleYear(year string) bool {
+	yearNumber, err := strconv.Atoi(year)
+	return err == nil && yearNumber <= time.Now().Year()+1
 }
 
 // splitYear splits a show name such as "Cosmos (2014)" or "Cosmos.2014"
 // into the cleaned name and the year ("" when there is none).
-func splitYear(s string) (name, year string) {
-	if y := yearRe.FindStringSubmatchIndex(s); y != nil && y[0] > 0 && plausibleYear(s[y[2]:y[3]]) {
-		return clean(s[:y[0]]), s[y[2]:y[3]]
+func splitYear(text string) (name, year string) {
+	if yearMatch := yearRe.FindStringSubmatchIndex(text); yearMatch != nil && yearMatch[0] > 0 && plausibleYear(text[yearMatch[2]:yearMatch[3]]) {
+		return clean(text[:yearMatch[0]]), text[yearMatch[2]:yearMatch[3]]
 	}
-	return clean(s), ""
+	return clean(text), ""
 }
 
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
+func firstNonEmpty(first, second string) string {
+	if first != "" {
+		return first
 	}
-	return b
+	return second
 }
 
 // clean turns "The.Big_Show - " into "The Big Show".
-func clean(s string) string {
-	if !strings.Contains(s, " ") {
-		s = strings.NewReplacer(".", " ", "_", " ").Replace(s)
+func clean(text string) string {
+	if !strings.Contains(text, " ") {
+		text = strings.NewReplacer(".", " ", "_", " ").Replace(text)
 	} else {
-		s = strings.ReplaceAll(s, "_", " ")
+		text = strings.ReplaceAll(text, "_", " ")
 	}
-	s = strings.Trim(s, " -.([])")
-	return strings.Join(strings.Fields(s), " ")
+	text = strings.Trim(text, " -.([])")
+	return strings.Join(strings.Fields(text), " ")
 }

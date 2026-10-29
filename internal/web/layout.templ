@@ -38,7 +38,7 @@ templ shell(p Page) {
 templ shellWithSearch(p Page, results templ.Component) {
 	@layout(p) {
 		<!-- hx-headers carries the CSRF token for htmx; player.js reads it too. -->
-		<body hx-headers={ csrfHeaders(p.V) }>
+		<body hx-headers={ csrfHeaders(p.Viewer) }>
 			@topBar(p)
 			<main class="page">
 				<div class="above-panel">
@@ -78,7 +78,7 @@ templ topBar(p Page) {
 				@icon("play")
 				Nexus Play
 			</a>
-			if p.V.User != nil {
+			if p.Viewer.User != nil {
 				<button type="button" class="top-link" aria-label="Previously watching" title="Previously watching" popovertarget="resume-pop" hx-get="/me/resume" hx-target="#resume-pop-body" hx-trigger="click">
 					<span class="label-long">Previously watching</span><span class="label-short">@icon("history")</span>
 				</button>
@@ -94,12 +94,12 @@ templ topBar(p Page) {
 					<div id="notif-pop-body"></div>
 				</div>
 				<span class="spacer"></span>
-				if p.V.IsAdmin() {
+				if p.Viewer.IsAdmin() {
 					<a class="top-link" href="/admin" aria-label="Control panel" title="Control panel"><span class="label-long">Control panel</span><span class="label-short">@icon("settings")</span></a>
 				}
-				<span class="top-text">Welcome, { p.V.User.Nickname }</span>
+				<span class="top-text">Welcome, { p.Viewer.User.Nickname }</span>
 				<form method="post" action="/logout" class="inline-form">
-					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+					<input type="hidden" name="csrf_token" value={ p.Viewer.CSRF }/>
 					<button type="submit" class="top-link" aria-label="Log out" title="Log out"><span class="label-long">Log out</span><span class="label-short">@icon("log-out")</span></button>
 				</form>
 			} else {

@@ -49,8 +49,8 @@ func wantFormError(t *testing.T, err error, want string) {
 		t.Errorf("unexpected error: %v", err)
 	case want != "" && !errors.As(err, &fe):
 		t.Errorf("error = %v, want a form error containing %q", err, want)
-	case want != "" && !strings.Contains(fe.msg, want):
-		t.Errorf("message = %q, want it to contain %q", fe.msg, want)
+	case want != "" && !strings.Contains(fe.message, want):
+		t.Errorf("message = %q, want it to contain %q", fe.message, want)
 	}
 }
 

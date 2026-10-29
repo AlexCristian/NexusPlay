@@ -24,10 +24,10 @@ func testConfig(t *testing.T) config.Config {
 	t.Helper()
 	dir := t.TempDir()
 	c := config.Defaults()
-	c.MediaDir = filepath.Join(dir, "media")
-	c.DataDir = filepath.Join(dir, "data")
+	c.MediaDirectory = filepath.Join(dir, "media")
+	c.DataDirectory = filepath.Join(dir, "data")
 	c.FFmpegPath, c.FFprobePath = "true", "true"
-	os.MkdirAll(c.MediaDir, 0o755)
+	os.MkdirAll(c.MediaDirectory, 0o755)
 	return c
 }
 
@@ -42,7 +42,7 @@ func TestNewFailsWithoutFFmpeg(t *testing.T) {
 
 func TestNewFailsWithoutMediaFolder(t *testing.T) {
 	c := testConfig(t)
-	c.MediaDir = filepath.Join(t.TempDir(), "missing")
+	c.MediaDirectory = filepath.Join(t.TempDir(), "missing")
 	if _, err := New(context.Background(), c, quiet); err == nil || !strings.Contains(err.Error(), "media folder") {
 		t.Errorf("err = %v", err)
 	}

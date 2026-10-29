@@ -96,7 +96,7 @@ func libraryView(p Page, recent []store.Tile, cats []store.Category) templ.Compo
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if p.V.IsAdmin() {
+			if p.Viewer.IsAdmin() {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p>Add videos to the media folder, then publish them from the <a href=\"/admin\">control panel</a>.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err

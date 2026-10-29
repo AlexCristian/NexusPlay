@@ -14,19 +14,19 @@ import (
 // Config holds every runtime setting. Nothing is compiled in: each field has
 // a default and can be overridden with the NEXUSPLAY_* variable named beside it.
 type Config struct {
-	Addr          string        // NEXUSPLAY_ADDR
-	MediaDir      string        // NEXUSPLAY_MEDIA_DIR (made absolute)
-	DataDir       string        // NEXUSPLAY_DATA_DIR (made absolute)
-	ScanInterval  time.Duration // NEXUSPLAY_SCAN_INTERVAL
-	TMDBAPIKey    string        // NEXUSPLAY_TMDB_API_KEY
-	VotesRequired int           // NEXUSPLAY_VOTES_REQUIRED
-	MaxTranscodes int           // NEXUSPLAY_MAX_TRANSCODES
-	RequireLogin  bool          // NEXUSPLAY_REQUIRE_LOGIN
-	MaxAccounts   int           // NEXUSPLAY_MAX_ACCOUNTS: 0 for no limit
-	SecureCookies bool          // NEXUSPLAY_SECURE_COOKIES
-	FFmpegPath    string        // NEXUSPLAY_FFMPEG
-	FFprobePath   string        // NEXUSPLAY_FFPROBE
-	Debug         bool          // NEXUSPLAY_DEBUG: log every request
+	Addr           string        // NEXUSPLAY_ADDR
+	MediaDirectory string        // NEXUSPLAY_MEDIA_DIR (made absolute)
+	DataDirectory  string        // NEXUSPLAY_DATA_DIR (made absolute)
+	ScanInterval   time.Duration // NEXUSPLAY_SCAN_INTERVAL
+	TMDBAPIKey     string        // NEXUSPLAY_TMDB_API_KEY
+	VotesRequired  int           // NEXUSPLAY_VOTES_REQUIRED
+	MaxTranscodes  int           // NEXUSPLAY_MAX_TRANSCODES
+	RequireLogin   bool          // NEXUSPLAY_REQUIRE_LOGIN
+	MaxAccounts    int           // NEXUSPLAY_MAX_ACCOUNTS: 0 for no limit
+	SecureCookies  bool          // NEXUSPLAY_SECURE_COOKIES
+	FFmpegPath     string        // NEXUSPLAY_FFMPEG
+	FFprobePath    string        // NEXUSPLAY_FFPROBE
+	Debug          bool          // NEXUSPLAY_DEBUG: log every request
 
 	// Convert turns every file that is not a browser-ready MP4 into one in
 	// the background, then deletes the original.
@@ -38,8 +38,8 @@ type Config struct {
 func Defaults() Config {
 	return Config{
 		Addr:           ":8080",
-		MediaDir:       "./media",
-		DataDir:        "./data",
+		MediaDirectory: "./media",
+		DataDirectory:  "./data",
 		ScanInterval:   5 * time.Minute,
 		VotesRequired:  4,
 		MaxTranscodes:  2,
@@ -58,27 +58,27 @@ func Load() (Config, error) { return LoadFrom(os.Getenv) }
 // tests), applies defaults, and validates it. It reports every bad variable
 // at once rather than stopping at the first.
 func LoadFrom(getenv func(string) string) (Config, error) {
-	c := Defaults()
+	config := Defaults()
 	var errs []error
-	for _, v := range c.variables() {
-		if s := getenv(v.name); s != "" {
-			if err := v.set(s); err != nil {
-				errs = append(errs, fmt.Errorf("%s: %q %v", v.name, s, err))
+	for _, variable := range config.variables() {
+		if value := getenv(variable.name); value != "" {
+			if err := variable.set(value); err != nil {
+				errs = append(errs, fmt.Errorf("%s: %q %v", variable.name, value, err))
 			}
 		}
 	}
-	errs = append(errs, c.Validate())
+	errs = append(errs, config.Validate())
 	if err := errors.Join(errs...); err != nil {
-		return c, err
+		return config, err
 	}
 	var err error
-	if c.MediaDir, err = filepath.Abs(c.MediaDir); err != nil {
-		return c, err
+	if config.MediaDirectory, err = filepath.Abs(config.MediaDirectory); err != nil {
+		return config, err
 	}
-	if c.DataDir, err = filepath.Abs(c.DataDir); err != nil {
-		return c, err
+	if config.DataDirectory, err = filepath.Abs(config.DataDirectory); err != nil {
+		return config, err
 	}
-	return c, nil
+	return config, nil
 }
 
 // variable is one NEXUSPLAY_* setting: its name, and how to parse a value
@@ -89,93 +89,97 @@ type variable struct {
 }
 
 // variables lists every setting read from the environment.
-func (c *Config) variables() []variable {
+func (config *Config) variables() []variable {
 	return []variable{
-		{"NEXUSPLAY_ADDR", text(&c.Addr)},
-		{"NEXUSPLAY_MEDIA_DIR", text(&c.MediaDir)},
-		{"NEXUSPLAY_DATA_DIR", text(&c.DataDir)},
-		{"NEXUSPLAY_TMDB_API_KEY", text(&c.TMDBAPIKey)},
-		{"NEXUSPLAY_FFMPEG", text(&c.FFmpegPath)},
-		{"NEXUSPLAY_FFPROBE", text(&c.FFprobePath)},
-		{"NEXUSPLAY_SCAN_INTERVAL", duration(&c.ScanInterval)},
-		{"NEXUSPLAY_VOTES_REQUIRED", number(&c.VotesRequired)},
-		{"NEXUSPLAY_MAX_TRANSCODES", number(&c.MaxTranscodes)},
-		{"NEXUSPLAY_MAX_CONVERSIONS", number(&c.MaxConversions)},
-		{"NEXUSPLAY_MAX_ACCOUNTS", number(&c.MaxAccounts)},
-		{"NEXUSPLAY_CONVERT", flag(&c.Convert)},
-		{"NEXUSPLAY_REQUIRE_LOGIN", flag(&c.RequireLogin)},
-		{"NEXUSPLAY_SECURE_COOKIES", flag(&c.SecureCookies)},
-		{"NEXUSPLAY_DEBUG", flag(&c.Debug)},
+		{"NEXUSPLAY_ADDR", text(&config.Addr)},
+		{"NEXUSPLAY_MEDIA_DIR", text(&config.MediaDirectory)},
+		{"NEXUSPLAY_DATA_DIR", text(&config.DataDirectory)},
+		{"NEXUSPLAY_TMDB_API_KEY", text(&config.TMDBAPIKey)},
+		{"NEXUSPLAY_FFMPEG", text(&config.FFmpegPath)},
+		{"NEXUSPLAY_FFPROBE", text(&config.FFprobePath)},
+		{"NEXUSPLAY_SCAN_INTERVAL", duration(&config.ScanInterval)},
+		{"NEXUSPLAY_VOTES_REQUIRED", number(&config.VotesRequired)},
+		{"NEXUSPLAY_MAX_TRANSCODES", number(&config.MaxTranscodes)},
+		{"NEXUSPLAY_MAX_CONVERSIONS", number(&config.MaxConversions)},
+		{"NEXUSPLAY_MAX_ACCOUNTS", number(&config.MaxAccounts)},
+		{"NEXUSPLAY_CONVERT", flag(&config.Convert)},
+		{"NEXUSPLAY_REQUIRE_LOGIN", flag(&config.RequireLogin)},
+		{"NEXUSPLAY_SECURE_COOKIES", flag(&config.SecureCookies)},
+		{"NEXUSPLAY_DEBUG", flag(&config.Debug)},
 	}
 }
 
-func text(dst *string) func(string) error {
-	return func(v string) error { *dst = v; return nil }
+func text(destination *string) func(string) error {
+	return func(value string) error { *destination = value; return nil }
 }
 
-func number(dst *int) func(string) error {
-	return func(v string) error {
-		n, err := strconv.Atoi(v)
+func number(destination *int) func(string) error {
+	return func(value string) error {
+		number, err := strconv.Atoi(value)
 		if err != nil {
 			return errors.New("is not a whole number")
 		}
-		*dst = n
+		*destination = number
 		return nil
 	}
 }
 
-func flag(dst *bool) func(string) error {
-	return func(v string) error {
-		b, err := strconv.ParseBool(v)
+func flag(destination *bool) func(string) error {
+	return func(value string) error {
+		enabled, err := strconv.ParseBool(value)
 		if err != nil {
 			return errors.New("is not true or false")
 		}
-		*dst = b
+		*destination = enabled
 		return nil
 	}
 }
 
-func duration(dst *time.Duration) func(string) error {
-	return func(v string) error {
-		d, err := time.ParseDuration(v)
+func duration(destination *time.Duration) func(string) error {
+	return func(value string) error {
+		duration, err := time.ParseDuration(value)
 		if err != nil {
 			return errors.New("is not a duration such as 5m or 1h")
 		}
-		*dst = d
+		*destination = duration
 		return nil
 	}
 }
 
 // Validate reports every setting that is out of range.
-func (c Config) Validate() error {
+func (config Config) Validate() error {
 	var errs []error
-	atLeastOne := func(key string, n int) {
-		if n < 1 {
-			errs = append(errs, fmt.Errorf("%s must be at least 1, not %d", key, n))
+	atLeastOne := func(key string, count int) {
+		if count < 1 {
+			errs = append(errs, fmt.Errorf("%s must be at least 1, not %d", key, count))
 		}
 	}
-	atLeastOne("NEXUSPLAY_VOTES_REQUIRED", c.VotesRequired)
-	atLeastOne("NEXUSPLAY_MAX_TRANSCODES", c.MaxTranscodes)
-	atLeastOne("NEXUSPLAY_MAX_CONVERSIONS", c.MaxConversions)
+	atLeastOne("NEXUSPLAY_VOTES_REQUIRED", config.VotesRequired)
+	atLeastOne("NEXUSPLAY_MAX_TRANSCODES", config.MaxTranscodes)
+	atLeastOne("NEXUSPLAY_MAX_CONVERSIONS", config.MaxConversions)
 	// Changes are picked up within seconds by the file watcher; the interval
 	// is only the safety net, and walking a big library too often wastes disk I/O.
-	if c.ScanInterval < 10*time.Second {
-		errs = append(errs, fmt.Errorf("NEXUSPLAY_SCAN_INTERVAL must be at least 10s, not %s", c.ScanInterval))
+	if config.ScanInterval < 10*time.Second {
+		errs = append(errs, fmt.Errorf("NEXUSPLAY_SCAN_INTERVAL must be at least 10s, not %s", config.ScanInterval))
 	}
-	if c.MaxAccounts < 0 {
-		errs = append(errs, fmt.Errorf("NEXUSPLAY_MAX_ACCOUNTS must be 0 (no limit) or more, not %d", c.MaxAccounts))
+	if config.MaxAccounts < 0 {
+		errs = append(errs, fmt.Errorf("NEXUSPLAY_MAX_ACCOUNTS must be 0 (no limit) or more, not %d", config.MaxAccounts))
 	}
-	if c.Addr == "" {
+	if config.Addr == "" {
 		errs = append(errs, errors.New("NEXUSPLAY_ADDR must not be empty"))
 	}
 	return errors.Join(errs...)
 }
 
-// PosterDir is where downloaded and uploaded posters are stored.
-func (c Config) PosterDir() string { return filepath.Join(c.DataDir, "posters") }
+// PosterDirectory is where downloaded and uploaded posters are stored.
+func (config Config) PosterDirectory() string { return filepath.Join(config.DataDirectory, "posters") }
 
-// TranscodeDir is the scratch space for HLS output.
-func (c Config) TranscodeDir() string { return filepath.Join(c.DataDir, "transcode") }
+// TranscodeDirectory is the scratch space for HLS output.
+func (config Config) TranscodeDirectory() string {
+	return filepath.Join(config.DataDirectory, "transcode")
+}
 
-// DBPath is the SQLite database file.
-func (c Config) DBPath() string { return filepath.Join(c.DataDir, "nexusplay.db") }
+// DatabasePath is the SQLite database file.
+func (config Config) DatabasePath() string {
+	return filepath.Join(config.DataDirectory, "nexusplay.db")
+}

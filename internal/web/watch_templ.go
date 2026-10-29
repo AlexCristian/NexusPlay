@@ -143,9 +143,9 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var10 string
-			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(p.V.User != nil))
+			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(p.Viewer.User != nil))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 25, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/watch.templ`, Line: 25, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
@@ -233,12 +233,12 @@ func watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resume
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if p.V.User != nil {
+			if p.Viewer.User != nil {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div class=\"player-actions\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				if p.V.IsAdmin() {
+				if p.Viewer.IsAdmin() {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<a class=\"player-action\" href=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err

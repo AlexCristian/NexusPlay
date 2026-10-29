@@ -20,11 +20,11 @@ func TestDefaults(t *testing.T) {
 		c.VotesRequired != 4 || c.ScanInterval != 5*time.Minute || c.RequireLogin || c.MaxAccounts != 10 {
 		t.Errorf("defaults = %+v", c)
 	}
-	if !filepath.IsAbs(c.MediaDir) || !filepath.IsAbs(c.DataDir) {
-		t.Errorf("folders must be absolute: %q %q", c.MediaDir, c.DataDir)
+	if !filepath.IsAbs(c.MediaDirectory) || !filepath.IsAbs(c.DataDirectory) {
+		t.Errorf("folders must be absolute: %q %q", c.MediaDirectory, c.DataDirectory)
 	}
-	if c.DBPath() != filepath.Join(c.DataDir, "nexusplay.db") {
-		t.Errorf("DBPath = %q", c.DBPath())
+	if c.DatabasePath() != filepath.Join(c.DataDirectory, "nexusplay.db") {
+		t.Errorf("DBPath = %q", c.DatabasePath())
 	}
 }
 
@@ -41,7 +41,7 @@ func TestLoadFrom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Addr != "127.0.0.1:9000" || c.MediaDir != "/srv/media" || c.ScanInterval != time.Hour ||
+	if c.Addr != "127.0.0.1:9000" || c.MediaDirectory != "/srv/media" || c.ScanInterval != time.Hour ||
 		c.MaxConversions != 3 || c.Convert || !c.RequireLogin || c.TMDBAPIKey != "abc" {
 		t.Errorf("config = %+v", c)
 	}

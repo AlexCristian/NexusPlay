@@ -89,7 +89,7 @@ func TestConcurrentWriteTransactions(t *testing.T) {
 		}
 	}
 	admins := 0
-	users, _ := queryAll(ctx, s.db, scanUser, `SELECT `+userCols+` FROM users`)
+	users, _ := queryAll(ctx, s.database, scanUser, `SELECT `+userCols+` FROM users`)
 	for _, u := range users {
 		if u.IsAdmin {
 			admins++
@@ -117,7 +117,7 @@ func TestOpenPathWithQueryCharacters(t *testing.T) {
 		t.Errorf("database not created at %s: %v", path, err)
 	}
 	var mode string
-	if err := s.db.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || mode != "wal" {
+	if err := s.database.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil || mode != "wal" {
 		t.Errorf("journal_mode = %q (%v), want wal: settings were not applied", mode, err)
 	}
 }

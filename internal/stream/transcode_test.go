@@ -17,14 +17,14 @@ import (
 )
 
 func TestFFmpegArgs(t *testing.T) {
-	remux := ffmpegArgs("in.mkv", "/out", media.Format{VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p"})
+	remux := ffmpegArguments("in.mkv", "/out", media.Format{VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p"})
 	if !slices.Contains(remux, "copy") || slices.Contains(remux, "libx264") {
 		t.Errorf("h264/aac should be copied, got %v", remux)
 	}
-	if tenBit := ffmpegArgs("in.mkv", "/out", media.Format{VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p10le"}); !slices.Contains(tenBit, "libx264") {
+	if tenBit := ffmpegArguments("in.mkv", "/out", media.Format{VideoCodec: "h264", AudioCodec: "aac", PixFmt: "yuv420p10le"}); !slices.Contains(tenBit, "libx264") {
 		t.Errorf("10-bit h264 must be re-encoded for browsers, got %v", tenBit)
 	}
-	encode := ffmpegArgs("in.avi", "/out", media.Format{VideoCodec: "mpeg4", AudioCodec: "mp3"})
+	encode := ffmpegArguments("in.avi", "/out", media.Format{VideoCodec: "mpeg4", AudioCodec: "mp3"})
 	if !slices.Contains(encode, "libx264") || !slices.Contains(encode, "aac") {
 		t.Errorf("mpeg4/mp3 should be encoded, got %v", encode)
 	}
@@ -68,7 +68,7 @@ func (p *fakeProcess) Wait() error {
 
 func newTestManager(t *testing.T, f *fakeStarter, max int) *Manager {
 	t.Helper()
-	m, err := NewManager(f, Config{Dir: filepath.Join(t.TempDir(), "transcode"), Max: max},
+	m, err := NewManager(f, Config{Directory: filepath.Join(t.TempDir(), "transcode"), Max: max},
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -185,7 +185,7 @@ func TestRunStopsAndCleansUpOnShutdown(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Run did not return after cancel")
 	}
-	entries, _ := os.ReadDir(m.cfg.Dir)
+	entries, _ := os.ReadDir(m.config.Directory)
 	if len(entries) != 0 {
 		t.Errorf("output left after shutdown: %v", entries)
 	}

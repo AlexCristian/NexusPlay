@@ -18,11 +18,11 @@ import (
 
 // formError is a problem with submitted input that the user can fix. The
 // handler shows the form again with the message instead of an error page.
-type formError struct{ msg string }
+type formError struct{ message string }
 
-func (e *formError) Error() string { return e.msg }
+func (formError *formError) Error() string { return formError.message }
 
-func formErr(msg string) error { return &formError{msg: msg} }
+func formErr(message string) error { return &formError{message: message} }
 
 // mediaInput is the media edit form, decoded.
 type mediaInput struct {
@@ -39,7 +39,7 @@ func decodeMediaForm(r *http.Request) (mediaInput, error) {
 	if err := parseForm(r, maxUpload); err != nil {
 		return mediaInput{}, formErr("The upload is too large or malformed.")
 	}
-	in := mediaInput{
+	input := mediaInput{
 		update: store.MediaUpdate{
 			Title:    oneLine(r.FormValue("title")),
 			Year:     strings.TrimSpace(r.FormValue("year")),
@@ -49,28 +49,28 @@ func decodeMediaForm(r *http.Request) (mediaInput, error) {
 		collection: strings.TrimSpace(r.FormValue("collection")),
 		publish:    r.FormValue("publish") == "1",
 	}
-	var ok bool
-	if in.update.Season, ok = formCount(r, "season"); !ok {
-		return in, formErr("Season must be a number.")
+	var valid bool
+	if input.update.Season, valid = formCount(r, "season"); !valid {
+		return input, formErr("Season must be a number.")
 	}
-	if in.update.Episode, ok = formCount(r, "episode"); !ok {
-		return in, formErr("Episode must be a number.")
+	if input.update.Episode, valid = formCount(r, "episode"); !valid {
+		return input, formErr("Episode must be a number.")
 	}
-	if in.update.EpisodeEnd, ok = formCount(r, "episode_end"); !ok {
-		return in, formErr("The last episode must be a number.")
+	if input.update.EpisodeEnd, valid = formCount(r, "episode_end"); !valid {
+		return input, formErr("The last episode must be a number.")
 	}
-	if in.update.EpisodeEnd == in.update.Episode {
-		in.update.EpisodeEnd = 0 // "1 to 1" is one episode
+	if input.update.EpisodeEnd == input.update.Episode {
+		input.update.EpisodeEnd = 0 // "1 to 1" is one episode
 	}
-	if in.update.EpisodeEnd != 0 && in.update.EpisodeEnd < in.update.Episode {
-		return in, formErr("The last episode must come after the first.")
+	if input.update.EpisodeEnd != 0 && input.update.EpisodeEnd < input.update.Episode {
+		return input, formErr("The last episode must come after the first.")
 	}
-	if in.update.Title == "" {
-		return in, formErr("The title cannot be empty.")
+	if input.update.Title == "" {
+		return input, formErr("The title cannot be empty.")
 	}
 	var err error
-	in.poster, in.update.RemovePoster, err = decodePoster(r)
-	return in, err
+	input.poster, input.update.RemovePoster, err = decodePoster(r)
+	return input, err
 }
 
 // collectionInput is the collection form, decoded.
@@ -85,7 +85,7 @@ func decodeCollectionForm(r *http.Request) (collectionInput, error) {
 	if err := parseForm(r, maxUpload); err != nil {
 		return collectionInput{}, formErr("The upload is too large or malformed.")
 	}
-	in := collectionInput{
+	input := collectionInput{
 		update: store.CollectionUpdate{
 			Name:     oneLine(r.FormValue("name")),
 			Category: strings.TrimSpace(r.FormValue("category")),
@@ -94,22 +94,22 @@ func decodeCollectionForm(r *http.Request) (collectionInput, error) {
 		},
 		lookup: r.FormValue("lookup") == "1",
 	}
-	if in.update.Name == "" || in.update.Category == "" {
-		return in, formErr("A collection needs a name and a category.")
+	if input.update.Name == "" || input.update.Category == "" {
+		return input, formErr("A collection needs a name and a category.")
 	}
 	var err error
-	in.poster, in.update.RemovePoster, err = decodePoster(r)
-	return in, err
+	input.poster, input.update.RemovePoster, err = decodePoster(r)
+	return input, err
 }
 
 // decodeSubtitleUpload reads the subtitle upload form: a language code and
 // an SRT or WebVTT file.
-func decodeSubtitleUpload(r *http.Request) (lang string, cues []subtitle.Cue, err error) {
+func decodeSubtitleUpload(r *http.Request) (language string, cues []subtitle.Cue, err error) {
 	if err := parseForm(r, maxUpload); err != nil {
 		return "", nil, formErr("The upload is too large or malformed.")
 	}
-	lang = strings.ToLower(strings.TrimSpace(r.FormValue("language")))
-	if lang == "" || len(lang) > 12 {
+	language = strings.ToLower(strings.TrimSpace(r.FormValue("language")))
+	if language == "" || len(language) > 12 {
 		return "", nil, formErr("Enter a language code such as en or ro.")
 	}
 	file, _, err := r.FormFile("file")
@@ -124,7 +124,7 @@ func decodeSubtitleUpload(r *http.Request) (lang string, cues []subtitle.Cue, er
 	if cues, err = subtitle.Parse(data); err != nil {
 		return "", nil, formErr("That file is not a valid SRT or WebVTT subtitle: " + err.Error())
 	}
-	return lang, cues, nil
+	return language, cues, nil
 }
 
 // posterUpload is an uploaded poster whose content is a supported image.
@@ -139,46 +139,46 @@ var posterTypes = map[string]string{"image/jpeg": ".jpg", "image/png": ".png", "
 // box, which cannot both be used at once.
 func decodePoster(r *http.Request) (upload *posterUpload, remove bool, err error) {
 	remove = r.FormValue("remove_poster") == "1"
-	var fh *multipart.FileHeader
+	var posterFile *multipart.FileHeader
 	if r.MultipartForm != nil {
-		for _, f := range r.MultipartForm.File["poster"] {
-			if f.Size > 0 {
-				fh = f
+		for _, fileHeader := range r.MultipartForm.File["poster"] {
+			if fileHeader.Size > 0 {
+				posterFile = fileHeader
 				break
 			}
 		}
 	}
-	if fh == nil {
+	if posterFile == nil {
 		return nil, remove, nil
 	}
 	if remove {
 		return nil, false, formErr("Upload a new poster or remove the current one, not both.")
 	}
-	f, err := fh.Open()
+	file, err := posterFile.Open()
 	if err != nil {
 		return nil, false, formErr("Could not read the uploaded poster.")
 	}
-	defer f.Close()
+	defer file.Close()
 	head := make([]byte, 512)
-	n, _ := io.ReadFull(f, head) // a file shorter than 512 bytes is fine: sniff what there is
-	ext, ok := posterTypes[http.DetectContentType(head[:n])]
-	if !ok {
+	bytesRead, _ := io.ReadFull(file, head) // a file shorter than 512 bytes is fine: sniff what there is
+	ext, allowed := posterTypes[http.DetectContentType(head[:bytesRead])]
+	if !allowed {
 		return nil, false, formErr("Posters must be JPEG, PNG or WebP images.")
 	}
-	return &posterUpload{file: fh, ext: ext}, false, nil
+	return &posterUpload{file: posterFile, ext: ext}, false, nil
 }
 
 // oneLine trims s and joins its lines and runs of spaces with single spaces:
 // titles are edited in a growing text area, where Enter adds a line break.
-func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+func oneLine(text string) string { return strings.Join(strings.Fields(text), " ") }
 
 // formCount reads an optional whole number that cannot be negative, such
 // as a season. A blank field is 0.
 func formCount(r *http.Request, key string) (int, bool) {
-	v := strings.TrimSpace(r.FormValue(key))
-	if v == "" {
+	value := strings.TrimSpace(r.FormValue(key))
+	if value == "" {
 		return 0, true
 	}
-	n, err := strconv.Atoi(v)
-	return n, err == nil && n >= 0
+	number, err := strconv.Atoi(value)
+	return number, err == nil && number >= 0
 }

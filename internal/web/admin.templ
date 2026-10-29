@@ -8,7 +8,7 @@ templ controlPanel(p Page, pending []store.Media, collections []store.Collection
 			<header class="admin-header">
 				<h1>Control panel</h1>
 				<form method="post" action="/admin/scan">
-					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+					<input type="hidden" name="csrf_token" value={ p.Viewer.CSRF }/>
 					<button type="submit" class="button button-quiet">
 						@icon("refresh")
 						Scan library now
@@ -40,7 +40,7 @@ templ controlPanel(p Page, pending []store.Media, collections []store.Collection
 					</tbody>
 				</table>
 			}
-			@conversionsSection(p.V.CSRF, conv)
+			@conversionsSection(p.Viewer.CSRF, conv)
 			<h2>Collections</h2>
 			if len(collections) > 0 {
 				<table class="admin-table">
@@ -62,7 +62,7 @@ templ controlPanel(p Page, pending []store.Media, collections []store.Collection
 			<details class="admin-new">
 				<summary>New collection</summary>
 				<form class="form-grid" method="post" action="/admin/collections" enctype="multipart/form-data">
-					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+					<input type="hidden" name="csrf_token" value={ p.Viewer.CSRF }/>
 					@collectionFields(store.Collection{Category: "TV Shows"}, categories, metaEnabled)
 					<div class="form-actions">
 						<button type="submit" class="button">Create collection</button>
@@ -141,7 +141,7 @@ templ editCollectionPage(p Page, c store.Collection, categories []string, metaEn
 			<div class="edit-layout">
 				<img class="edit-poster" src={ posterURL(c.Poster) } alt="" width="140" height="210"/>
 				<form class="form-grid" method="post" action={ templ.SafeURL("/admin/collections/" + itoa(c.ID)) } enctype="multipart/form-data">
-					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+					<input type="hidden" name="csrf_token" value={ p.Viewer.CSRF }/>
 					@collectionFields(c, categories, metaEnabled)
 					<div class="form-actions">
 						<button type="submit" class="button">Save</button>
@@ -149,7 +149,7 @@ templ editCollectionPage(p Page, c store.Collection, categories []string, metaEn
 				</form>
 			</div>
 			<form method="post" action={ templ.SafeURL("/admin/collections/" + itoa(c.ID) + "/delete") } class="danger-zone" data-confirm="Delete this collection? Its episodes stay in the library as standalone items.">
-				<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+				<input type="hidden" name="csrf_token" value={ p.Viewer.CSRF }/>
 				<button type="submit" class="button button-danger">Delete collection</button>
 			</form>
 			@categoryList(categories)
@@ -180,7 +180,7 @@ templ editMediaPage(p Page, f MediaForm) {
 			<div class="edit-layout">
 				<img class="edit-poster" src={ posterURL(f.Media.Poster) } alt="" width="140" height="210"/>
 				<form class="form-grid" method="post" action={ templ.SafeURL("/admin/media/" + itoa(f.Media.ID)) } enctype="multipart/form-data">
-					<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+					<input type="hidden" name="csrf_token" value={ p.Viewer.CSRF }/>
 					<label>
 						Title
 						<textarea name="title" class="grow" rows="1" required maxlength="200">{ f.Media.Title }</textarea>
@@ -246,7 +246,7 @@ templ editMediaPage(p Page, f MediaForm) {
 							<tr>
 								<td colspan="2">
 									<form class="inline-fields" method="post" action={ templ.SafeURL("/admin/subtitles/" + itoa(s.ID)) }>
-										<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+										<input type="hidden" name="csrf_token" value={ p.Viewer.CSRF }/>
 										<label>
 											Language code
 											<input type="text" name="language" value={ s.Language } required maxlength="12"/>
@@ -260,7 +260,7 @@ templ editMediaPage(p Page, f MediaForm) {
 								</td>
 								<td>
 									<form method="post" action={ templ.SafeURL("/admin/subtitles/" + itoa(s.ID) + "/delete") } data-confirm="Delete this subtitle track and its proposed corrections?">
-										<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+										<input type="hidden" name="csrf_token" value={ p.Viewer.CSRF }/>
 										<button type="submit" class="button button-small button-danger">Delete</button>
 									</form>
 								</td>
@@ -270,7 +270,7 @@ templ editMediaPage(p Page, f MediaForm) {
 				</table>
 			}
 			<form class="form-grid upload-sub" method="post" action={ templ.SafeURL("/admin/media/" + itoa(f.Media.ID) + "/subtitles") } enctype="multipart/form-data">
-				<input type="hidden" name="csrf_token" value={ p.V.CSRF }/>
+				<input type="hidden" name="csrf_token" value={ p.Viewer.CSRF }/>
 				<label>
 					Subtitle file (.srt or .vtt)
 					<input type="file" name="file" accept=".srt,.vtt,text/vtt" required/>

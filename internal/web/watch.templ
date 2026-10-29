@@ -22,7 +22,7 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 				data-resume={ fmtSeconds(resumeAt) }
 				data-duration={ fmtSeconds(m.Duration) }
 				data-hls-script={ asset("/static/vendor/hls.light.min.js") }
-				data-signed-in={ strconv.FormatBool(p.V.User != nil) }
+				data-signed-in={ strconv.FormatBool(p.Viewer.User != nil) }
 			>
 				for _, s := range subs {
 					<track kind="subtitles" id={ "sub-" + itoa(s.ID) } src={ "/subtitles/" + itoa(s.ID) } srclang={ s.Language } label={ s.Label }/>
@@ -37,9 +37,9 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 			@playerControls(len(subs) > 0)
 		</div>
 		<section class="video-content">
-			if p.V.User != nil {
+			if p.Viewer.User != nil {
 				<div class="player-actions">
-					if p.V.IsAdmin() {
+					if p.Viewer.IsAdmin() {
 						<a class="player-action" href={ templ.SafeURL("/admin/media/" + itoa(m.ID)) } title="Edit metadata" aria-label="Edit metadata">
 							@icon("pencil")
 						</a>

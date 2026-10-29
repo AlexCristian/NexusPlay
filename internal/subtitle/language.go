@@ -18,12 +18,12 @@ var languageNames = map[string]string{
 // the code itself.
 func LanguageName(code string) string {
 	code = strings.ToLower(strings.TrimSpace(code))
-	if n, ok := languageNames[code]; ok {
-		return n
+	if name, found := languageNames[code]; found {
+		return name
 	}
-	if base, _, ok := strings.Cut(code, "-"); ok {
-		if n, ok := languageNames[base]; ok {
-			return n
+	if base, _, hasSubtag := strings.Cut(code, "-"); hasSubtag {
+		if name, found := languageNames[base]; found {
+			return name
 		}
 	}
 	if code == "" || code == "und" {

@@ -68,7 +68,7 @@ func TestShowFromDirs(t *testing.T) {
 		"TV/The.Expanse/Specials/":     {"Specials", 0}, // not a season folder
 		"Shows/House of Cards (2013)/": {"House of Cards (2013)", 0},
 	} {
-		show, season := showFromDirs(dir)
+		show, season := showFromDirectories(dir)
 		if show != want.show || season != want.season {
 			t.Errorf("showFromDirs(%q) = %q, %d; want %q, %d", dir, show, season, want.show, want.season)
 		}

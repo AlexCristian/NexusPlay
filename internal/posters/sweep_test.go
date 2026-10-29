@@ -31,7 +31,7 @@ func TestSweepRemovesOnlyOldUnusedFiles(t *testing.T) {
 	write(".poster-123", old)           // an interrupted download
 	os.Mkdir(filepath.Join(dir, "sub"), 0o755)
 
-	s := NewSweeper(fakeStore{"used.jpg": true}, Config{Dir: dir}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s := NewSweeper(fakeStore{"used.jpg": true}, Config{Directory: dir}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	n, err := s.Sweep(context.Background())
 	if err != nil {
 		t.Fatal(err)

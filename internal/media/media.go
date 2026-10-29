@@ -20,14 +20,14 @@ var videoTypes = map[string]string{
 
 // IsVideo reports whether a file name has a video extension NexusPlay uses.
 func IsVideo(name string) bool {
-	_, ok := videoTypes[strings.ToLower(path.Ext(name))]
-	return ok
+	_, known := videoTypes[strings.ToLower(path.Ext(name))]
+	return known
 }
 
 // MIMEType returns the Content-Type to serve a video file with.
 func MIMEType(name string) (string, bool) {
-	t, ok := videoTypes[strings.ToLower(path.Ext(name))]
-	return t, ok
+	mimeType, known := videoTypes[strings.ToLower(path.Ext(name))]
+	return mimeType, known
 }
 
 // Format is what the policy needs to know about a file.
@@ -50,20 +50,20 @@ const (
 
 // Deliver decides how to play a file now. It accepts anything current
 // browsers decode natively, which is broader than what NeedsConversion keeps.
-func Deliver(f Format) Delivery {
-	ok := false
-	switch ext(f.Path) {
+func Deliver(format Format) Delivery {
+	playable := false
+	switch ext(format.Path) {
 	case ".mp4", ".m4v":
-		ok = slices.Contains([]string{"h264", "av1", "vp9"}, f.VideoCodec) &&
-			slices.Contains([]string{"", "aac", "mp3", "opus", "flac"}, f.AudioCodec)
+		playable = slices.Contains([]string{"h264", "av1", "vp9"}, format.VideoCodec) &&
+			slices.Contains([]string{"", "aac", "mp3", "opus", "flac"}, format.AudioCodec)
 	case ".webm":
-		ok = slices.Contains([]string{"vp8", "vp9", "av1"}, f.VideoCodec) &&
-			slices.Contains([]string{"", "opus", "vorbis"}, f.AudioCodec)
+		playable = slices.Contains([]string{"vp8", "vp9", "av1"}, format.VideoCodec) &&
+			slices.Contains([]string{"", "opus", "vorbis"}, format.AudioCodec)
 	}
-	if ok && f.VideoCodec == "h264" && !BrowserSafeH264(f.PixFmt) {
-		ok = false
+	if playable && format.VideoCodec == "h264" && !BrowserSafeH264(format.PixFmt) {
+		playable = false
 	}
-	if ok {
+	if playable {
 		return DirectPlay
 	}
 	return HLS
@@ -74,14 +74,14 @@ func Deliver(f Format) Delivery {
 // one combination that plays everywhere, including Safari and TV browsers.
 // So WebM and VP9 files, which Deliver plays directly in most browsers, are
 // still converted.
-func NeedsConversion(f Format) bool {
+func NeedsConversion(format Format) bool {
 	switch {
-	case ext(f.Path) != ".mp4" && ext(f.Path) != ".m4v":
+	case ext(format.Path) != ".mp4" && ext(format.Path) != ".m4v":
 		return true
-	case f.VideoCodec != "h264" || !BrowserSafeH264(f.PixFmt):
+	case format.VideoCodec != "h264" || !BrowserSafeH264(format.PixFmt):
 		return true
 	default:
-		return !slices.Contains([]string{"", "aac", "mp3"}, f.AudioCodec)
+		return !slices.Contains([]string{"", "aac", "mp3"}, format.AudioCodec)
 	}
 }
 

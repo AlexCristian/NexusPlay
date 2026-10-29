@@ -19,20 +19,20 @@ import (
 type Store interface {
 	ConversionCandidates(ctx context.Context) ([]store.ConversionCandidate, error)
 	MediaByID(ctx context.Context, id int64) (store.Media, error)
-	ReplaceMediaFile(ctx context.Context, id int64, f store.ReplacedFile) error
+	ReplaceMediaFile(ctx context.Context, id int64, replaced store.ReplacedFile) error
 	SetConvertFailed(ctx context.Context, id int64, reason string) error
 }
 
 // Tools runs ffprobe and ffmpeg; ffmpeg.Tools is the real one.
 type Tools interface {
 	Probe(ctx context.Context, file string) (ffmpeg.Probe, error)
-	Run(ctx context.Context, args []string, opt ffmpeg.RunOptions) error
+	Run(ctx context.Context, arguments []string, options ffmpeg.RunOptions) error
 }
 
 // Library is the scanner as the converter sees it: the lock it shares with
 // scans, and a way to ask for a rescan (which imports extracted subtitles).
 type Library interface {
-	Exclusive(fn func() error) error
+	Exclusive(operation func() error) error
 	Trigger()
 }
 
@@ -46,11 +46,11 @@ type Deps struct {
 
 // Config tunes the converter.
 type Config struct {
-	MediaDir string
-	Max      int // conversions at once (at least 1)
+	MediaDirectory string
+	Max            int // conversions at once (at least 1)
 	// FreeSpace reports the free bytes in a folder's file system. Nil uses
 	// the operating system; tests replace it.
-	FreeSpace func(dir string) (uint64, error)
+	FreeSpace func(directory string) (uint64, error)
 }
 
 // Converter works through the queue of files that need converting, at most
@@ -66,12 +66,12 @@ type Config struct {
 //
 // Only "failed" is stored; the queue is computed from the library.
 type Converter struct {
-	deps Deps
-	cfg  Config
-	now  func() time.Time
-	wake chan struct{}
+	deps   Deps
+	config Config
+	now    func() time.Time
+	wake   chan struct{}
 
-	mu          sync.Mutex // guards everything below
+	mutex       sync.Mutex // guards everything below
 	active      map[int64]*job
 	waitUntil   map[int64]time.Time // postponed files
 	unavailable string              // why Run stopped before converting anything
@@ -86,31 +86,31 @@ type job struct {
 
 // percent is how far the job has got, 0 to 99 (100 only once it is done).
 // The caller holds the converter's mutex.
-func (j *job) percent() int {
-	if j.duration <= 0 {
+func (job *job) percent() int {
+	if job.duration <= 0 {
 		return 0
 	}
-	return int(math.Min(99, j.done/j.duration*100))
+	return int(math.Min(99, job.done/job.duration*100))
 }
 
 // New returns a converter. Call Run to start working through the queue.
-func New(d Deps, c Config) *Converter {
-	if c.Max < 1 {
-		c.Max = 1
+func New(dependencies Deps, config Config) *Converter {
+	if config.Max < 1 {
+		config.Max = 1
 	}
-	if c.FreeSpace == nil {
-		c.FreeSpace = freeBytes
+	if config.FreeSpace == nil {
+		config.FreeSpace = freeBytes
 	}
 	return &Converter{
-		deps: d, cfg: c, now: time.Now, wake: make(chan struct{}, 1),
+		deps: dependencies, config: config, now: time.Now, wake: make(chan struct{}, 1),
 		active: map[int64]*job{}, waitUntil: map[int64]time.Time{},
 	}
 }
 
 // Wake asks the converter to look at the queue now (after a scan found new files).
-func (c *Converter) Wake() {
+func (converter *Converter) Wake() {
 	select {
-	case c.wake <- struct{}{}:
+	case converter.wake <- struct{}{}:
 	default:
 	}
 }
@@ -118,30 +118,30 @@ func (c *Converter) Wake() {
 // Run processes the queue until ctx ends, and returns after every running
 // conversion has stopped. If the media folder is not writable it returns at
 // once and Status says why.
-func (c *Converter) Run(ctx context.Context) error {
-	if err := checkWritable(c.cfg.MediaDir); err != nil {
-		c.mu.Lock()
-		c.unavailable = fmt.Sprintf("Conversion is off: the media folder is read-only or not writable by this "+
+func (converter *Converter) Run(ctx context.Context) error {
+	if err := checkWritable(converter.config.MediaDirectory); err != nil {
+		converter.mutex.Lock()
+		converter.unavailable = fmt.Sprintf("Conversion is off: the media folder is read-only or not writable by this "+
 			"server's user (UID %d), so originals cannot be replaced. In Docker, mount it without :ro and make "+
 			"sure that user owns it, or set user: in docker-compose.yml to the folder's owner.", os.Getuid())
-		c.mu.Unlock()
-		c.deps.Log.Warn("automatic conversion disabled", "reason", err)
+		converter.mutex.Unlock()
+		converter.deps.Log.Warn("automatic conversion disabled", "reason", err)
 		return nil
 	}
-	if err := removeLeftovers(c.cfg.MediaDir); err != nil {
-		c.deps.Log.Warn("could not remove files left by an interrupted conversion", "err", err)
+	if err := removeLeftovers(converter.config.MediaDirectory); err != nil {
+		converter.deps.Log.Warn("could not remove files left by an interrupted conversion", "err", err)
 	}
 
 	tick := time.NewTicker(time.Minute)
 	defer tick.Stop()
-	var wg sync.WaitGroup
-	defer wg.Wait()
+	var waitGroup sync.WaitGroup
+	defer waitGroup.Wait()
 	for {
-		c.fill(ctx, &wg)
+		converter.fill(ctx, &waitGroup)
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-c.wake:
+		case <-converter.wake:
 		case <-tick.C:
 		}
 	}
@@ -150,63 +150,63 @@ func (c *Converter) Run(ctx context.Context) error {
 // fill starts conversions until Max are running or the queue is empty. Only
 // Run calls it, so the free-slot count cannot change underneath it except by
 // jobs finishing, which only frees more.
-func (c *Converter) fill(ctx context.Context, wg *sync.WaitGroup) {
-	c.mu.Lock()
-	free := c.cfg.Max - len(c.active)
-	c.mu.Unlock()
+func (converter *Converter) fill(ctx context.Context, waitGroup *sync.WaitGroup) {
+	converter.mutex.Lock()
+	free := converter.config.Max - len(converter.active)
+	converter.mutex.Unlock()
 	if free <= 0 {
 		return
 	}
-	queue, _, err := c.queue(ctx)
+	queue, _, err := converter.queue(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
-			c.deps.Log.Error("reading the conversion queue", "err", err)
+			converter.deps.Log.Error("reading the conversion queue", "err", err)
 		}
 		return
 	}
 	for _, id := range queue[:min(free, len(queue))] {
-		m, err := c.deps.Store.MediaByID(ctx, id)
+		media, err := converter.deps.Store.MediaByID(ctx, id)
 		if errors.Is(err, store.ErrNotFound) {
 			continue // removed by a scan since the queue was read
 		}
 		if err != nil {
 			if ctx.Err() == nil {
-				c.deps.Log.Error("reading the conversion queue", "err", err)
+				converter.deps.Log.Error("reading the conversion queue", "err", err)
 			}
 			return
 		}
-		j := &job{media: m, duration: m.Duration}
-		c.mu.Lock()
-		c.active[m.ID] = j
-		c.mu.Unlock()
-		wg.Go(func() {
-			c.runJob(ctx, j)
-			c.mu.Lock()
-			delete(c.active, j.media.ID)
-			c.mu.Unlock()
-			c.Wake()
+		newJob := &job{media: media, duration: media.Duration}
+		converter.mutex.Lock()
+		converter.active[media.ID] = newJob
+		converter.mutex.Unlock()
+		waitGroup.Go(func() {
+			converter.runJob(ctx, newJob)
+			converter.mutex.Lock()
+			delete(converter.active, newJob.media.ID)
+			converter.mutex.Unlock()
+			converter.Wake()
 		})
 	}
 }
 
 // queue lists the IDs of files waiting for conversion, newest first,
 // leaving out running ones. It also counts postponed ones.
-func (c *Converter) queue(ctx context.Context) (queued []int64, postponed int, err error) {
-	cands, err := c.deps.Store.ConversionCandidates(ctx)
+func (converter *Converter) queue(ctx context.Context) (queued []int64, postponed int, err error) {
+	cands, err := converter.deps.Store.ConversionCandidates(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
-	now := c.now()
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, m := range cands {
-		f := media.Format{Path: m.Path, VideoCodec: m.VideoCodec, AudioCodec: m.AudioCodec, PixFmt: m.PixFmt}
+	now := converter.now()
+	converter.mutex.Lock()
+	defer converter.mutex.Unlock()
+	for _, candidate := range cands {
+		format := media.Format{Path: candidate.Path, VideoCodec: candidate.VideoCodec, AudioCodec: candidate.AudioCodec, PixFmt: candidate.PixFmt}
 		switch {
-		case !media.NeedsConversion(f) || c.active[m.ID] != nil:
-		case now.Before(c.waitUntil[m.ID]):
+		case !media.NeedsConversion(format) || converter.active[candidate.ID] != nil:
+		case now.Before(converter.waitUntil[candidate.ID]):
 			postponed++
 		default:
-			queued = append(queued, m.ID)
+			queued = append(queued, candidate.ID)
 		}
 	}
 	return queued, postponed, nil
@@ -228,19 +228,19 @@ type Status struct {
 }
 
 // Status reports what the converter is doing.
-func (c *Converter) Status(ctx context.Context) (Status, error) {
-	c.mu.Lock()
-	st := Status{Unavailable: c.unavailable}
-	for _, j := range c.active {
-		st.Active = append(st.Active, JobStatus{Media: j.media, Percent: j.percent()})
+func (converter *Converter) Status(ctx context.Context) (Status, error) {
+	converter.mutex.Lock()
+	status := Status{Unavailable: converter.unavailable}
+	for _, job := range converter.active {
+		status.Active = append(status.Active, JobStatus{Media: job.media, Percent: job.percent()})
 	}
-	c.mu.Unlock()
-	if st.Unavailable != "" {
-		return st, nil
+	converter.mutex.Unlock()
+	if status.Unavailable != "" {
+		return status, nil
 	}
-	q, postponed, err := c.queue(ctx)
-	st.Queued, st.Postponed = len(q), postponed
-	return st, err
+	queued, postponed, err := converter.queue(ctx)
+	status.Queued, status.Postponed = len(queued), postponed
+	return status, err
 }
 
 // Disabled stands in for the converter when conversion is turned off, so
@@ -256,51 +256,51 @@ func (Disabled) Wake() {}
 // runJob converts one file and records the outcome. Shutdown, a changed
 // source and a full disk are not failures; anything else is recorded so the
 // control panel can show it.
-func (c *Converter) runJob(ctx context.Context, j *job) {
-	m := j.media
-	start := c.now()
-	c.deps.Log.Info("converting", "media", m.ID, "path", m.Path)
-	newPath, err := c.convert(ctx, j)
+func (converter *Converter) runJob(ctx context.Context, job *job) {
+	media := job.media
+	start := converter.now()
+	converter.deps.Log.Info("converting", "media", media.ID, "path", media.Path)
+	newPath, err := converter.convert(ctx, job)
 	switch {
 	case ctx.Err() != nil:
-		c.deps.Log.Info("conversion stopped by shutdown; it starts over after the restart",
-			"path", m.Path, "progress", fmt.Sprintf("%d%%", c.percent(j)))
+		converter.deps.Log.Info("conversion stopped by shutdown; it starts over after the restart",
+			"path", media.Path, "progress", fmt.Sprintf("%d%%", converter.percent(job)))
 	case errors.Is(err, ErrSourceChanged):
-		c.deps.Log.Info("conversion discarded; the file changed while converting", "path", m.Path)
+		converter.deps.Log.Info("conversion discarded; the file changed while converting", "path", media.Path)
 	case errors.Is(err, ErrNoSpace):
-		c.mu.Lock()
-		c.waitUntil[m.ID] = c.now().Add(noSpaceRetry)
-		c.mu.Unlock()
-		c.deps.Log.Warn("conversion postponed", "path", m.Path, "err", err)
+		converter.mutex.Lock()
+		converter.waitUntil[media.ID] = converter.now().Add(noSpaceRetry)
+		converter.mutex.Unlock()
+		converter.deps.Log.Warn("conversion postponed", "path", media.Path, "err", err)
 	case err != nil:
-		c.deps.Log.Error("conversion failed", "path", m.Path, "err", err)
-		if err := c.deps.Store.SetConvertFailed(context.WithoutCancel(ctx), m.ID, err.Error()); err != nil {
-			c.deps.Log.Error("recording a failed conversion", "err", err)
+		converter.deps.Log.Error("conversion failed", "path", media.Path, "err", err)
+		if err := converter.deps.Store.SetConvertFailed(context.WithoutCancel(ctx), media.ID, err.Error()); err != nil {
+			converter.deps.Log.Error("recording a failed conversion", "err", err)
 		}
 	default:
-		c.deps.Log.Info("converted", "media", m.ID, "from", m.Path, "to", newPath, "took", c.now().Sub(start).Round(time.Second))
-		if c.deps.Library != nil {
-			c.deps.Library.Trigger() // imports the extracted subtitles
+		converter.deps.Log.Info("converted", "media", media.ID, "from", media.Path, "to", newPath, "took", converter.now().Sub(start).Round(time.Second))
+		if converter.deps.Library != nil {
+			converter.deps.Library.Trigger() // imports the extracted subtitles
 		}
 	}
 }
 
-func (c *Converter) percent(j *job) int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return j.percent()
+func (converter *Converter) percent(job *job) int {
+	converter.mutex.Lock()
+	defer converter.mutex.Unlock()
+	return job.percent()
 }
 
-func (c *Converter) setProgress(j *job, seconds float64) {
-	c.mu.Lock()
-	j.done = seconds
-	c.mu.Unlock()
+func (converter *Converter) setProgress(job *job, seconds float64) {
+	converter.mutex.Lock()
+	job.done = seconds
+	converter.mutex.Unlock()
 }
 
-func (c *Converter) setDuration(j *job, seconds float64) {
+func (converter *Converter) setDuration(job *job, seconds float64) {
 	if seconds > 0 {
-		c.mu.Lock()
-		j.duration = seconds
-		c.mu.Unlock()
+		converter.mutex.Lock()
+		job.duration = seconds
+		converter.mutex.Unlock()
 	}
 }

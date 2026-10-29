@@ -21,44 +21,44 @@ type Store interface {
 
 // Config sets where posters live and how careful the sweep is.
 type Config struct {
-	Dir      string
-	MinAge   time.Duration // a file younger than this is kept (default 1 h)
-	Interval time.Duration // time between sweeps (default 1 h)
+	Directory string
+	MinAge    time.Duration // a file younger than this is kept (default 1 h)
+	Interval  time.Duration // time between sweeps (default 1 h)
 }
 
 // Sweeper deletes unused poster files.
 type Sweeper struct {
-	store Store
-	cfg   Config
-	log   *slog.Logger
-	now   func() time.Time
+	store  Store
+	config Config
+	log    *slog.Logger
+	now    func() time.Time
 }
 
 // NewSweeper returns a sweeper; nothing runs until Run.
-func NewSweeper(st Store, cfg Config, log *slog.Logger) *Sweeper {
-	if cfg.MinAge <= 0 {
-		cfg.MinAge = time.Hour
+func NewSweeper(database Store, config Config, log *slog.Logger) *Sweeper {
+	if config.MinAge <= 0 {
+		config.MinAge = time.Hour
 	}
-	if cfg.Interval <= 0 {
-		cfg.Interval = time.Hour
+	if config.Interval <= 0 {
+		config.Interval = time.Hour
 	}
-	return &Sweeper{store: st, cfg: cfg, log: log, now: time.Now}
+	return &Sweeper{store: database, config: config, log: log, now: time.Now}
 }
 
 // Run sweeps at once and then every Interval until ctx ends.
-func (s *Sweeper) Run(ctx context.Context) error {
-	t := time.NewTicker(s.cfg.Interval)
-	defer t.Stop()
+func (sweeper *Sweeper) Run(ctx context.Context) error {
+	ticker := time.NewTicker(sweeper.config.Interval)
+	defer ticker.Stop()
 	for {
-		if n, err := s.Sweep(ctx); err != nil && ctx.Err() == nil {
-			s.log.Warn("removing unused posters", "err", err)
-		} else if n > 0 {
-			s.log.Info("removed unused posters", "count", n)
+		if deleted, err := sweeper.Sweep(ctx); err != nil && ctx.Err() == nil {
+			sweeper.log.Warn("removing unused posters", "err", err)
+		} else if deleted > 0 {
+			sweeper.log.Info("removed unused posters", "count", deleted)
 		}
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-t.C:
+		case <-ticker.C:
 		}
 	}
 }
@@ -70,27 +70,27 @@ func (s *Sweeper) Run(ctx context.Context) error {
 // The age check is what makes this safe without a lock: a poster is
 // written to disk just before the row that uses it is saved, and an hour
 // is far longer than that gap.
-func (s *Sweeper) Sweep(ctx context.Context) (int, error) {
-	inUse, err := s.store.PosterNames(ctx)
+func (sweeper *Sweeper) Sweep(ctx context.Context) (int, error) {
+	inUse, err := sweeper.store.PosterNames(ctx)
 	if err != nil {
 		return 0, err
 	}
-	entries, err := os.ReadDir(s.cfg.Dir)
+	entries, err := os.ReadDir(sweeper.config.Directory)
 	if err != nil {
 		return 0, err
 	}
-	cutoff := s.now().Add(-s.cfg.MinAge)
+	cutoff := sweeper.now().Add(-sweeper.config.MinAge)
 	removed := 0
-	for _, e := range entries {
-		if !e.Type().IsRegular() || inUse[e.Name()] {
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() || inUse[entry.Name()] {
 			continue
 		}
-		info, err := e.Info()
+		info, err := entry.Info()
 		if err != nil || info.ModTime().After(cutoff) {
 			continue
 		}
-		if err := os.Remove(filepath.Join(s.cfg.Dir, e.Name())); err != nil {
-			s.log.Warn("could not remove an unused poster", "file", e.Name(), "err", err)
+		if err := os.Remove(filepath.Join(sweeper.config.Directory, entry.Name())); err != nil {
+			sweeper.log.Warn("could not remove an unused poster", "file", entry.Name(), "err", err)
 			continue
 		}
 		removed++

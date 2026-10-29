@@ -33,11 +33,11 @@ var ErrUserLimit = errors.New("account limit reached")
 const userCols = `id, email, nickname, password_hash, is_admin, created_at`
 
 func scanUser(row rowScanner) (User, error) {
-	var u User
+	var user User
 	var created int64
-	err := row.Scan(&u.ID, &u.Email, &u.Nickname, &u.PasswordHash, &u.IsAdmin, &created)
-	u.CreatedAt = time.Unix(created, 0)
-	return u, err
+	err := row.Scan(&user.ID, &user.Email, &user.Nickname, &user.PasswordHash, &user.IsAdmin, &created)
+	user.CreatedAt = time.Unix(created, 0)
+	return user, err
 }
 
 // CreateUser inserts a user. The first account ever created becomes the
@@ -47,64 +47,64 @@ func scanUser(row rowScanner) (User, error) {
 // exist. maxUsers 0 means no limit. The count and the insert are one
 // transaction, so two people registering at once cannot both take the last
 // place.
-func (s *Store) CreateUser(ctx context.Context, email, nickname, passwordHash string, maxUsers int) (User, error) {
-	var u User
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+func (store *Store) CreateUser(ctx context.Context, email, nickname, passwordHash string, maxUsers int) (User, error) {
+	var user User
+	err := store.withTransaction(ctx, func(transaction *sql.Tx) error {
 		var count int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		if err := transaction.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
 			return err
 		}
 		if maxUsers > 0 && count >= maxUsers {
 			return ErrUserLimit
 		}
-		res, err := tx.ExecContext(ctx,
+		result, err := transaction.ExecContext(ctx,
 			`INSERT INTO users (email, nickname, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?)`,
-			email, nickname, passwordHash, count == 0, s.unix())
+			email, nickname, passwordHash, count == 0, store.unix())
 		if err != nil {
 			if isUniqueViolation(err) {
 				return ErrDuplicate
 			}
 			return err
 		}
-		id, err := res.LastInsertId()
+		id, err := result.LastInsertId()
 		if err != nil {
 			return err
 		}
-		u, err = scanUser(tx.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE id = ?`, id))
+		user, err = scanUser(transaction.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE id = ?`, id))
 		return err
 	})
-	return u, err
+	return user, err
 }
 
 // UserCount returns how many accounts exist.
-func (s *Store) UserCount(ctx context.Context) (int, error) {
-	var n int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&n)
-	return n, err
+func (store *Store) UserCount(ctx context.Context) (int, error) {
+	var count int
+	err := store.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count)
+	return count, err
 }
 
 // UserByEmail looks a user up by email, case-insensitively, or returns
 // ErrNotFound.
-func (s *Store) UserByEmail(ctx context.Context, email string) (User, error) {
-	u, err := scanUser(s.db.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE email = ?`, email))
-	return u, notFound(err)
+func (store *Store) UserByEmail(ctx context.Context, email string) (User, error) {
+	user, err := scanUser(store.database.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE email = ?`, email))
+	return user, notFound(err)
 }
 
 // UserByID looks a user up by ID, or returns ErrNotFound.
-func (s *Store) UserByID(ctx context.Context, id int64) (User, error) {
-	u, err := scanUser(s.db.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE id = ?`, id))
-	return u, notFound(err)
+func (store *Store) UserByID(ctx context.Context, id int64) (User, error) {
+	user, err := scanUser(store.database.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE id = ?`, id))
+	return user, notFound(err)
 }
 
 // UpdatePasswordHash replaces a user's stored hash (used to upgrade hash parameters).
-func (s *Store) UpdatePasswordHash(ctx context.Context, id int64, hash string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, hash, id)
+func (store *Store) UpdatePasswordHash(ctx context.Context, id int64, hash string) error {
+	_, err := store.database.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, hash, id)
 	return err
 }
 
 // CreateSession stores a session keyed by the hash of its token.
-func (s *Store) CreateSession(ctx context.Context, tokenHash string, userID int64, csrf string, expires time.Time) error {
-	_, err := s.db.ExecContext(ctx,
+func (store *Store) CreateSession(ctx context.Context, tokenHash string, userID int64, csrf string, expires time.Time) error {
+	_, err := store.database.ExecContext(ctx,
 		`INSERT INTO sessions (token_hash, user_id, csrf_token, expires_at) VALUES (?, ?, ?, ?)`,
 		tokenHash, userID, csrf, expires.Unix())
 	return err
@@ -112,34 +112,34 @@ func (s *Store) CreateSession(ctx context.Context, tokenHash string, userID int6
 
 // SessionUser returns the session and its user. It returns ErrNotFound when
 // there is no such session or it has expired.
-func (s *Store) SessionUser(ctx context.Context, tokenHash string) (Session, User, error) {
+func (store *Store) SessionUser(ctx context.Context, tokenHash string) (Session, User, error) {
 	var sess Session
 	var exp int64
-	row := s.db.QueryRowContext(ctx, `
+	row := store.database.QueryRowContext(ctx, `
 		SELECT s.user_id, s.csrf_token, s.expires_at,
 		       u.id, u.email, u.nickname, u.password_hash, u.is_admin, u.created_at
 		FROM sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash, s.unix())
-	var u User
+		WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash, store.unix())
+	var user User
 	var created int64
 	err := row.Scan(&sess.UserID, &sess.CSRFToken, &exp,
-		&u.ID, &u.Email, &u.Nickname, &u.PasswordHash, &u.IsAdmin, &created)
+		&user.ID, &user.Email, &user.Nickname, &user.PasswordHash, &user.IsAdmin, &created)
 	if err != nil {
-		return sess, u, notFound(err)
+		return sess, user, notFound(err)
 	}
 	sess.ExpiresAt = time.Unix(exp, 0)
-	u.CreatedAt = time.Unix(created, 0)
-	return sess, u, nil
+	user.CreatedAt = time.Unix(created, 0)
+	return sess, user, nil
 }
 
 // DeleteSession logs a session out.
-func (s *Store) DeleteSession(ctx context.Context, tokenHash string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE token_hash = ?`, tokenHash)
+func (store *Store) DeleteSession(ctx context.Context, tokenHash string) error {
+	_, err := store.database.ExecContext(ctx, `DELETE FROM sessions WHERE token_hash = ?`, tokenHash)
 	return err
 }
 
 // DeleteExpiredSessions removes stale sessions.
-func (s *Store) DeleteExpiredSessions(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at <= ?`, s.unix())
+func (store *Store) DeleteExpiredSessions(ctx context.Context) error {
+	_, err := store.database.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at <= ?`, store.unix())
 	return err
 }

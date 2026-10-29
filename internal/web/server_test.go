@@ -39,35 +39,35 @@ func newEnv(t *testing.T, mutate func(*config.Config)) *env {
 	t.Helper()
 	dir := t.TempDir()
 	cfg := config.Config{
-		MediaDir: filepath.Join(dir, "media"), DataDir: filepath.Join(dir, "data"),
+		MediaDirectory: filepath.Join(dir, "media"), DataDirectory: filepath.Join(dir, "data"),
 		VotesRequired: 2, MaxTranscodes: 1, FFmpegPath: "ffmpeg", FFprobePath: "ffprobe",
 	}
 	if mutate != nil {
 		mutate(&cfg)
 	}
-	for _, d := range []string{cfg.MediaDir, cfg.PosterDir()} {
+	for _, d := range []string{cfg.MediaDirectory, cfg.PosterDirectory()} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	st, err := store.Open(context.Background(), cfg.DBPath())
+	st, err := store.Open(context.Background(), cfg.DatabasePath())
 	if err != nil {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	tm, err := stream.NewManager(stream.FFmpegStarter(ffmpeg.Tools{FFmpeg: "ffmpeg", FFprobe: "ffprobe"}),
-		stream.Config{Dir: cfg.TranscodeDir(), Max: 1}, log)
+		stream.Config{Directory: cfg.TranscodeDirectory(), Max: 1}, log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	meta := metadata.New(metadata.Config{PosterDirectory: cfg.PosterDir()}, log)
+	meta := metadata.New(metadata.Config{PosterDirectory: cfg.PosterDirectory()}, log)
 	accounts, err := auth.NewAccounts(st, cfg.MaxAccounts, log)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Server{Cfg: cfg, Store: st, Meta: meta, Transcodes: tm, Converter: convert.Disabled{}, Log: log,
+	s := &Server{Config: cfg, Store: st, Meta: meta, Transcodes: tm, Converter: convert.Disabled{}, Log: log,
 		Accounts: accounts, Sessions: auth.NewSessions(st, time.Hour, log),
-		Scanner: library.NewScanner(library.Deps{Store: st, Meta: meta, Log: log}, library.Config{MediaDir: cfg.MediaDir})}
+		Scanner: library.NewScanner(library.Deps{Store: st, Meta: meta, Log: log}, library.Config{MediaDirectory: cfg.MediaDirectory})}
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(func() { ts.Close(); st.Close() })
 	return &env{t: t, srv: ts, store: st, cfg: cfg}
@@ -224,7 +224,7 @@ func TestUnpublishedMediaIsHidden(t *testing.T) {
 
 func TestMediaStreamingSupportsRanges(t *testing.T) {
 	e := newEnv(t, nil)
-	if err := os.WriteFile(filepath.Join(e.cfg.MediaDir, "clip.mp4"), []byte("0123456789"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(e.cfg.MediaDirectory, "clip.mp4"), []byte("0123456789"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()

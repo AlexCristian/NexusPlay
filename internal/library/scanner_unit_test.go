@@ -53,7 +53,7 @@ func newUnitScanner(t *testing.T, p Prober) (*Scanner, *store.Store, string) {
 	t.Cleanup(func() { st.Close() })
 	media := filepath.Join(dir, "media")
 	os.MkdirAll(media, 0o755)
-	sc := NewScanner(Deps{Store: st, Prober: p, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDir: media})
+	sc := NewScanner(Deps{Store: st, Prober: p, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
 	return sc, st, media
 }
 

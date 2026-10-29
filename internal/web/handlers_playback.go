@@ -19,10 +19,10 @@ import (
 // conversions for files a browser cannot play, posters, and watch progress.
 type playbackHandlers struct {
 	responder
-	store      playbackStore
-	transcodes transcoder
-	mediaDir   string
-	posterDir  string
+	store           playbackStore
+	transcodes      transcoder
+	mediaDirectory  string
+	posterDirectory string
 }
 
 // playbackStore is the part of the database the player uses.
@@ -37,95 +37,95 @@ type playbackStore interface {
 
 // transcoder runs the on-demand HLS conversions (stream.Manager).
 type transcoder interface {
-	Touch(mediaID int64) (dir string, ok bool)
-	Playlist(ctx context.Context, mediaID int64, src string, f media.Format) (string, error)
+	Touch(mediaID int64) (directory string, found bool)
+	Playlist(ctx context.Context, mediaID int64, source string, format media.Format) (string, error)
 	Segment(ctx context.Context, mediaID int64, name string) (string, error)
 }
 
 // watch handles GET /watch/{id}: the player page.
-func (h *playbackHandlers) watch(w http.ResponseWriter, r *http.Request) error {
-	m, err := visibleMedia(r, h.store)
+func (handlers *playbackHandlers) watch(w http.ResponseWriter, r *http.Request) error {
+	media, err := visibleMedia(r, handlers.store)
 	if err != nil {
 		return err
 	}
 	ctx := r.Context()
-	subs, err := h.store.Subtitles(ctx, m.ID)
+	subs, err := handlers.store.Subtitles(ctx, media.ID)
 	if err != nil {
 		return err
 	}
-	v := viewer(r)
+	currentViewer := viewer(r)
 	var resumeAt float64
-	if v.User != nil {
-		if resumeAt, err = h.store.Progress(ctx, v.ID(), m.ID); err != nil {
+	if currentViewer.User != nil {
+		if resumeAt, err = handlers.store.Progress(ctx, currentViewer.ID(), media.ID); err != nil {
 			return err
 		}
 		// Opening the video dismisses its "new episode" notification.
-		if err := h.store.ClearNotification(ctx, v.ID(), m.ID); err != nil {
-			h.log.Warn("clearing notification", "err", err)
+		if err := handlers.store.ClearNotification(ctx, currentViewer.ID(), media.ID); err != nil {
+			handlers.log.Warn("clearing notification", "err", err)
 		}
 	}
-	if m.Published {
-		if err := h.store.IncrementViews(ctx, m.ID); err != nil {
-			h.log.Warn("counting view", "err", err)
+	if media.Published {
+		if err := handlers.store.IncrementViews(ctx, media.ID); err != nil {
+			handlers.log.Warn("counting view", "err", err)
 		}
 	}
-	title := m.Title
-	if m.CollectionName != "" {
-		title = m.CollectionName + " · " + m.Title
+	title := media.Title
+	if media.CollectionName != "" {
+		title = media.CollectionName + " · " + media.Title
 	}
-	h.render(w, r, http.StatusOK, watchPage(newPage(r, title), m, playbackFor(m), subs, resumeAt))
+	handlers.render(w, r, http.StatusOK, watchPage(newPage(r, title), media, playbackFor(media), subs, resumeAt))
 	return nil
 }
 
 // playbackFor tells the player where to load a video from: the file itself,
 // or an on-the-fly HLS conversion.
-func playbackFor(m store.Media) Playback {
-	if media.Deliver(formatOf(m)) == media.DirectPlay {
-		return Playback{Direct: true, URL: "/media/" + itoa(m.ID) + "/file"}
+func playbackFor(mediaItem store.Media) Playback {
+	if media.Deliver(formatOf(mediaItem)) == media.DirectPlay {
+		return Playback{Direct: true, URL: "/media/" + itoa(mediaItem.ID) + "/file"}
 	}
-	return Playback{URL: "/media/" + itoa(m.ID) + "/hls/index.m3u8"}
+	return Playback{URL: "/media/" + itoa(mediaItem.ID) + "/hls/index.m3u8"}
 }
 
 // formatOf describes a media item for the playback policy.
-func formatOf(m store.Media) media.Format {
-	return media.Format{Path: m.Path, VideoCodec: m.VideoCodec, AudioCodec: m.AudioCodec, PixFmt: m.PixFmt}
+func formatOf(mediaItem store.Media) media.Format {
+	return media.Format{Path: mediaItem.Path, VideoCodec: mediaItem.VideoCodec, AudioCodec: mediaItem.AudioCodec, PixFmt: mediaItem.PixFmt}
 }
 
 // mediaPath resolves a media item's file, refusing anything outside the media
 // folder. (Paths come from the scanner, so this is defence in depth.)
-func (h *playbackHandlers) mediaPath(m store.Media) (string, error) {
-	p := filepath.Join(h.mediaDir, filepath.FromSlash(m.Path))
-	rel, err := filepath.Rel(h.mediaDir, p)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+func (handlers *playbackHandlers) mediaPath(media store.Media) (string, error) {
+	path := filepath.Join(handlers.mediaDirectory, filepath.FromSlash(media.Path))
+	relativePath, err := filepath.Rel(handlers.mediaDirectory, path)
+	if err != nil || relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
 		return "", errors.New("media path escapes the media folder")
 	}
-	return p, nil
+	return path, nil
 }
 
 // mediaFile handles GET /media/{id}/file: the original file, with range
 // requests so the player can seek.
-func (h *playbackHandlers) mediaFile(w http.ResponseWriter, r *http.Request) error {
-	m, err := visibleMedia(r, h.store)
+func (handlers *playbackHandlers) mediaFile(w http.ResponseWriter, r *http.Request) error {
+	mediaItem, err := visibleMedia(r, handlers.store)
 	if err != nil {
 		return err
 	}
-	p, err := h.mediaPath(m)
+	path, err := handlers.mediaPath(mediaItem)
 	if err != nil {
 		return err
 	}
-	f, err := os.Open(p)
+	file, err := os.Open(path)
 	if err != nil {
 		return store.ErrNotFound // deleted since the last scan
 	}
-	defer f.Close()
-	info, err := f.Stat()
+	defer file.Close()
+	info, err := file.Stat()
 	if err != nil {
 		return err
 	}
-	if ct, ok := media.MIMEType(m.Path); ok {
-		w.Header().Set("Content-Type", ct)
+	if contentType, known := media.MIMEType(mediaItem.Path); known {
+		w.Header().Set("Content-Type", contentType)
 	}
-	http.ServeContent(w, r, "", info.ModTime(), f)
+	http.ServeContent(w, r, "", info.ModTime(), file)
 	return nil
 }
 
@@ -135,12 +135,12 @@ func (h *playbackHandlers) mediaFile(w http.ResponseWriter, r *http.Request) err
 
 // hlsPlaylist handles GET /media/{id}/hls/index.m3u8: it starts the
 // transcode, or reuses a running one, and returns its playlist.
-func (h *playbackHandlers) hlsPlaylist(w http.ResponseWriter, r *http.Request) error {
-	m, err := visibleMedia(r, h.store)
+func (handlers *playbackHandlers) hlsPlaylist(w http.ResponseWriter, r *http.Request) error {
+	media, err := visibleMedia(r, handlers.store)
 	if err != nil {
 		return err
 	}
-	playlist, err := h.startTranscode(r.Context(), m)
+	playlist, err := handlers.startTranscode(r.Context(), media)
 	if err != nil {
 		return err
 	}
@@ -153,21 +153,21 @@ func (h *playbackHandlers) hlsPlaylist(w http.ResponseWriter, r *http.Request) e
 // hlsSegment handles GET /media/{id}/hls/{segment}, such as seg00012.ts,
 // waiting for the segment if it is not written yet. A request for a
 // transcode that was stopped for being idle starts it again.
-func (h *playbackHandlers) hlsSegment(w http.ResponseWriter, r *http.Request) error {
+func (handlers *playbackHandlers) hlsSegment(w http.ResponseWriter, r *http.Request) error {
 	name := r.PathValue("segment")
 	if !stream.IsSegmentName(name) {
 		return store.ErrNotFound
 	}
-	m, err := visibleMedia(r, h.store)
+	media, err := visibleMedia(r, handlers.store)
 	if err != nil {
 		return err
 	}
-	if _, running := h.transcodes.Touch(m.ID); !running {
-		if _, err := h.startTranscode(r.Context(), m); err != nil {
+	if _, running := handlers.transcodes.Touch(media.ID); !running {
+		if _, err := handlers.startTranscode(r.Context(), media); err != nil {
 			return err
 		}
 	}
-	segment, err := h.transcodes.Segment(r.Context(), m.ID, name)
+	segment, err := handlers.transcodes.Segment(r.Context(), media.ID, name)
 	if err != nil {
 		return store.ErrNotFound
 	}
@@ -178,29 +178,29 @@ func (h *playbackHandlers) hlsSegment(w http.ResponseWriter, r *http.Request) er
 
 // startTranscode starts or reuses the HLS transcode of m and returns its
 // playlist. A failed transcode is logged here, with the media it was for.
-func (h *playbackHandlers) startTranscode(ctx context.Context, m store.Media) (string, error) {
-	src, err := h.mediaPath(m)
+func (handlers *playbackHandlers) startTranscode(ctx context.Context, media store.Media) (string, error) {
+	source, err := handlers.mediaPath(media)
 	if err != nil {
 		return "", err
 	}
-	playlist, err := h.transcodes.Playlist(ctx, m.ID, src, formatOf(m))
+	playlist, err := handlers.transcodes.Playlist(ctx, media.ID, source, formatOf(media))
 	if err != nil && !errors.Is(err, stream.ErrBusy) && ctx.Err() == nil {
-		h.log.Error("transcode failed", "media", m.ID, "err", err)
+		handlers.log.Error("transcode failed", "media", media.ID, "err", err)
 		return "", &statusError{status: http.StatusInternalServerError, title: "Playback failed",
-			msg: "This video could not be converted for playback."}
+			message: "This video could not be converted for playback."}
 	}
 	return playlist, err
 }
 
 // poster handles GET /posters/{name}. Only plain file names in the poster
 // folder are served.
-func (h *playbackHandlers) poster(w http.ResponseWriter, r *http.Request) error {
+func (handlers *playbackHandlers) poster(w http.ResponseWriter, r *http.Request) error {
 	name := r.PathValue("name")
 	if name == "" || filepath.Base(name) != name || strings.HasPrefix(name, ".") {
 		return store.ErrNotFound
 	}
 	w.Header().Set("Cache-Control", "public, max-age=86400")
-	http.ServeFile(w, r, filepath.Join(h.posterDir, name))
+	http.ServeFile(w, r, filepath.Join(handlers.posterDirectory, name))
 	return nil
 }
 
@@ -208,22 +208,22 @@ func (h *playbackHandlers) poster(w http.ResponseWriter, r *http.Request) error 
 // navigator.sendBeacon. Two rules mark a video watched, on purpose: the
 // player sends finished=1 when it ends, and the server also counts 95% as
 // finished, because a tab closed during the credits never sends "ended".
-func (h *playbackHandlers) saveProgress(w http.ResponseWriter, r *http.Request) error {
+func (handlers *playbackHandlers) saveProgress(w http.ResponseWriter, r *http.Request) error {
 	id, err := strconv.ParseInt(r.FormValue("media_id"), 10, 64)
 	if err != nil {
 		return badRequest("The media_id is not a number.")
 	}
-	pos, err := strconv.ParseFloat(r.FormValue("position"), 64)
-	if err != nil || pos < 0 || math.IsNaN(pos) || math.IsInf(pos, 0) {
+	position, err := strconv.ParseFloat(r.FormValue("position"), 64)
+	if err != nil || position < 0 || math.IsNaN(position) || math.IsInf(position, 0) {
 		return badRequest("The position must be a number of seconds.")
 	}
-	v := viewer(r)
-	m, err := visibleMediaByID(r.Context(), h.store, v, id)
+	currentViewer := viewer(r)
+	media, err := visibleMediaByID(r.Context(), handlers.store, currentViewer, id)
 	if err != nil {
 		return err
 	}
-	finished := r.FormValue("finished") == "1" || (m.Duration > 0 && pos >= m.Duration*0.95)
-	if err := h.store.SaveProgress(r.Context(), v.ID(), id, pos, finished); err != nil {
+	finished := r.FormValue("finished") == "1" || (media.Duration > 0 && position >= media.Duration*0.95)
+	if err := handlers.store.SaveProgress(r.Context(), currentViewer.ID(), id, position, finished); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)

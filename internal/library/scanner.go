@@ -24,15 +24,15 @@ import (
 // Store is the database as the scanner uses it; *store.Store implements it.
 type Store interface {
 	MediaPaths(ctx context.Context) (map[string]int64, error)
-	InsertScannedMedia(ctx context.Context, m store.ScannedMedia) (id int64, inserted bool, err error)
-	SetScannedMetadata(ctx context.Context, id int64, md store.ScannedMetadata) error
-	ReplaceMetadata(ctx context.Context, id int64, md store.ScannedMetadata) error
+	InsertScannedMedia(ctx context.Context, media store.ScannedMedia) (id int64, inserted bool, err error)
+	SetScannedMetadata(ctx context.Context, id int64, scannedMetadata store.ScannedMetadata) error
+	ReplaceMetadata(ctx context.Context, id int64, scannedMetadata store.ScannedMetadata) error
 	MarkMetadataChecked(ctx context.Context, id int64) error
 	MediaNeedingMetadata(ctx context.Context, checkedBefore time.Time, limit int) ([]store.Media, error)
 	MediaByID(ctx context.Context, id int64) (store.Media, error)
 	DeleteMedia(ctx context.Context, id int64) error
 	SubtitleSources(ctx context.Context) (map[string]bool, error)
-	AddSubtitle(ctx context.Context, t store.NewSubtitle) (id int64, inserted bool, err error)
+	AddSubtitle(ctx context.Context, subtitle store.NewSubtitle) (id int64, inserted bool, err error)
 	H264MissingPixFmt(ctx context.Context) (map[string]int64, error)
 	SetEpisodeEnd(ctx context.Context, id int64, episode, end int) error
 	SetPixFmt(ctx context.Context, id int64, pixFmt string) error
@@ -62,9 +62,9 @@ type Deps struct {
 
 // Config tunes the scanner. Zero durations use the defaults.
 type Config struct {
-	MediaDir string
-	Interval time.Duration // full rescan period (default 5 min)
-	Settle   time.Duration // how long a new file must go unmodified before import (default 30 s)
+	MediaDirectory string
+	Interval       time.Duration // full rescan period (default 5 min)
+	Settle         time.Duration // how long a new file must go unmodified before import (default 30 s)
 }
 
 // Scanner keeps the database in step with the media folder. It rescans on a
@@ -79,7 +79,7 @@ type Config struct {
 // lock is reentrant: never call Scan from inside Exclusive.
 type Scanner struct {
 	deps    Deps
-	cfg     Config
+	config  Config
 	trigger chan struct{}
 	now     func() time.Time
 
@@ -97,43 +97,43 @@ type Result struct {
 }
 
 // NewScanner returns a scanner. Call Run to keep it scanning.
-func NewScanner(d Deps, c Config) *Scanner {
-	if c.Interval <= 0 {
-		c.Interval = 5 * time.Minute
+func NewScanner(dependencies Deps, config Config) *Scanner {
+	if config.Interval <= 0 {
+		config.Interval = 5 * time.Minute
 	}
-	if c.Settle <= 0 {
-		c.Settle = 30 * time.Second
+	if config.Settle <= 0 {
+		config.Settle = 30 * time.Second
 	}
-	return &Scanner{deps: d, cfg: c, trigger: make(chan struct{}, 1), now: time.Now}
+	return &Scanner{deps: dependencies, config: config, trigger: make(chan struct{}, 1), now: time.Now}
 }
 
 // OnAdded registers fn to be called after a scan that added media (the
 // converter uses it to look at new files at once). Call it before Run.
-func (s *Scanner) OnAdded(fn func()) { s.onAdded = fn }
+func (scanner *Scanner) OnAdded(handler func()) { scanner.onAdded = handler }
 
 // Trigger asks Run for a scan as soon as possible. Triggers that arrive while
 // one is pending coalesce into a single scan.
-func (s *Scanner) Trigger() {
+func (scanner *Scanner) Trigger() {
 	select {
-	case s.trigger <- struct{}{}:
+	case scanner.trigger <- struct{}{}:
 	default:
 	}
 }
 
 // Exclusive runs fn while no scan is changing the database. It waits at most
 // for one reconcile step, which only touches the database and stats files.
-func (s *Scanner) Exclusive(fn func() error) error {
-	s.reconcile.Lock()
-	defer s.reconcile.Unlock()
-	return fn()
+func (scanner *Scanner) Exclusive(operation func() error) error {
+	scanner.reconcile.Lock()
+	defer scanner.reconcile.Unlock()
+	return operation()
 }
 
 // Run scans immediately and then whenever the timer fires, Trigger is
 // called, or the media folder changes (debounced by 5 s), until ctx ends.
-func (s *Scanner) Run(ctx context.Context) error {
+func (scanner *Scanner) Run(ctx context.Context) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		s.deps.Log.Warn("filesystem watching unavailable; relying on periodic scans", "err", err)
+		scanner.deps.Log.Warn("filesystem watching unavailable; relying on periodic scans", "err", err)
 	} else {
 		defer watcher.Close()
 	}
@@ -143,7 +143,7 @@ func (s *Scanner) Run(ctx context.Context) error {
 		events, errs = watcher.Events, watcher.Errors
 	}
 
-	ticker := time.NewTicker(s.cfg.Interval)
+	ticker := time.NewTicker(scanner.config.Interval)
 	defer ticker.Stop()
 	soon := time.NewTimer(0) // fires at once: the initial scan
 	defer soon.Stop()
@@ -153,177 +153,177 @@ func (s *Scanner) Run(ctx context.Context) error {
 			return nil
 		case <-ticker.C:
 		case <-soon.C:
-		case <-s.trigger:
-		case ev, ok := <-events:
-			if !ok {
+		case <-scanner.trigger:
+		case event, open := <-events:
+			if !open {
 				events = nil
 			} else {
-				s.onEvent(ev, soon)
+				scanner.onEvent(event, soon)
 			}
 			continue
-		case err, ok := <-errs:
-			if !ok {
+		case err, open := <-errs:
+			if !open {
 				errs = nil
 			} else {
-				s.onWatchError(err, soon)
+				scanner.onWatchError(err, soon)
 			}
 			continue
 		}
-		s.scanOnce(ctx, watcher, soon)
+		scanner.scanOnce(ctx, watcher, soon)
 	}
 }
 
 // onEvent schedules a scan a few seconds after a change in the media
 // folder, so a burst of changes (a file being copied in) causes one scan.
 // Permission changes alone are ignored.
-func (s *Scanner) onEvent(ev fsnotify.Event, soon *time.Timer) {
-	if !ev.Has(fsnotify.Chmod) || ev.Has(fsnotify.Write) {
+func (scanner *Scanner) onEvent(event fsnotify.Event, soon *time.Timer) {
+	if !event.Has(fsnotify.Chmod) || event.Has(fsnotify.Write) {
 		soon.Reset(5 * time.Second)
 	}
 }
 
 // onWatchError handles a watcher error. An overflow means changes were
 // lost, and only a full scan can catch up.
-func (s *Scanner) onWatchError(err error, soon *time.Timer) {
+func (scanner *Scanner) onWatchError(err error, soon *time.Timer) {
 	if errors.Is(err, fsnotify.ErrEventOverflow) {
-		s.deps.Log.Info("too many filesystem changes at once; rescanning")
+		scanner.deps.Log.Info("too many filesystem changes at once; rescanning")
 		soon.Reset(time.Second)
 		return
 	}
-	s.deps.Log.Warn("filesystem watcher", "err", err)
+	scanner.deps.Log.Warn("filesystem watcher", "err", err)
 }
 
 // scanOnce runs one scan for Run and acts on its result.
-func (s *Scanner) scanOnce(ctx context.Context, watcher *fsnotify.Watcher, soon *time.Timer) {
-	res, dirs, err := s.scanAll(ctx)
+func (scanner *Scanner) scanOnce(ctx context.Context, watcher *fsnotify.Watcher, soon *time.Timer) {
+	result, directories, err := scanner.scanAll(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
-			s.deps.Log.Error("library scan failed", "err", err)
+			scanner.deps.Log.Error("library scan failed", "err", err)
 		}
 		return
 	}
 	if watcher != nil {
-		for _, d := range dirs {
-			if err := watcher.Add(d); err != nil {
+		for _, directory := range directories {
+			if err := watcher.Add(directory); err != nil {
 				// Usually the inotify watch limit; periodic scans still work.
-				s.deps.Log.Debug("not watching folder for changes", "path", d, "err", err)
+				scanner.deps.Log.Debug("not watching folder for changes", "path", directory, "err", err)
 			}
 		}
 	}
-	if res.Added+res.Removed+res.Subtitles > 0 {
-		s.deps.Log.Info("library scan", "added", res.Added, "removed", res.Removed, "subtitles", res.Subtitles)
+	if result.Added+result.Removed+result.Subtitles > 0 {
+		scanner.deps.Log.Info("library scan", "added", result.Added, "removed", result.Removed, "subtitles", result.Subtitles)
 	}
-	if res.Waiting > 0 {
-		soon.Reset(s.cfg.Settle + 5*time.Second) // come back once they have settled
+	if result.Waiting > 0 {
+		soon.Reset(scanner.config.Settle + 5*time.Second) // come back once they have settled
 	}
-	if res.Added > 0 && s.onAdded != nil {
-		s.onAdded()
+	if result.Added > 0 && scanner.onAdded != nil {
+		scanner.onAdded()
 	}
 }
 
 // Scan brings the database in step with the media folder once: new files are
 // probed and added as unpublished media, sidecar subtitles are imported, and
 // media whose files are gone are removed.
-func (s *Scanner) Scan(ctx context.Context) (Result, error) {
-	res, _, err := s.scanAll(ctx)
-	return res, err
+func (scanner *Scanner) Scan(ctx context.Context) (Result, error) {
+	result, _, err := scanner.scanAll(ctx)
+	return result, err
 }
 
-func (s *Scanner) scanAll(ctx context.Context) (Result, []string, error) {
-	s.scan.Lock()
-	defer s.scan.Unlock()
-	var res Result
+func (scanner *Scanner) scanAll(ctx context.Context) (Result, []string, error) {
+	scanner.scan.Lock()
+	defer scanner.scan.Unlock()
+	var result Result
 
-	tree, err := s.walk()
+	tree, err := scanner.walk()
 	if err != nil {
-		return res, nil, err
+		return result, nil, err
 	}
-	known, err := s.deps.Store.MediaPaths(ctx)
+	known, err := scanner.deps.Store.MediaPaths(ctx)
 	if err != nil {
-		return res, nil, err
+		return result, nil, err
 	}
-	probed, waiting := s.probeNew(ctx, tree.videos, known)
-	res.Waiting = waiting
+	probed, waiting := scanner.probeNew(ctx, tree.videos, known)
+	result.Waiting = waiting
 
-	s.reconcile.Lock()
-	added, removed, known, err := s.applyChanges(ctx, tree, probed)
-	s.reconcile.Unlock()
+	scanner.reconcile.Lock()
+	added, removed, known, err := scanner.applyChanges(ctx, tree, probed)
+	scanner.reconcile.Unlock()
 	if err != nil {
-		return res, nil, err
+		return result, nil, err
 	}
-	res.Added, res.Removed = len(added), removed
+	result.Added, result.Removed = len(added), removed
 
-	for _, a := range added {
-		s.lookupMetadata(ctx, a.id, a.guess)
+	for _, newMedia := range added {
+		scanner.lookupMetadata(ctx, newMedia.id, newMedia.guess)
 	}
-	s.retryMetadata(ctx)
-	res.Subtitles = s.importAllSidecars(ctx, tree, known)
-	s.backfillPixFmt(ctx, tree.videos)
-	s.backfillEpisodeEnd(ctx, tree.videos, known)
-	return res, tree.dirs, nil
+	scanner.retryMetadata(ctx)
+	result.Subtitles = scanner.importAllSidecars(ctx, tree, known)
+	scanner.backfillPixFmt(ctx, tree.videos)
+	scanner.backfillEpisodeEnd(ctx, tree.videos, known)
+	return result, tree.directories, nil
 }
 
 // tree is what one walk of the media folder found.
 type tree struct {
-	videos     []found
-	subsByDir  map[string][]string // sidecar subtitle files by folder (relative paths)
-	dirs       []string            // absolute folder paths, for the change watcher
-	unreadable []string            // relative paths that could not be read
+	videos               []found
+	subtitlesByDirectory map[string][]string // sidecar subtitle files by folder (relative paths)
+	directories          []string            // absolute folder paths, for the change watcher
+	unreadable           []string            // relative paths that could not be read
 }
 
 type found struct {
-	rel  string // relative, slash-separated
-	abs  string
-	info fs.FileInfo
+	relativePath string // relative, slash-separated
+	absolutePath string
+	info         fs.FileInfo
 }
 
 // walk lists the media folder. Hidden files and folders are skipped. Paths
 // that cannot be read are recorded rather than treated as gone: a folder that
 // fails to list on a flaky network share must not look deleted.
-func (s *Scanner) walk() (tree, error) {
-	t := tree{subsByDir: map[string][]string{}}
-	unreadable := func(p string, err error) {
-		s.deps.Log.Warn("skipping unreadable path; its library entries are kept", "path", p, "err", err)
-		if rel, relErr := filepath.Rel(s.cfg.MediaDir, p); relErr == nil {
-			t.unreadable = append(t.unreadable, filepath.ToSlash(rel))
+func (scanner *Scanner) walk() (tree, error) {
+	mediaTree := tree{subtitlesByDirectory: map[string][]string{}}
+	unreadable := func(path string, err error) {
+		scanner.deps.Log.Warn("skipping unreadable path; its library entries are kept", "path", path, "err", err)
+		if relativePath, relativeErr := filepath.Rel(scanner.config.MediaDirectory, path); relativeErr == nil {
+			mediaTree.unreadable = append(mediaTree.unreadable, filepath.ToSlash(relativePath))
 		}
 	}
-	err := filepath.WalkDir(s.cfg.MediaDir, func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(scanner.config.MediaDirectory, func(filePath string, entry fs.DirEntry, err error) error {
 		switch {
-		case err != nil && p == s.cfg.MediaDir:
+		case err != nil && filePath == scanner.config.MediaDirectory:
 			return err
 		case err != nil:
-			unreadable(p, err)
+			unreadable(filePath, err)
 			return nil
-		case strings.HasPrefix(d.Name(), ".") && p != s.cfg.MediaDir:
-			if d.IsDir() {
+		case strings.HasPrefix(entry.Name(), ".") && filePath != scanner.config.MediaDirectory:
+			if entry.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
-		case d.IsDir():
-			t.dirs = append(t.dirs, p)
+		case entry.IsDir():
+			mediaTree.directories = append(mediaTree.directories, filePath)
 			return nil
 		}
-		rel, err := filepath.Rel(s.cfg.MediaDir, p)
+		relativePath, err := filepath.Rel(scanner.config.MediaDirectory, filePath)
 		if err != nil {
-			unreadable(p, err)
+			unreadable(filePath, err)
 			return nil
 		}
-		rel = filepath.ToSlash(rel)
-		switch ext := strings.ToLower(path.Ext(rel)); {
-		case media.IsVideo(rel):
-			info, err := d.Info()
+		relativePath = filepath.ToSlash(relativePath)
+		switch ext := strings.ToLower(path.Ext(relativePath)); {
+		case media.IsVideo(relativePath):
+			info, err := entry.Info()
 			if err != nil {
-				unreadable(p, err)
+				unreadable(filePath, err)
 				return nil
 			}
-			t.videos = append(t.videos, found{rel: rel, abs: p, info: info})
+			mediaTree.videos = append(mediaTree.videos, found{relativePath: relativePath, absolutePath: filePath, info: info})
 		case ext == ".srt" || ext == ".vtt":
-			t.subsByDir[path.Dir(rel)] = append(t.subsByDir[path.Dir(rel)], rel)
+			mediaTree.subtitlesByDirectory[path.Dir(relativePath)] = append(mediaTree.subtitlesByDirectory[path.Dir(relativePath)], relativePath)
 		}
 		return nil
 	})
-	return t, err
+	return mediaTree, err
 }
 
 // probedFile is a new file ready to be added.
@@ -337,44 +337,44 @@ type probedFile struct {
 // settled: modified at least Settle ago, so a file still being copied in is
 // not read half-written. Files that fail to probe are logged and skipped
 // (they are retried next scan). It returns how many files are still settling.
-func (s *Scanner) probeNew(ctx context.Context, videos []found, known map[string]int64) (out []probedFile, waiting int) {
-	for _, v := range videos {
-		if _, ok := known[v.rel]; ok {
+func (scanner *Scanner) probeNew(ctx context.Context, videos []found, known map[string]int64) (out []probedFile, waiting int) {
+	for _, video := range videos {
+		if _, isKnown := known[video.relativePath]; isKnown {
 			continue
 		}
-		if s.now().Sub(v.info.ModTime()) < s.cfg.Settle {
+		if scanner.now().Sub(video.info.ModTime()) < scanner.config.Settle {
 			waiting++
 			continue
 		}
-		p, err := s.probe(ctx, v)
+		probed, err := scanner.probe(ctx, video)
 		if err != nil {
 			if ctx.Err() != nil {
 				return out, waiting
 			}
-			s.deps.Log.Warn("could not add media", "path", v.rel, "err", err)
+			scanner.deps.Log.Warn("could not add media", "path", video.relativePath, "err", err)
 			continue
 		}
-		out = append(out, p)
+		out = append(out, probed)
 	}
 	return out, waiting
 }
 
-func (s *Scanner) probe(ctx context.Context, v found) (probedFile, error) {
+func (scanner *Scanner) probe(ctx context.Context, candidate found) (probedFile, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	probe, err := s.deps.Prober.Probe(ctx, v.abs)
+	probe, err := scanner.deps.Prober.Probe(ctx, candidate.absolutePath)
 	if err != nil {
 		return probedFile{}, err
 	}
-	video, ok := probe.Video()
-	if !ok {
+	video, hasVideo := probe.Video()
+	if !hasVideo {
 		return probedFile{}, ffmpeg.ErrNoVideo
 	}
-	g := ParsePath(v.rel)
-	return probedFile{found: v, guess: g, media: store.ScannedMedia{
-		Path: v.rel, Title: g.Title, Year: g.Year, Season: g.Season, Episode: g.Episode, EpisodeEnd: g.EpisodeEnd,
+	guess := ParsePath(candidate.relativePath)
+	return probedFile{found: candidate, guess: guess, media: store.ScannedMedia{
+		Path: candidate.relativePath, Title: guess.Title, Year: guess.Year, Season: guess.Season, Episode: guess.Episode, EpisodeEnd: guess.EpisodeEnd,
 		Duration: probe.Duration, Container: probe.Container,
-		VideoCodec: video.Codec, AudioCodec: probe.AudioCodec(), PixFmt: video.PixFmt, Size: v.info.Size(),
+		VideoCodec: video.Codec, AudioCodec: probe.AudioCodec(), PixFmt: video.PixFmt, Size: candidate.info.Size(),
 	}}, nil
 }
 
@@ -388,45 +388,45 @@ type addedMedia struct {
 // re-reads the database and re-checks each file on disk instead of trusting
 // the walk: the converter may have swapped a file in the meantime. It
 // returns the added media, the number removed, and the updated path→ID map.
-func (s *Scanner) applyChanges(ctx context.Context, t tree, probed []probedFile) ([]addedMedia, int, map[string]int64, error) {
-	known, err := s.deps.Store.MediaPaths(ctx)
+func (scanner *Scanner) applyChanges(ctx context.Context, tree tree, probed []probedFile) ([]addedMedia, int, map[string]int64, error) {
+	known, err := scanner.deps.Store.MediaPaths(ctx)
 	if err != nil {
 		return nil, 0, nil, err
 	}
 	var added []addedMedia
-	for _, p := range probed {
-		if _, ok := known[p.rel]; ok || !exists(p.abs) {
+	for _, candidate := range probed {
+		if _, isKnown := known[candidate.relativePath]; isKnown || !exists(candidate.absolutePath) {
 			continue
 		}
-		id, inserted, err := s.deps.Store.InsertScannedMedia(ctx, p.media)
+		id, inserted, err := scanner.deps.Store.InsertScannedMedia(ctx, candidate.media)
 		if err != nil {
 			return added, 0, known, err
 		}
 		if inserted {
-			known[p.rel] = id
-			added = append(added, addedMedia{id: id, guess: p.guess})
+			known[candidate.relativePath] = id
+			added = append(added, addedMedia{id: id, guess: candidate.guess})
 		}
 	}
 
 	// If the folder has no videos while the database has rows, the drive is
 	// most likely unmounted: keep everything rather than wipe the library.
-	if len(t.videos) == 0 && len(known) > 0 {
-		s.deps.Log.Warn("media folder has no videos; skipping removals in case it is unmounted", "dir", s.cfg.MediaDir)
+	if len(tree.videos) == 0 && len(known) > 0 {
+		scanner.deps.Log.Warn("media folder has no videos; skipping removals in case it is unmounted", "dir", scanner.config.MediaDirectory)
 		return added, 0, known, nil
 	}
-	onDisk := make(map[string]bool, len(t.videos))
-	for _, v := range t.videos {
-		onDisk[v.rel] = true
+	onDisk := make(map[string]bool, len(tree.videos))
+	for _, video := range tree.videos {
+		onDisk[video.relativePath] = true
 	}
 	removed := 0
-	for _, rel := range missingMedia(known, onDisk, t.unreadable) {
-		if exists(filepath.Join(s.cfg.MediaDir, filepath.FromSlash(rel))) {
+	for _, relativePath := range missingMedia(known, onDisk, tree.unreadable) {
+		if exists(filepath.Join(scanner.config.MediaDirectory, filepath.FromSlash(relativePath))) {
 			continue // appeared after the walk (a converted file)
 		}
-		if err := s.deps.Store.DeleteMedia(ctx, known[rel]); err != nil {
+		if err := scanner.deps.Store.DeleteMedia(ctx, known[relativePath]); err != nil {
 			return added, removed, known, err
 		}
-		delete(known, rel)
+		delete(known, relativePath)
 		removed++
 	}
 	return added, removed, known, nil
@@ -442,18 +442,18 @@ func exists(path string) bool {
 // may well still exist).
 func missingMedia(known map[string]int64, onDisk map[string]bool, unreadable []string) []string {
 	var gone []string
-	for p := range known {
-		if !onDisk[p] && !underAny(p, unreadable) {
-			gone = append(gone, p)
+	for path := range known {
+		if !onDisk[path] && !underAny(path, unreadable) {
+			gone = append(gone, path)
 		}
 	}
 	return gone
 }
 
 // underAny reports whether p is one of roots or inside one of them.
-func underAny(p string, roots []string) bool {
-	for _, r := range roots {
-		if p == r || strings.HasPrefix(p, r+"/") {
+func underAny(path string, roots []string) bool {
+	for _, root := range roots {
+		if path == root || strings.HasPrefix(path, root+"/") {
 			return true
 		}
 	}
@@ -471,43 +471,43 @@ const (
 
 // lookupMetadata enriches an unpublished item from TMDB. It is optional:
 // failures are logged and the file-name guess stays.
-func (s *Scanner) lookupMetadata(ctx context.Context, id int64, g Guess) {
-	if s.deps.Meta == nil {
+func (scanner *Scanner) lookupMetadata(ctx context.Context, id int64, guess Guess) {
+	if scanner.deps.Meta == nil {
 		return
 	}
-	md, err := s.metadataFor(ctx, g)
+	scannedMetadata, err := scanner.metadataFor(ctx, guess)
 	switch {
 	case errors.Is(err, metadata.ErrDisabled):
 		return // not a lookup: try again once a key is set
 	case errors.Is(err, metadata.ErrNoMatch):
-		err = s.deps.Store.MarkMetadataChecked(ctx, id)
+		err = scanner.deps.Store.MarkMetadataChecked(ctx, id)
 	case err != nil:
-		s.deps.Log.Warn("metadata lookup failed; it is retried later", "title", g.Title, "err", err)
-		err = s.deps.Store.MarkMetadataChecked(ctx, id)
+		scanner.deps.Log.Warn("metadata lookup failed; it is retried later", "title", guess.Title, "err", err)
+		err = scanner.deps.Store.MarkMetadataChecked(ctx, id)
 	default:
-		err = s.deps.Store.SetScannedMetadata(ctx, id, md)
+		err = scanner.deps.Store.SetScannedMetadata(ctx, id, scannedMetadata)
 	}
 	if err != nil {
-		s.deps.Log.Warn("saving metadata failed", "media", id, "err", err)
+		scanner.deps.Log.Warn("saving metadata failed", "media", id, "err", err)
 	}
 }
 
 // retryMetadata looks up again unpublished media that is still missing a
 // poster or description (see metadataRetryAfter).
-func (s *Scanner) retryMetadata(ctx context.Context) {
-	if s.deps.Meta == nil {
+func (scanner *Scanner) retryMetadata(ctx context.Context) {
+	if scanner.deps.Meta == nil {
 		return
 	}
-	list, err := s.deps.Store.MediaNeedingMetadata(ctx, s.now().Add(-metadataRetryAfter), metadataRetryBatch)
+	list, err := scanner.deps.Store.MediaNeedingMetadata(ctx, scanner.now().Add(-metadataRetryAfter), metadataRetryBatch)
 	if err != nil {
-		s.deps.Log.Warn("listing media without metadata", "err", err)
+		scanner.deps.Log.Warn("listing media without metadata", "err", err)
 		return
 	}
-	for _, m := range list {
+	for _, media := range list {
 		if ctx.Err() != nil {
 			return
 		}
-		s.lookupMetadata(ctx, m.ID, guessForMedia(m))
+		scanner.lookupMetadata(ctx, media.ID, guessForMedia(media))
 	}
 }
 
@@ -516,45 +516,45 @@ func (s *Scanner) retryMetadata(ctx context.Context) {
 // the item's current collection, season and episode, which an
 // administrator may have corrected. It returns metadata.ErrNoMatch when
 // TMDB has nothing and metadata.ErrDisabled without an API key.
-func (s *Scanner) RefreshMetadata(ctx context.Context, id int64) error {
-	if s.deps.Meta == nil {
+func (scanner *Scanner) RefreshMetadata(ctx context.Context, id int64) error {
+	if scanner.deps.Meta == nil {
 		return metadata.ErrDisabled
 	}
-	m, err := s.deps.Store.MediaByID(ctx, id)
+	media, err := scanner.deps.Store.MediaByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	md, err := s.metadataFor(ctx, guessForMedia(m))
+	scannedMetadata, err := scanner.metadataFor(ctx, guessForMedia(media))
 	if err != nil {
 		return err
 	}
-	return s.deps.Store.ReplaceMetadata(ctx, id, md)
+	return scanner.deps.Store.ReplaceMetadata(ctx, id, scannedMetadata)
 }
 
 // guessForMedia is what to look a stored item up by: the guess from its
 // file name, with the collection, season and episode from the database.
-func guessForMedia(m store.Media) Guess {
-	g := ParsePath(m.Path)
-	if !g.IsEpisode() && (m.CollectionName == "" || (m.Season == 0 && m.Episode == 0)) {
-		return g // a film, possibly in a collection of films
+func guessForMedia(media store.Media) Guess {
+	guess := ParsePath(media.Path)
+	if !guess.IsEpisode() && (media.CollectionName == "" || (media.Season == 0 && media.Episode == 0)) {
+		return guess // a film, possibly in a collection of films
 	}
-	if m.CollectionName != "" {
-		if !strings.EqualFold(g.Show, m.CollectionName) {
-			g.Year = "" // the year was a film's or another show's; TMDB knows the show's
+	if media.CollectionName != "" {
+		if !strings.EqualFold(guess.Show, media.CollectionName) {
+			guess.Year = "" // the year was a film's or another show's; TMDB knows the show's
 		}
-		g.Show = m.CollectionName
+		guess.Show = media.CollectionName
 	}
-	if m.Season > 0 || m.Episode > 0 {
-		g.Season, g.Episode = m.Season, m.Episode
+	if media.Season > 0 || media.Episode > 0 {
+		guess.Season, guess.Episode = media.Season, media.Episode
 	}
-	return g
+	return guess
 }
 
 // metadataFor looks g up, within 30 seconds.
-func (s *Scanner) metadataFor(ctx context.Context, g Guess) (store.ScannedMetadata, error) {
+func (scanner *Scanner) metadataFor(ctx context.Context, guess Guess) (store.ScannedMetadata, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	info, err := s.findMetadata(ctx, g)
+	info, err := scanner.findMetadata(ctx, guess)
 	if err != nil {
 		return store.ScannedMetadata{}, err
 	}
@@ -562,119 +562,119 @@ func (s *Scanner) metadataFor(ctx context.Context, g Guess) (store.ScannedMetada
 }
 
 // findMetadata looks up a film, or an episode with its show's poster.
-func (s *Scanner) findMetadata(ctx context.Context, g Guess) (metadata.Info, error) {
-	if !g.IsEpisode() {
-		return s.deps.Meta.Movie(ctx, g.Title, g.Year)
+func (scanner *Scanner) findMetadata(ctx context.Context, guess Guess) (metadata.Info, error) {
+	if !guess.IsEpisode() {
+		return scanner.deps.Meta.Movie(ctx, guess.Title, guess.Year)
 	}
-	show, err := s.deps.Meta.Show(ctx, g.Show, g.Year)
+	show, err := scanner.deps.Meta.Show(ctx, guess.Show, guess.Year)
 	if err != nil {
 		return metadata.Info{}, err
 	}
-	ep, err := s.findEpisode(ctx, show.ID, g)
+	episodeInfo, err := scanner.findEpisode(ctx, show.ID, guess)
 	if err != nil {
 		return metadata.Info{}, err
 	}
-	ep.Poster = show.Poster
-	return ep, nil
+	episodeInfo.Poster = show.Poster
+	return episodeInfo, nil
 }
 
 // findEpisode finds g's episode of a show: by the title in the file name
 // when there is one, since TMDB's episode numbers can differ from the
 // file's (see match.go), and otherwise by number.
-func (s *Scanner) findEpisode(ctx context.Context, showID int, g Guess) (metadata.Info, error) {
-	title := fileEpisodeTitle(g)
+func (scanner *Scanner) findEpisode(ctx context.Context, showID int, guess Guess) (metadata.Info, error) {
+	title := fileEpisodeTitle(guess)
 	if title == "" {
-		return s.deps.Meta.Episode(ctx, showID, g.Season, g.Episode)
+		return scanner.deps.Meta.Episode(ctx, showID, guess.Season, guess.Episode)
 	}
-	eps, err := s.deps.Meta.Season(ctx, showID, g.Season)
+	episodes, err := scanner.deps.Meta.Season(ctx, showID, guess.Season)
 	if err != nil {
 		return metadata.Info{}, err
 	}
-	if e, ok := episodeByTitle(eps, title, g.Episode); ok {
-		if e.Number != g.Episode {
-			s.deps.Log.Debug("episode matched by title", "show", g.Show, "season", g.Season,
-				"file_episode", g.Episode, "tmdb_episode", e.Number, "title", e.Title)
+	if episode, found := episodeByTitle(episodes, title, guess.Episode); found {
+		if episode.Number != guess.Episode {
+			scanner.deps.Log.Debug("episode matched by title", "show", guess.Show, "season", guess.Season,
+				"file_episode", guess.Episode, "tmdb_episode", episode.Number, "title", episode.Title)
 		}
-		return e.Info, nil
+		return episode.Info, nil
 	}
-	if e, ok := episodeByNumber(eps, g.Episode); ok {
-		return e.Info, nil
+	if episode, found := episodeByNumber(episodes, guess.Episode); found {
+		return episode.Info, nil
 	}
 	return metadata.Info{}, metadata.ErrNoMatch
 }
 
 // importAllSidecars imports subtitle files next to every known video.
-func (s *Scanner) importAllSidecars(ctx context.Context, t tree, known map[string]int64) int {
-	imported, err := s.deps.Store.SubtitleSources(ctx)
+func (scanner *Scanner) importAllSidecars(ctx context.Context, tree tree, known map[string]int64) int {
+	imported, err := scanner.deps.Store.SubtitleSources(ctx)
 	if err != nil {
-		s.deps.Log.Warn("could not list imported subtitles", "err", err)
+		scanner.deps.Log.Warn("could not list imported subtitles", "err", err)
 		return 0
 	}
-	n := 0
-	for _, v := range t.videos {
-		if id, ok := known[v.rel]; ok {
-			n += s.importSidecars(ctx, id, v.rel, t.subsByDir[path.Dir(v.rel)], imported)
+	importedCount := 0
+	for _, video := range tree.videos {
+		if id, isKnown := known[video.relativePath]; isKnown {
+			importedCount += scanner.importSidecars(ctx, id, video.relativePath, tree.subtitlesByDirectory[path.Dir(video.relativePath)], imported)
 		}
 	}
-	return n
+	return importedCount
 }
 
 // importSidecars imports subtitle files named after a video, such as
 // "Movie.srt" or "Movie.en.vtt" next to "Movie.mp4". The converter writes
 // extracted subtitles with the same naming, so they come in here too.
-func (s *Scanner) importSidecars(ctx context.Context, mediaID int64, videoRel string, candidates []string, imported map[string]bool) int {
-	n := 0
+func (scanner *Scanner) importSidecars(ctx context.Context, mediaID int64, videoRelativePath string, candidates []string, imported map[string]bool) int {
+	importedCount := 0
 	for _, sub := range candidates {
 		if imported[sub] {
 			continue
 		}
-		lang, ok := SidecarLanguage(videoRel, sub)
-		if !ok {
+		language, isSidecar := SidecarLanguage(videoRelativePath, sub)
+		if !isSidecar {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(s.cfg.MediaDir, filepath.FromSlash(sub)))
+		data, err := os.ReadFile(filepath.Join(scanner.config.MediaDirectory, filepath.FromSlash(sub)))
 		if err != nil {
-			s.deps.Log.Warn("could not read subtitle", "path", sub, "err", err)
+			scanner.deps.Log.Warn("could not read subtitle", "path", sub, "err", err)
 			continue
 		}
 		cues, err := subtitle.Parse(data)
 		if err != nil {
-			s.deps.Log.Warn("could not parse subtitle", "path", sub, "err", err)
+			scanner.deps.Log.Warn("could not parse subtitle", "path", sub, "err", err)
 			imported[sub] = true // do not retry a broken file on every scan of this run
 			continue
 		}
-		_, inserted, err := s.deps.Store.AddSubtitle(ctx, store.NewSubtitle{
-			MediaID: mediaID, Language: lang, Label: subtitle.LanguageName(lang), Source: sub, Cues: cues,
+		_, inserted, err := scanner.deps.Store.AddSubtitle(ctx, store.NewSubtitle{
+			MediaID: mediaID, Language: language, Label: subtitle.LanguageName(language), Source: sub, Cues: cues,
 		})
 		if err != nil {
-			s.deps.Log.Warn("could not save subtitle", "path", sub, "err", err)
+			scanner.deps.Log.Warn("could not save subtitle", "path", sub, "err", err)
 			continue
 		}
 		imported[sub] = true
 		if inserted {
-			n++
+			importedCount++
 		}
 	}
-	return n
+	return importedCount
 }
 
 // SidecarLanguage reports whether subRel is a sidecar subtitle of the video
 // at videoRel and, if so, its language: "Movie.srt" is "und",
 // "Movie.en.srt" is "en" and "Movie.forced.en.srt" is "en".
-func SidecarLanguage(videoRel, subRel string) (lang string, ok bool) {
-	base := strings.TrimSuffix(path.Base(videoRel), path.Ext(videoRel))
-	name := strings.TrimSuffix(path.Base(subRel), path.Ext(subRel))
-	if path.Dir(videoRel) != path.Dir(subRel) || (name != base && !strings.HasPrefix(name, base+".")) {
+func SidecarLanguage(videoRelativePath, subtitleRelativePath string) (language string, isSidecar bool) {
+	base := strings.TrimSuffix(path.Base(videoRelativePath), path.Ext(videoRelativePath))
+	name := strings.TrimSuffix(path.Base(subtitleRelativePath), path.Ext(subtitleRelativePath))
+	if path.Dir(videoRelativePath) != path.Dir(subtitleRelativePath) || (name != base && !strings.HasPrefix(name, base+".")) {
 		return "", false
 	}
-	lang = strings.ToLower(strings.TrimPrefix(strings.TrimPrefix(name, base), "."))
-	if i := strings.LastIndexByte(lang, '.'); i >= 0 {
-		lang = lang[i+1:]
+	language = strings.ToLower(strings.TrimPrefix(strings.TrimPrefix(name, base), "."))
+	if i := strings.LastIndexByte(language, '.'); i >= 0 {
+		language = language[i+1:]
 	}
-	if lang == "" {
-		lang = "und"
+	if language == "" {
+		language = "und"
 	}
-	return lang, true
+	return language, true
 }
 
 // backfillLimit caps how many files one scan re-probes, so the first scan
@@ -683,15 +683,15 @@ const backfillLimit = 50
 
 // backfillEpisodeEnd records the episode range of multi-episode files that
 // were scanned before the range was stored (see store.SetEpisodeEnd).
-func (s *Scanner) backfillEpisodeEnd(ctx context.Context, videos []found, known map[string]int64) {
-	for _, v := range videos {
-		id, ok := known[v.rel]
-		if !ok {
+func (scanner *Scanner) backfillEpisodeEnd(ctx context.Context, videos []found, known map[string]int64) {
+	for _, video := range videos {
+		id, isKnown := known[video.relativePath]
+		if !isKnown {
 			continue
 		}
-		if g := ParsePath(v.rel); g.EpisodeEnd > 0 {
-			if err := s.deps.Store.SetEpisodeEnd(ctx, id, g.Episode, g.EpisodeEnd); err != nil {
-				s.deps.Log.Warn("recording an episode range", "path", v.rel, "err", err)
+		if guess := ParsePath(video.relativePath); guess.EpisodeEnd > 0 {
+			if err := scanner.deps.Store.SetEpisodeEnd(ctx, id, guess.Episode, guess.EpisodeEnd); err != nil {
+				scanner.deps.Log.Warn("recording an episode range", "path", video.relativePath, "err", err)
 			}
 		}
 	}
@@ -700,29 +700,29 @@ func (s *Scanner) backfillEpisodeEnd(ctx context.Context, videos []found, known 
 // backfillPixFmt records the pixel format of H.264 files added before it was
 // stored. Without it, a 10-bit H.264 file (which no browser plays) would be
 // served as is and never converted.
-func (s *Scanner) backfillPixFmt(ctx context.Context, videos []found) {
-	missing, err := s.deps.Store.H264MissingPixFmt(ctx)
+func (scanner *Scanner) backfillPixFmt(ctx context.Context, videos []found) {
+	missing, err := scanner.deps.Store.H264MissingPixFmt(ctx)
 	if err != nil {
-		s.deps.Log.Warn("could not list media to re-probe", "err", err)
+		scanner.deps.Log.Warn("could not list media to re-probe", "err", err)
 		return
 	}
 	done := 0
-	for _, v := range videos {
-		id, ok := missing[v.rel]
-		if !ok || done == backfillLimit {
+	for _, scannedVideo := range videos {
+		id, isMissing := missing[scannedVideo.relativePath]
+		if !isMissing || done == backfillLimit {
 			continue
 		}
 		done++
 		pctx, cancel := context.WithTimeout(ctx, time.Minute)
-		probe, err := s.deps.Prober.Probe(pctx, v.abs)
+		probe, err := scanner.deps.Prober.Probe(pctx, scannedVideo.absolutePath)
 		cancel()
 		if err != nil {
-			s.deps.Log.Warn("could not re-probe media", "path", v.rel, "err", err)
+			scanner.deps.Log.Warn("could not re-probe media", "path", scannedVideo.relativePath, "err", err)
 			continue
 		}
-		if video, ok := probe.Video(); ok && video.PixFmt != "" {
-			if err := s.deps.Store.SetPixFmt(ctx, id, video.PixFmt); err != nil {
-				s.deps.Log.Warn("could not record pixel format", "path", v.rel, "err", err)
+		if video, hasVideo := probe.Video(); hasVideo && video.PixFmt != "" {
+			if err := scanner.deps.Store.SetPixFmt(ctx, id, video.PixFmt); err != nil {
+				scanner.deps.Log.Warn("could not record pixel format", "path", scannedVideo.relativePath, "err", err)
 			}
 		}
 	}

@@ -28,7 +28,7 @@ templ libraryView(p Page, recent []store.Tile, cats []store.Category) {
 	if len(recent) == 0 && len(cats) == 0 {
 		<div class="empty">
 			<h2>Your library is empty</h2>
-			if p.V.IsAdmin() {
+			if p.Viewer.IsAdmin() {
 				<p>Add videos to the media folder, then publish them from the <a href="/admin">control panel</a>.</p>
 			} else {
 				<p>Nothing has been published yet. Check back soon.</p>

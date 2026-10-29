@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	// tmpSuffix names the hidden file an MP4 is written to before the swap.
+	// temporarySuffix names the hidden file an MP4 is written to before the swap.
 	// The leading dot keeps the scanner away from it.
-	tmpSuffix = ".nexusplay-converting.mp4"
+	temporarySuffix = ".nexusplay-converting.mp4"
 	// spaceMargin is kept free on top of the source file's size.
 	spaceMargin = 256 << 20
 	// noSpaceRetry is how long a file waits after a disk-space check fails.
@@ -41,128 +41,128 @@ var (
 
 // work is everything one conversion needs once it is planned.
 type work struct {
-	src    string // the original
-	dir    string // its folder; every file below lives here
-	target string // the MP4's final name
-	tmp    string // where ffmpeg writes the MP4
-	source ffmpeg.Probe
-	plan   Plan
+	sourcePath    string // the original
+	directory     string // its folder; every file below lives here
+	target        string // the MP4's final name
+	temporaryPath string // where ffmpeg writes the MP4
+	source        ffmpeg.Probe
+	plan          Plan
 }
 
 // convert turns one file into an MP4 that replaces it, and returns the new
 // path. The steps are: prepare (checks and plan), extract subtitles, encode,
 // verify, commit (swap the files and the database row).
-func (c *Converter) convert(ctx context.Context, j *job) (string, error) {
-	w, err := c.prepare(ctx, j)
+func (converter *Converter) convert(ctx context.Context, job *job) (string, error) {
+	work, err := converter.prepare(ctx, job)
 	if err != nil {
 		return "", err
 	}
-	c.extractSubtitles(ctx, j.media.Path, w)
-	defer os.Remove(w.tmp) // only matters if we stop before the swap
-	err = c.deps.Tools.Run(ctx, w.plan.ConvertArgs(w.src, w.tmp), ffmpeg.RunOptions{
+	converter.extractSubtitles(ctx, job.media.Path, work)
+	defer os.Remove(work.temporaryPath) // only matters if we stop before the swap
+	err = converter.deps.Tools.Run(ctx, work.plan.ConvertArguments(work.sourcePath, work.temporaryPath), ffmpeg.RunOptions{
 		LowPriority: true,
-		OnProgress:  func(seconds float64) { c.setProgress(j, seconds) },
+		OnProgress:  func(seconds float64) { converter.setProgress(job, seconds) },
 	})
 	if err != nil {
 		return "", err
 	}
-	result, err := c.verify(ctx, w)
+	result, err := converter.verify(ctx, work)
 	if err != nil {
 		return "", fmt.Errorf("the converted file failed its checks: %w", err)
 	}
-	rel, err := filepath.Rel(c.cfg.MediaDir, w.target)
+	relativePath, err := filepath.Rel(converter.config.MediaDirectory, work.target)
 	if err != nil {
 		return "", err
 	}
-	result.Path = filepath.ToSlash(rel)
-	return result.Path, c.commit(ctx, j.media, w, result)
+	result.Path = filepath.ToSlash(relativePath)
+	return result.Path, converter.commit(ctx, job.media, work, result)
 }
 
 // prepare checks there is room, probes the original and plans the
 // conversion. It refuses early if a file already has the MP4's name (commit
 // checks again, since the encode can take hours).
-func (c *Converter) prepare(ctx context.Context, j *job) (work, error) {
-	src := filepath.Join(c.cfg.MediaDir, filepath.FromSlash(j.media.Path))
-	info, err := os.Stat(src)
+func (converter *Converter) prepare(ctx context.Context, job *job) (work, error) {
+	sourcePath := filepath.Join(converter.config.MediaDirectory, filepath.FromSlash(job.media.Path))
+	info, err := os.Stat(sourcePath)
 	if err != nil {
 		return work{}, fmt.Errorf("original file: %w", err)
 	}
-	dir := filepath.Dir(src)
+	directory := filepath.Dir(sourcePath)
 	need := uint64(info.Size()) + spaceMargin
-	free, err := c.cfg.FreeSpace(dir)
+	free, err := converter.config.FreeSpace(directory)
 	switch {
 	case err != nil:
 		// Not knowing is not a reason to stop; ffmpeg fails cleanly if the disk fills.
-		c.deps.Log.Debug("could not check free disk space", "dir", dir, "err", err)
+		converter.deps.Log.Debug("could not check free disk space", "dir", directory, "err", err)
 	case free < need:
 		return work{}, fmt.Errorf("%w: %d MB free, %d MB needed", ErrNoSpace, free>>20, need>>20)
 	}
 
 	pctx, cancel := context.WithTimeout(ctx, time.Minute)
-	source, err := c.deps.Tools.Probe(pctx, src)
+	source, err := converter.deps.Tools.Probe(pctx, sourcePath)
 	cancel()
 	if err != nil {
 		return work{}, err
 	}
-	c.setDuration(j, source.Duration)
-	base := strings.TrimSuffix(filepath.Base(src), filepath.Ext(src))
+	converter.setDuration(job, source.Duration)
+	base := strings.TrimSuffix(filepath.Base(sourcePath), filepath.Ext(sourcePath))
 	plan, err := MakePlan(source, base)
 	if err != nil {
 		return work{}, err
 	}
-	w := work{src: src, dir: dir, target: filepath.Join(dir, base+".mp4"),
-		tmp: filepath.Join(dir, "."+base+tmpSuffix), source: source, plan: plan}
-	if w.target != src {
-		if _, err := os.Lstat(w.target); err == nil {
-			return work{}, fmt.Errorf("%s: %w; rename one of them", filepath.Base(w.target), ErrTargetExists)
+	conversionWork := work{sourcePath: sourcePath, directory: directory, target: filepath.Join(directory, base+".mp4"),
+		temporaryPath: filepath.Join(directory, "."+base+temporarySuffix), source: source, plan: plan}
+	if conversionWork.target != sourcePath {
+		if _, err := os.Lstat(conversionWork.target); err == nil {
+			return work{}, fmt.Errorf("%s: %w; rename one of them", filepath.Base(conversionWork.target), ErrTargetExists)
 		}
 	}
-	return w, nil
+	return conversionWork, nil
 }
 
 // extractSubtitles saves the built-in text subtitles next to the video. A
 // track that fails is logged and skipped: the video matters more.
-func (c *Converter) extractSubtitles(ctx context.Context, path string, w work) {
-	for _, sp := range w.plan.Subtitles {
-		if err := c.extractSubtitle(ctx, w.src, w.dir, sp); err != nil {
-			c.deps.Log.Warn("could not extract a subtitle track", "path", path, "file", sp.File, "err", err)
+func (converter *Converter) extractSubtitles(ctx context.Context, path string, work work) {
+	for _, subtitlePlan := range work.plan.Subtitles {
+		if err := converter.extractSubtitle(ctx, work.sourcePath, work.directory, subtitlePlan); err != nil {
+			converter.deps.Log.Warn("could not extract a subtitle track", "path", path, "file", subtitlePlan.File, "err", err)
 		}
 	}
-	if w.plan.DroppedSubs > 0 {
-		c.deps.Log.Info("image-based subtitles cannot be kept in MP4", "path", path, "tracks", w.plan.DroppedSubs)
+	if work.plan.DroppedSubs > 0 {
+		converter.deps.Log.Info("image-based subtitles cannot be kept in MP4", "path", path, "tracks", work.plan.DroppedSubs)
 	}
 }
 
-func (c *Converter) extractSubtitle(ctx context.Context, src, dir string, sp SubtitlePlan) error {
-	out := filepath.Join(dir, sp.File)
+func (converter *Converter) extractSubtitle(ctx context.Context, source, directory string, subtitlePlan SubtitlePlan) error {
+	out := filepath.Join(directory, subtitlePlan.File)
 	// Defence in depth on top of safeLanguage: sidecars live next to the video.
-	if filepath.Dir(out) != filepath.Clean(dir) {
-		return fmt.Errorf("refusing to write subtitle %q outside the video's folder", sp.File)
+	if filepath.Dir(out) != filepath.Clean(directory) {
+		return fmt.Errorf("refusing to write subtitle %q outside the video's folder", subtitlePlan.File)
 	}
 	if _, err := os.Lstat(out); err == nil {
 		return nil // keep an existing file of the same name
 	}
-	tmp := filepath.Join(dir, "."+sp.File+".part")
-	defer os.Remove(tmp)
-	if err := c.deps.Tools.Run(ctx, SubtitleArgs(src, sp, tmp), ffmpeg.RunOptions{}); err != nil {
+	temporaryPath := filepath.Join(directory, "."+subtitlePlan.File+".part")
+	defer os.Remove(temporaryPath)
+	if err := converter.deps.Tools.Run(ctx, SubtitleArguments(source, subtitlePlan, temporaryPath), ffmpeg.RunOptions{}); err != nil {
 		return err
 	}
-	return os.Rename(tmp, out)
+	return os.Rename(temporaryPath, out)
 }
 
 // verify checks the converted file before anything is deleted and returns
 // what the library should record about it.
-func (c *Converter) verify(ctx context.Context, w work) (store.ReplacedFile, error) {
+func (converter *Converter) verify(ctx context.Context, work work) (store.ReplacedFile, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	got, err := c.deps.Tools.Probe(ctx, w.tmp)
+	got, err := converter.deps.Tools.Probe(ctx, work.temporaryPath)
 	if err != nil {
 		return store.ReplacedFile{}, err
 	}
-	if err := CheckConverted(got, w.source, w.plan); err != nil {
+	if err := CheckConverted(got, work.source, work.plan); err != nil {
 		return store.ReplacedFile{}, err
 	}
-	info, err := os.Stat(w.tmp)
+	info, err := os.Stat(work.temporaryPath)
 	if err != nil {
 		return store.ReplacedFile{}, err
 	}
@@ -175,11 +175,11 @@ func (c *Converter) verify(ctx context.Context, w work) (store.ReplacedFile, err
 // video, every planned audio track, and the same length within max(2 s, 1%).
 // The original is deleted only when this passes, so it is deliberately strict.
 func CheckConverted(got, source ffmpeg.Probe, plan Plan) error {
-	if v := got.VideoCodec(); v != "h264" {
-		return fmt.Errorf("video is %q, want h264", v)
+	if videoCodec := got.VideoCodec(); videoCodec != "h264" {
+		return fmt.Errorf("video is %q, want h264", videoCodec)
 	}
-	if n := got.Count("audio"); n != len(plan.Audio) {
-		return fmt.Errorf("%d audio tracks, want %d", n, len(plan.Audio))
+	if audioCount := got.Count("audio"); audioCount != len(plan.Audio) {
+		return fmt.Errorf("%d audio tracks, want %d", audioCount, len(plan.Audio))
 	}
 	if source.Duration > 0 {
 		tolerance := math.Max(2, source.Duration*0.01)
@@ -191,12 +191,14 @@ func CheckConverted(got, source ffmpeg.Probe, plan Plan) error {
 }
 
 // commit swaps the verified MP4 in while no scan can run.
-func (c *Converter) commit(ctx context.Context, m store.Media, w work, result store.ReplacedFile) error {
-	swap := func() error { return c.swap(ctx, m, w.src, w.tmp, w.target, result) }
-	if c.deps.Library == nil {
+func (converter *Converter) commit(ctx context.Context, media store.Media, work work, result store.ReplacedFile) error {
+	swap := func() error {
+		return converter.swap(ctx, media, work.sourcePath, work.temporaryPath, work.target, result)
+	}
+	if converter.deps.Library == nil {
 		return swap()
 	}
-	return c.deps.Library.Exclusive(swap)
+	return converter.deps.Library.Exclusive(swap)
 }
 
 // swap makes the verified MP4 the library's copy of the media. The order of
@@ -218,34 +220,34 @@ func (c *Converter) commit(ctx context.Context, m store.Media, w work, result st
 // swap runs under the scanner's Exclusive lock, so no scan sees the state
 // between steps 1 and 2, and ignores cancellation: a half-finished swap is
 // worse than a slow shutdown.
-func (c *Converter) swap(ctx context.Context, m store.Media, src, tmp, target string, result store.ReplacedFile) error {
+func (converter *Converter) swap(ctx context.Context, media store.Media, source, temporaryPath, target string, result store.ReplacedFile) error {
 	ctx = context.WithoutCancel(ctx)
-	cur, err := c.deps.Store.MediaByID(ctx, m.ID)
+	current, err := converter.deps.Store.MediaByID(ctx, media.ID)
 	if err != nil {
-		return fmt.Errorf("re-reading media %d: %w", m.ID, err)
+		return fmt.Errorf("re-reading media %d: %w", media.ID, err)
 	}
-	if cur.Path != m.Path {
+	if current.Path != media.Path {
 		return ErrSourceChanged
 	}
-	sameName := target == src
+	sameName := target == source
 	if sameName {
-		if err := os.Rename(tmp, target); err != nil {
+		if err := os.Rename(temporaryPath, target); err != nil {
 			return fmt.Errorf("putting the converted file in place: %w", err)
 		}
-	} else if err := moveNoReplace(tmp, target); err != nil {
+	} else if err := moveNoReplace(temporaryPath, target); err != nil {
 		return err
 	}
-	if err := c.deps.Store.ReplaceMediaFile(ctx, m.ID, result); err != nil {
+	if err := converter.deps.Store.ReplaceMediaFile(ctx, media.ID, result); err != nil {
 		if !sameName {
 			if rmErr := os.Remove(target); rmErr != nil {
-				c.deps.Log.Error("could not remove the converted file after a failed update", "path", target, "err", rmErr)
+				converter.deps.Log.Error("could not remove the converted file after a failed update", "path", target, "err", rmErr)
 			}
 		}
 		return fmt.Errorf("updating the library: %w", err)
 	}
 	if !sameName {
-		if err := os.Remove(src); err != nil {
-			c.deps.Log.Error("could not delete the original; delete it by hand", "path", src, "err", err)
+		if err := os.Remove(source); err != nil {
+			converter.deps.Log.Error("could not delete the original; delete it by hand", "path", source, "err", err)
 		}
 	}
 	return nil
@@ -256,11 +258,11 @@ func (c *Converter) swap(ctx context.Context, m store.Media, src, tmp, target st
 // replace it. On file systems without hard links (FAT, some network shares)
 // it falls back to checking first, which is safe here because the caller
 // holds the scan lock and the scanner never creates files.
-func moveNoReplace(tmp, target string) error {
-	err := os.Link(tmp, target)
+func moveNoReplace(temporaryPath, target string) error {
+	err := os.Link(temporaryPath, target)
 	switch {
 	case err == nil:
-		if err := os.Remove(tmp); err != nil {
+		if err := os.Remove(temporaryPath); err != nil {
 			return fmt.Errorf("removing the temporary file: %w", err)
 		}
 		return nil
@@ -270,7 +272,7 @@ func moveNoReplace(tmp, target string) error {
 	if _, statErr := os.Lstat(target); statErr == nil {
 		return fmt.Errorf("%s: %w; rename one of them", filepath.Base(target), ErrTargetExists)
 	}
-	if err := os.Rename(tmp, target); err != nil {
+	if err := os.Rename(temporaryPath, target); err != nil {
 		return fmt.Errorf("putting the converted file in place: %w", err)
 	}
 	return nil
@@ -278,15 +280,15 @@ func moveNoReplace(tmp, target string) error {
 
 // removeLeftovers deletes half-written files from a conversion that was
 // interrupted (a crash or a power cut).
-func removeLeftovers(mediaDir string) error {
+func removeLeftovers(mediaDirectory string) error {
 	var errs []error
-	walkErr := filepath.WalkDir(mediaDir, func(p string, d fs.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(mediaDirectory, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // an unreadable folder holds no leftovers we could remove
 		}
-		if !d.IsDir() && strings.HasPrefix(d.Name(), ".") &&
-			(strings.HasSuffix(d.Name(), tmpSuffix) || strings.HasSuffix(d.Name(), ".srt.part")) {
-			if err := os.Remove(p); err != nil {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), ".") &&
+			(strings.HasSuffix(entry.Name(), temporarySuffix) || strings.HasSuffix(entry.Name(), ".srt.part")) {
+			if err := os.Remove(path); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -296,12 +298,12 @@ func removeLeftovers(mediaDir string) error {
 }
 
 // checkWritable reports whether files can be created in dir.
-func checkWritable(dir string) error {
-	f, err := os.CreateTemp(dir, ".nexusplay-write-test-*")
+func checkWritable(directory string) error {
+	file, err := os.CreateTemp(directory, ".nexusplay-write-test-*")
 	if err != nil {
 		return err
 	}
-	name := f.Name()
-	f.Close()
+	name := file.Name()
+	file.Close()
 	return os.Remove(name)
 }

@@ -20,7 +20,7 @@ type libraryHandlers struct {
 type libraryStore interface {
 	RecentTiles(ctx context.Context, userID int64, limit int) ([]store.Tile, error)
 	Categories(ctx context.Context, userID int64) ([]store.Category, error)
-	Search(ctx context.Context, userID int64, q string, limit int) ([]store.Category, error)
+	Search(ctx context.Context, userID int64, query string, limit int) ([]store.Category, error)
 	CollectionByID(ctx context.Context, id int64) (store.Collection, error)
 	CollectionEpisodes(ctx context.Context, collectionID int64) ([]store.Media, error)
 	WatchedIn(ctx context.Context, userID, collectionID int64) (map[int64]bool, error)
@@ -38,24 +38,24 @@ const (
 )
 
 // home handles GET /: "Just added" and a tab per category.
-func (h *libraryHandlers) home(w http.ResponseWriter, r *http.Request) error {
-	recent, cats, err := h.libraryData(r)
+func (handlers *libraryHandlers) home(w http.ResponseWriter, r *http.Request) error {
+	recent, cats, err := handlers.libraryData(r)
 	if err != nil {
 		return err
 	}
-	h.render(w, r, http.StatusOK, homePage(newPage(r, ""), recent, cats))
+	handlers.render(w, r, http.StatusOK, homePage(newPage(r, ""), recent, cats))
 	return nil
 }
 
 // libraryData is what the home page and an emptied search show: the
 // recent row and every category, with the viewer's watched marks.
-func (h *libraryHandlers) libraryData(r *http.Request) ([]store.Tile, []store.Category, error) {
+func (handlers *libraryHandlers) libraryData(r *http.Request) ([]store.Tile, []store.Category, error) {
 	uid := viewer(r).ID()
-	recent, err := h.store.RecentTiles(r.Context(), uid, recentLimit)
+	recent, err := handlers.store.RecentTiles(r.Context(), uid, recentLimit)
 	if err != nil {
 		return nil, nil, err
 	}
-	cats, err := h.store.Categories(r.Context(), uid)
+	cats, err := handlers.store.Categories(r.Context(), uid)
 	return recent, cats, err
 }
 
@@ -63,123 +63,123 @@ func (h *libraryHandlers) libraryData(r *http.Request) ([]store.Tile, []store.Ca
 // results in the search drawer; an empty query or no results renders
 // nothing, which closes it. Without JavaScript it is the home page with the
 // drawer open.
-func (h *libraryHandlers) search(w http.ResponseWriter, r *http.Request) error {
-	q := truncate(strings.TrimSpace(r.URL.Query().Get("q")), maxQuery)
-	if q == "" && !isHTMX(r) {
+func (handlers *libraryHandlers) search(w http.ResponseWriter, r *http.Request) error {
+	query := truncate(strings.TrimSpace(r.URL.Query().Get("q")), maxQuery)
+	if query == "" && !isHTMX(r) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return nil
 	}
 	var cats []store.Category
-	if q != "" {
+	if query != "" {
 		var err error
-		if cats, err = h.store.Search(r.Context(), viewer(r).ID(), q, searchLimit); err != nil {
+		if cats, err = handlers.store.Search(r.Context(), viewer(r).ID(), query, searchLimit); err != nil {
 			return err
 		}
 	}
 	if isHTMX(r) {
-		h.render(w, r, http.StatusOK, searchResults(cats))
+		handlers.render(w, r, http.StatusOK, searchResults(cats))
 		return nil
 	}
-	recent, libCats, err := h.libraryData(r)
+	recent, libCats, err := handlers.libraryData(r)
 	if err != nil {
 		return err
 	}
-	h.render(w, r, http.StatusOK, searchPage(newPage(r, "Search"), cats, recent, libCats))
+	handlers.render(w, r, http.StatusOK, searchPage(newPage(r, "Search"), cats, recent, libCats))
 	return nil
 }
 
 // truncate shortens s to at most n characters.
-func truncate(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
+func truncate(text string, limit int) string {
+	if utf8.RuneCountInString(text) <= limit {
+		return text
 	}
-	return string([]rune(s)[:n])
+	return string([]rune(text)[:limit])
 }
 
 // collection handles GET /collections/{id}: the show's dialog with its
 // seasons, or a full page without htmx.
-func (h *libraryHandlers) collection(w http.ResponseWriter, r *http.Request) error {
+func (handlers *libraryHandlers) collection(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r)
 	if err != nil {
 		return err
 	}
 	ctx := r.Context()
-	c, err := h.store.CollectionByID(ctx, id)
+	collection, err := handlers.store.CollectionByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	eps, err := h.store.CollectionEpisodes(ctx, id)
+	episodes, err := handlers.store.CollectionEpisodes(ctx, id)
 	if err != nil {
 		return err
 	}
-	v := viewer(r)
+	currentViewer := viewer(r)
 	var subscribed bool
 	watched := map[int64]bool{}
-	if v.User != nil {
-		if subscribed, err = h.store.IsSubscribed(ctx, v.ID(), id); err != nil {
+	if currentViewer.User != nil {
+		if subscribed, err = handlers.store.IsSubscribed(ctx, currentViewer.ID(), id); err != nil {
 			return err
 		}
-		if watched, err = h.store.WatchedIn(ctx, v.ID(), id); err != nil {
+		if watched, err = handlers.store.WatchedIn(ctx, currentViewer.ID(), id); err != nil {
 			return err
 		}
 	}
-	dialog := collectionDialog(v, c, groupBySeason(eps), subscribed, watched)
-	return h.respond(w, r, http.StatusOK, c.Name, dialog, collectionPage)
+	dialog := collectionDialog(currentViewer, collection, groupBySeason(episodes), subscribed, watched)
+	return handlers.respond(w, r, http.StatusOK, collection.Name, dialog, collectionPage)
 }
 
 // groupBySeason splits episodes, already sorted by season and episode, into
 // seasons.
-func groupBySeason(eps []store.Media) []Season {
+func groupBySeason(episodes []store.Media) []Season {
 	var seasons []Season
-	for _, e := range eps {
-		if len(seasons) == 0 || seasons[len(seasons)-1].Number != e.Season {
-			seasons = append(seasons, Season{Number: e.Season})
+	for _, episode := range episodes {
+		if len(seasons) == 0 || seasons[len(seasons)-1].Number != episode.Season {
+			seasons = append(seasons, Season{Number: episode.Season})
 		}
 		last := &seasons[len(seasons)-1]
-		last.Episodes = append(last.Episodes, e)
+		last.Episodes = append(last.Episodes, episode)
 	}
 	return seasons
 }
 
 // toggleSubscription handles POST /collections/{id}/subscribe and returns
 // the ribbon in its new state.
-func (h *libraryHandlers) toggleSubscription(w http.ResponseWriter, r *http.Request) error {
+func (handlers *libraryHandlers) toggleSubscription(w http.ResponseWriter, r *http.Request) error {
 	id, err := pathID(r)
 	if err != nil {
 		return err
 	}
-	if _, err := h.store.CollectionByID(r.Context(), id); err != nil {
+	if _, err := handlers.store.CollectionByID(r.Context(), id); err != nil {
 		return err
 	}
-	on, err := h.store.ToggleSubscription(r.Context(), viewer(r).ID(), id)
+	subscribed, err := handlers.store.ToggleSubscription(r.Context(), viewer(r).ID(), id)
 	if err != nil {
 		return err
 	}
-	h.render(w, r, http.StatusOK, subscribeRibbon(id, on))
+	handlers.render(w, r, http.StatusOK, subscribeRibbon(id, subscribed))
 	return nil
 }
 
 // resumeList handles GET /me/resume: the "Previously watching" popover.
-func (h *libraryHandlers) resumeList(w http.ResponseWriter, r *http.Request) error {
-	items, err := h.store.InProgress(r.Context(), viewer(r).ID(), 10)
+func (handlers *libraryHandlers) resumeList(w http.ResponseWriter, r *http.Request) error {
+	items, err := handlers.store.InProgress(r.Context(), viewer(r).ID(), 10)
 	if err != nil {
 		return err
 	}
-	h.render(w, r, http.StatusOK, resumeList(items))
+	handlers.render(w, r, http.StatusOK, resumeList(items))
 	return nil
 }
 
 // notificationList handles GET /me/notifications: new episodes of shows
 // the viewer subscribed to.
-func (h *libraryHandlers) notificationList(w http.ResponseWriter, r *http.Request) error {
-	items, err := h.store.Notifications(r.Context(), viewer(r).ID(), 20)
+func (handlers *libraryHandlers) notificationList(w http.ResponseWriter, r *http.Request) error {
+	items, err := handlers.store.Notifications(r.Context(), viewer(r).ID(), 20)
 	if err != nil {
 		return err
 	}
-	subs, err := h.store.SubscriptionCount(r.Context(), viewer(r).ID())
+	subs, err := handlers.store.SubscriptionCount(r.Context(), viewer(r).ID())
 	if err != nil {
 		return err
 	}
-	h.render(w, r, http.StatusOK, notificationList(items, subs))
+	handlers.render(w, r, http.StatusOK, notificationList(items, subs))
 	return nil
 }

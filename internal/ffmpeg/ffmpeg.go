@@ -31,14 +31,14 @@ type ExitError struct {
 	LastLine string
 }
 
-func (e *ExitError) Error() string {
-	if e.LastLine == "" {
-		return fmt.Sprintf("%s: %v", e.Program, e.Err)
+func (exitError *ExitError) Error() string {
+	if exitError.LastLine == "" {
+		return fmt.Sprintf("%s: %v", exitError.Program, exitError.Err)
 	}
-	return fmt.Sprintf("%s: %v: %s", e.Program, e.Err, e.LastLine)
+	return fmt.Sprintf("%s: %v: %s", exitError.Program, exitError.Err, exitError.LastLine)
 }
 
-func (e *ExitError) Unwrap() error { return e.Err }
+func (exitError *ExitError) Unwrap() error { return exitError.Err }
 
 // RunOptions tune a Run call. The zero value runs ffmpeg plainly.
 type RunOptions struct {
@@ -52,15 +52,15 @@ type RunOptions struct {
 
 // Run runs ffmpeg to completion. It returns ctx.Err() when ctx was cancelled
 // (the process is killed) and an *ExitError when ffmpeg failed.
-func (t Tools) Run(ctx context.Context, args []string, opt RunOptions) error {
-	if opt.OnProgress != nil {
-		args = append([]string{"-progress", "pipe:1", "-nostats"}, args...)
+func (tools Tools) Run(ctx context.Context, arguments []string, options RunOptions) error {
+	if options.OnProgress != nil {
+		arguments = append([]string{"-progress", "pipe:1", "-nostats"}, arguments...)
 	}
-	cmd := command(ctx, t.FFmpeg, args...)
+	cmd := command(ctx, tools.FFmpeg, arguments...)
 	stderr := &lastLineWriter{}
 	cmd.Stderr = stderr
 	var stdout io.Reader
-	if opt.OnProgress != nil {
+	if options.OnProgress != nil {
 		pipe, err := cmd.StdoutPipe()
 		if err != nil {
 			return err
@@ -70,11 +70,11 @@ func (t Tools) Run(ctx context.Context, args []string, opt RunOptions) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("starting ffmpeg: %w", err)
 	}
-	if opt.LowPriority {
+	if options.LowPriority {
 		lowerPriority(cmd.Process.Pid)
 	}
 	if stdout != nil {
-		readProgress(stdout, opt.OnProgress)
+		readProgress(stdout, options.OnProgress)
 	}
 	return exitError("ffmpeg", ctx, cmd.Wait(), stderr)
 }
@@ -88,27 +88,27 @@ type Process struct {
 
 // Start launches ffmpeg and returns without waiting for it. Cancelling ctx
 // kills the process. The caller must call Wait.
-func (t Tools) Start(ctx context.Context, args []string) (*Process, error) {
-	cmd := command(ctx, t.FFmpeg, args...)
-	p := &Process{cmd: cmd, ctx: ctx, stderr: &lastLineWriter{}}
-	cmd.Stderr = p.stderr
+func (tools Tools) Start(ctx context.Context, arguments []string) (*Process, error) {
+	cmd := command(ctx, tools.FFmpeg, arguments...)
+	process := &Process{cmd: cmd, ctx: ctx, stderr: &lastLineWriter{}}
+	cmd.Stderr = process.stderr
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("starting ffmpeg: %w", err)
 	}
-	return p, nil
+	return process, nil
 }
 
 // Wait waits for the process to exit. Like Run, it returns ctx.Err() when
 // the process was cancelled and an *ExitError when ffmpeg failed.
-func (p *Process) Wait() error {
-	return exitError("ffmpeg", p.ctx, p.cmd.Wait(), p.stderr)
+func (process *Process) Wait() error {
+	return exitError("ffmpeg", process.ctx, process.cmd.Wait(), process.stderr)
 }
 
 // command prepares a process that is killed when ctx is cancelled. WaitDelay
 // bounds how long Wait then waits for output pipes to close, so a child
 // process that inherited them cannot hold up shutdown.
-func command(ctx context.Context, name string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, name, args...)
+func command(ctx context.Context, name string, arguments ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, arguments...)
 	cmd.WaitDelay = 2 * time.Second
 	return cmd
 }
@@ -126,43 +126,43 @@ func exitError(program string, ctx context.Context, err error, stderr *lastLineW
 }
 
 // readProgress parses ffmpeg's "-progress pipe:1" key=value stream.
-func readProgress(r io.Reader, report func(seconds float64)) {
-	sc := bufio.NewScanner(r)
-	for sc.Scan() {
+func readProgress(reader io.Reader, report func(seconds float64)) {
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
 		// out_time_us is microseconds; so is out_time_ms, despite its name.
-		key, val, ok := strings.Cut(sc.Text(), "=")
-		if !ok || (key != "out_time_us" && key != "out_time_ms") {
+		key, value, found := strings.Cut(scanner.Text(), "=")
+		if !found || (key != "out_time_us" && key != "out_time_ms") {
 			continue
 		}
-		if us, err := strconv.ParseInt(val, 10, 64); err == nil && us > 0 {
-			report(float64(us) / 1e6)
+		if microseconds, err := strconv.ParseInt(value, 10, 64); err == nil && microseconds > 0 {
+			report(float64(microseconds) / 1e6)
 		}
 	}
 	// Keep draining so ffmpeg never blocks on a full pipe.
-	_, _ = io.Copy(io.Discard, r)
+	_, _ = io.Copy(io.Discard, reader)
 }
 
 // lastLineWriter keeps the tail of a program's stderr. ffmpeg can write a
 // lot (one line per bad frame), and only the end matters for the error.
 type lastLineWriter struct {
-	buf bytes.Buffer
+	buffer bytes.Buffer
 }
 
 const keepStderr = 4096
 
-func (w *lastLineWriter) Write(p []byte) (int, error) {
-	w.buf.Write(p)
-	if w.buf.Len() > 2*keepStderr {
-		tail := w.buf.Bytes()[w.buf.Len()-keepStderr:]
-		w.buf = *bytes.NewBuffer(append([]byte(nil), tail...))
+func (writer *lastLineWriter) Write(data []byte) (int, error) {
+	writer.buffer.Write(data)
+	if writer.buffer.Len() > 2*keepStderr {
+		tail := writer.buffer.Bytes()[writer.buffer.Len()-keepStderr:]
+		writer.buffer = *bytes.NewBuffer(append([]byte(nil), tail...))
 	}
-	return len(p), nil
+	return len(data), nil
 }
 
-func (w *lastLineWriter) last() string {
-	s := strings.TrimSpace(w.buf.String())
-	if i := strings.LastIndexByte(s, '\n'); i >= 0 {
-		return strings.TrimSpace(s[i+1:])
+func (writer *lastLineWriter) last() string {
+	text := strings.TrimSpace(writer.buffer.String())
+	if i := strings.LastIndexByte(text, '\n'); i >= 0 {
+		return strings.TrimSpace(text[i+1:])
 	}
-	return s
+	return text
 }

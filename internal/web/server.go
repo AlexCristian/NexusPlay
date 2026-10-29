@@ -45,7 +45,7 @@ const sessionCookie = "nexusplay_session"
 // hands each feature group (library, playback, subtitles, accounts, admin)
 // only the ones it uses.
 type Server struct {
-	Cfg        config.Config
+	Config     config.Config
 	Store      *store.Store
 	Scanner    *library.Scanner
 	Meta       *metadata.Client
@@ -75,121 +75,121 @@ type Viewer = auth.Viewer
 // viewer is who made the request; the zero Viewer for a visitor who is not
 // logged in. The session middleware sets it.
 func viewer(r *http.Request) Viewer {
-	v, _ := r.Context().Value(viewerKey).(Viewer)
-	return v
+	viewer, _ := r.Context().Value(viewerKey).(Viewer)
+	return viewer
 }
 
 // Handler returns the complete HTTP handler.
-func (s *Server) Handler() http.Handler {
-	s.responder = responder{log: s.Log}
-	lib := &libraryHandlers{responder: s.responder, store: s.Store}
-	play := &playbackHandlers{responder: s.responder, store: s.Store, transcodes: s.Transcodes,
-		mediaDir: s.Cfg.MediaDir, posterDir: s.Cfg.PosterDir()}
-	subs := &subtitleHandlers{responder: s.responder, store: s.Store, votesRequired: s.Cfg.VotesRequired}
-	acct := &accountHandlers{responder: s.responder, accounts: s.Accounts, sessions: s.Sessions,
-		secureCookies: s.Cfg.SecureCookies}
-	adm := &adminHandlers{responder: s.responder, store: s.Store, meta: s.Meta, scanner: s.Scanner, refresher: s.Scanner,
-		conversions: s.Converter, posterDir: s.Cfg.PosterDir()}
+func (server *Server) Handler() http.Handler {
+	server.responder = responder{log: server.Log}
+	lib := &libraryHandlers{responder: server.responder, store: server.Store}
+	play := &playbackHandlers{responder: server.responder, store: server.Store, transcodes: server.Transcodes,
+		mediaDirectory: server.Config.MediaDirectory, posterDirectory: server.Config.PosterDirectory()}
+	subs := &subtitleHandlers{responder: server.responder, store: server.Store, votesRequired: server.Config.VotesRequired}
+	acct := &accountHandlers{responder: server.responder, accounts: server.Accounts, sessions: server.Sessions,
+		secureCookies: server.Config.SecureCookies}
+	adm := &adminHandlers{responder: server.responder, store: server.Store, meta: server.Meta, scanner: server.Scanner, refresher: server.Scanner,
+		conversions: server.Converter, posterDirectory: server.Config.PosterDirectory()}
 
 	mux := http.NewServeMux()
 
 	static, _ := fs.Sub(staticFiles, "static") // cannot fail: "static" is a valid, embedded path
 	mux.Handle("GET /static/", cacheStatic(http.StripPrefix("/static/", http.FileServerFS(static))))
-	mux.HandleFunc("GET /healthz", s.healthz)
+	mux.HandleFunc("GET /healthz", server.healthz)
 
 	// Pages anyone may see unless NEXUSPLAY_REQUIRE_LOGIN is set.
-	mux.Handle("GET /{$}", s.browse(s.handle(lib.home)))
-	mux.Handle("GET /search", s.browse(s.handle(lib.search)))
-	mux.Handle("GET /collections/{id}", s.browse(s.handle(lib.collection)))
-	mux.Handle("GET /watch/{id}", s.browse(s.handle(play.watch)))
-	mux.Handle("GET /media/{id}/file", s.browse(s.handle(play.mediaFile)))
-	mux.Handle("GET /media/{id}/hls/index.m3u8", s.browse(s.handle(play.hlsPlaylist)))
-	mux.Handle("GET /media/{id}/hls/{segment}", s.browse(s.handle(play.hlsSegment)))
-	mux.Handle("GET /subtitles/{id}", s.browse(s.handle(subs.subtitleVTT)))
-	mux.Handle("GET /posters/{name}", s.browse(s.handle(play.poster)))
+	mux.Handle("GET /{$}", server.browse(server.handle(lib.home)))
+	mux.Handle("GET /search", server.browse(server.handle(lib.search)))
+	mux.Handle("GET /collections/{id}", server.browse(server.handle(lib.collection)))
+	mux.Handle("GET /watch/{id}", server.browse(server.handle(play.watch)))
+	mux.Handle("GET /media/{id}/file", server.browse(server.handle(play.mediaFile)))
+	mux.Handle("GET /media/{id}/hls/index.m3u8", server.browse(server.handle(play.hlsPlaylist)))
+	mux.Handle("GET /media/{id}/hls/{segment}", server.browse(server.handle(play.hlsSegment)))
+	mux.Handle("GET /subtitles/{id}", server.browse(server.handle(subs.subtitleVTT)))
+	mux.Handle("GET /posters/{name}", server.browse(server.handle(play.poster)))
 
 	// Accounts.
-	mux.HandleFunc("GET /login", s.handle(acct.loginPage))
-	mux.HandleFunc("POST /login", s.handle(acct.login))
-	mux.HandleFunc("GET /register", s.handle(acct.registerPage))
-	mux.HandleFunc("POST /register", s.handle(acct.register))
-	mux.HandleFunc("POST /logout", s.handle(acct.logout))
+	mux.HandleFunc("GET /login", server.handle(acct.loginPage))
+	mux.HandleFunc("POST /login", server.handle(acct.login))
+	mux.HandleFunc("GET /register", server.handle(acct.registerPage))
+	mux.HandleFunc("POST /register", server.handle(acct.register))
+	mux.HandleFunc("POST /logout", server.handle(acct.logout))
 
 	// Signed-in features.
-	mux.Handle("GET /me/resume", s.member(s.handle(lib.resumeList)))
-	mux.Handle("GET /me/notifications", s.member(s.handle(lib.notificationList)))
-	mux.Handle("POST /me/progress", s.member(s.handle(play.saveProgress)))
-	mux.Handle("POST /collections/{id}/subscribe", s.member(s.handle(lib.toggleSubscription)))
-	mux.Handle("GET /media/{id}/subtitle-report", s.member(s.handle(subs.subtitleReport)))
-	mux.Handle("POST /cues/{id}/changes", s.member(s.handle(subs.proposeChange)))
-	mux.Handle("POST /changes/{id}/vote", s.member(s.handle(subs.voteChange)))
+	mux.Handle("GET /me/resume", server.member(server.handle(lib.resumeList)))
+	mux.Handle("GET /me/notifications", server.member(server.handle(lib.notificationList)))
+	mux.Handle("POST /me/progress", server.member(server.handle(play.saveProgress)))
+	mux.Handle("POST /collections/{id}/subscribe", server.member(server.handle(lib.toggleSubscription)))
+	mux.Handle("GET /media/{id}/subtitle-report", server.member(server.handle(subs.subtitleReport)))
+	mux.Handle("POST /cues/{id}/changes", server.member(server.handle(subs.proposeChange)))
+	mux.Handle("POST /changes/{id}/vote", server.member(server.handle(subs.voteChange)))
 
 	// Administration.
-	mux.Handle("GET /admin", s.admin(s.handle(adm.controlPanel)))
-	mux.Handle("POST /admin/scan", s.admin(s.handle(adm.scanNow)))
-	mux.Handle("GET /admin/conversions", s.admin(s.handle(adm.conversionsPanel)))
-	mux.Handle("POST /admin/media/{id}/retry-conversion", s.admin(s.handle(adm.retryConversion)))
-	mux.Handle("GET /admin/media/{id}", s.admin(s.handle(adm.editMediaPage)))
-	mux.Handle("POST /admin/media/{id}", s.admin(s.handle(adm.saveMedia)))
-	mux.Handle("POST /admin/media/{id}/refresh-metadata", s.admin(s.handle(adm.refreshMetadata)))
-	mux.Handle("POST /admin/media/{id}/subtitles", s.admin(s.handle(adm.uploadSubtitle)))
-	mux.Handle("POST /admin/subtitles/{id}", s.admin(s.handle(adm.saveSubtitle)))
-	mux.Handle("POST /admin/subtitles/{id}/delete", s.admin(s.handle(adm.deleteSubtitle)))
-	mux.Handle("POST /admin/collections", s.admin(s.handle(adm.createCollection)))
-	mux.Handle("GET /admin/collections/{id}", s.admin(s.handle(adm.editCollectionPage)))
-	mux.Handle("POST /admin/collections/{id}", s.admin(s.handle(adm.saveCollection)))
-	mux.Handle("POST /admin/collections/{id}/delete", s.admin(s.handle(adm.deleteCollection)))
+	mux.Handle("GET /admin", server.admin(server.handle(adm.controlPanel)))
+	mux.Handle("POST /admin/scan", server.admin(server.handle(adm.scanNow)))
+	mux.Handle("GET /admin/conversions", server.admin(server.handle(adm.conversionsPanel)))
+	mux.Handle("POST /admin/media/{id}/retry-conversion", server.admin(server.handle(adm.retryConversion)))
+	mux.Handle("GET /admin/media/{id}", server.admin(server.handle(adm.editMediaPage)))
+	mux.Handle("POST /admin/media/{id}", server.admin(server.handle(adm.saveMedia)))
+	mux.Handle("POST /admin/media/{id}/refresh-metadata", server.admin(server.handle(adm.refreshMetadata)))
+	mux.Handle("POST /admin/media/{id}/subtitles", server.admin(server.handle(adm.uploadSubtitle)))
+	mux.Handle("POST /admin/subtitles/{id}", server.admin(server.handle(adm.saveSubtitle)))
+	mux.Handle("POST /admin/subtitles/{id}/delete", server.admin(server.handle(adm.deleteSubtitle)))
+	mux.Handle("POST /admin/collections", server.admin(server.handle(adm.createCollection)))
+	mux.Handle("GET /admin/collections/{id}", server.admin(server.handle(adm.editCollectionPage)))
+	mux.Handle("POST /admin/collections/{id}", server.admin(server.handle(adm.saveCollection)))
+	mux.Handle("POST /admin/collections/{id}/delete", server.admin(server.handle(adm.deleteCollection)))
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { s.notFound(w, r) })
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { server.notFound(w, r) })
 
 	// Outermost first: each request is logged, recovered from panics, given
 	// security headers, then its session, then checked for CSRF.
-	return chain(mux, s.logRequests, s.recoverer, securityHeaders, s.session, s.csrf)
+	return chain(mux, server.logRequests, server.recoverer, securityHeaders, server.session, server.csrf)
 }
 
 // chain wraps h in middleware, the first outermost.
-func chain(h http.Handler, middleware ...func(http.Handler) http.Handler) http.Handler {
+func chain(handler http.Handler, middleware ...func(http.Handler) http.Handler) http.Handler {
 	for i := len(middleware) - 1; i >= 0; i-- {
-		h = middleware[i](h)
+		handler = middleware[i](handler)
 	}
-	return h
+	return handler
 }
 
 // browse guards pages that are public unless the install requires login.
-func (s *Server) browse(h http.HandlerFunc) http.Handler {
+func (server *Server) browse(handler http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.Cfg.RequireLogin && viewer(r).User == nil {
-			s.needLogin(w, r)
+		if server.Config.RequireLogin && viewer(r).User == nil {
+			server.needLogin(w, r)
 			return
 		}
-		h(w, r)
+		handler(w, r)
 	})
 }
 
 // member guards features that need an account.
-func (s *Server) member(h http.HandlerFunc) http.Handler {
+func (server *Server) member(handler http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if viewer(r).User == nil {
-			s.needLogin(w, r)
+			server.needLogin(w, r)
 			return
 		}
-		h(w, r)
+		handler(w, r)
 	})
 }
 
 // admin guards the control panel.
-func (s *Server) admin(h http.HandlerFunc) http.Handler {
+func (server *Server) admin(handler http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		v := viewer(r)
-		if v.User == nil {
-			s.needLogin(w, r)
+		currentViewer := viewer(r)
+		if currentViewer.User == nil {
+			server.needLogin(w, r)
 			return
 		}
-		if !v.IsAdmin() {
-			s.errorPage(w, r, http.StatusForbidden, "Access denied", "Only the administrator can do that.")
+		if !currentViewer.IsAdmin() {
+			server.errorPage(w, r, http.StatusForbidden, "Access denied", "Only the administrator can do that.")
 			return
 		}
-		h(w, r)
+		handler(w, r)
 	})
 }
 
@@ -197,7 +197,7 @@ func (s *Server) admin(h http.HandlerFunc) http.Handler {
 // HX-Redirect to the login page; a page load is redirected there and comes
 // back afterwards; media, subtitle and other requests get a plain 401,
 // since a redirect to an HTML page would only confuse the player.
-func (s *Server) needLogin(w http.ResponseWriter, r *http.Request) {
+func (server *Server) needLogin(w http.ResponseWriter, r *http.Request) {
 	if isHTMX(r) {
 		w.Header().Set("HX-Redirect", "/login?next="+url.QueryEscape(currentURL(r)))
 		w.WriteHeader(http.StatusUnauthorized)
@@ -214,8 +214,8 @@ func (s *Server) needLogin(w http.ResponseWriter, r *http.Request) {
 // request (HX-Current-URL), not the fragment's URL.
 func currentURL(r *http.Request) string {
 	if isHTMX(r) {
-		if u, err := url.Parse(r.Header.Get("HX-Current-URL")); err == nil && u.Path != "" {
-			return u.RequestURI()
+		if parsedURL, err := url.Parse(r.Header.Get("HX-Current-URL")); err == nil && parsedURL.Path != "" {
+			return parsedURL.RequestURI()
 		}
 		return "/"
 	}
@@ -223,16 +223,16 @@ func currentURL(r *http.Request) string {
 }
 
 // session loads the logged-in user, if any, into the request context.
-func (s *Server) session(next http.Handler) http.Handler {
+func (server *Server) session(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var v Viewer
-		if c, err := r.Cookie(sessionCookie); err == nil {
-			v, err = s.Sessions.Lookup(r.Context(), c.Value)
+		var viewer Viewer
+		if cookie, err := r.Cookie(sessionCookie); err == nil {
+			viewer, err = server.Sessions.Lookup(r.Context(), cookie.Value)
 			if err != nil && !errors.Is(err, auth.ErrNoSession) {
-				s.Log.Error("loading session", "err", err)
+				server.Log.Error("loading session", "err", err)
 			}
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), viewerKey, v)))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), viewerKey, viewer)))
 	})
 }
 
@@ -268,7 +268,7 @@ func bodyLimit(r *http.Request) int64 {
 // The body size limit is applied here, before anything reads the body, so an
 // oversize upload is answered with 413 rather than looking like a missing
 // token.
-func (s *Server) csrf(next http.Handler) http.Handler {
+func (server *Server) csrf(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
@@ -281,8 +281,8 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 			http.Error(w, "cross-site request refused", http.StatusForbidden)
 			return
 		}
-		v := viewer(r)
-		if v.User == nil || r.URL.Path == "/login" || r.URL.Path == "/register" {
+		currentViewer := viewer(r)
+		if currentViewer.User == nil || r.URL.Path == "/login" || r.URL.Path == "/register" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -294,7 +294,7 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 			}
 			token = r.FormValue("csrf_token")
 		}
-		if subtle.ConstantTimeCompare([]byte(token), []byte(v.CSRF)) != 1 {
+		if subtle.ConstantTimeCompare([]byte(token), []byte(currentViewer.CSRF)) != 1 {
 			http.Error(w, "invalid or missing CSRF token; reload the page and try again", http.StatusForbidden)
 			return
 		}
@@ -332,7 +332,7 @@ func sameOrigin(r *http.Request) bool {
 		// Non-browser clients send neither; browsers always send Origin on POST.
 		return r.Header.Get("Sec-Fetch-Site") == "" || r.Header.Get("Sec-Fetch-Site") == "same-origin"
 	}
-	u, err := url.Parse(origin)
+	parsedURL, err := url.Parse(origin)
 	if err != nil {
 		return false
 	}
@@ -340,7 +340,7 @@ func sameOrigin(r *http.Request) bool {
 	if fwd := r.Header.Get("X-Forwarded-Host"); fwd != "" {
 		host = fwd
 	}
-	return strings.EqualFold(u.Host, host)
+	return strings.EqualFold(parsedURL.Host, host)
 }
 
 // securityHeaders sets headers for every response. The Content-Security-
@@ -349,11 +349,11 @@ func sameOrigin(r *http.Request) bool {
 // MediaSource.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := w.Header()
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("X-Frame-Options", "DENY")
-		h.Set("Referrer-Policy", "same-origin")
-		h.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; media-src 'self' blob:; "+
+		header := w.Header()
+		header.Set("X-Content-Type-Options", "nosniff")
+		header.Set("X-Frame-Options", "DENY")
+		header.Set("Referrer-Policy", "same-origin")
+		header.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; media-src 'self' blob:; "+
 			"worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 		next.ServeHTTP(w, r)
 	})
@@ -362,14 +362,14 @@ func securityHeaders(next http.Handler) http.Handler {
 // recoverer turns a panic in a handler into a logged 500 instead of a
 // dropped connection. http.ErrAbortHandler is re-raised: it is how a
 // handler deliberately aborts a response.
-func (s *Server) recoverer(next http.Handler) http.Handler {
+func (server *Server) recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
 				if rec == http.ErrAbortHandler {
 					panic(rec)
 				}
-				s.Log.Error("panic", "err", rec, "path", r.URL.Path, "stack", string(debug.Stack()))
+				server.Log.Error("panic", "err", rec, "path", r.URL.Path, "stack", string(debug.Stack()))
 				http.Error(w, "internal error", http.StatusInternalServerError)
 			}
 		}()
@@ -383,39 +383,39 @@ type statusWriter struct {
 	status int
 }
 
-func (w *statusWriter) WriteHeader(code int) {
-	if w.status == 0 {
-		w.status = code
+func (writer *statusWriter) WriteHeader(code int) {
+	if writer.status == 0 {
+		writer.status = code
 	}
-	w.ResponseWriter.WriteHeader(code)
+	writer.ResponseWriter.WriteHeader(code)
 }
 
-func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+func (writer *statusWriter) Unwrap() http.ResponseWriter { return writer.ResponseWriter }
 
 // logRequests logs each request at debug level (NEXUSPLAY_DEBUG), leaving
 // out static files and HLS segments, which would drown the rest.
-func (s *Server) logRequests(next http.Handler) http.Handler {
+func (server *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		sw := &statusWriter{ResponseWriter: w}
-		next.ServeHTTP(sw, r)
+		recorder := &statusWriter{ResponseWriter: w}
+		next.ServeHTTP(recorder, r)
 		if strings.HasPrefix(r.URL.Path, "/static/") || strings.Contains(r.URL.Path, "/hls/") {
 			return
 		}
-		status := sw.status
+		status := recorder.status
 		if status == 0 {
 			status = http.StatusOK
 		}
-		s.Log.Debug("request", "method", r.Method, "path", r.URL.Path, "status", status, "dur", time.Since(start))
+		server.Log.Debug("request", "method", r.Method, "path", r.URL.Path, "status", status, "dur", time.Since(start))
 	})
 }
 
 // healthz handles GET /healthz for the container health check: 200 while
 // the database answers, else 503.
-func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
+func (server *Server) healthz(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
-	if err := s.Store.Ping(ctx); err != nil {
+	if err := server.Store.Ping(ctx); err != nil {
 		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
 		return
 	}

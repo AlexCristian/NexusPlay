@@ -36,7 +36,7 @@ func newSwapFixture(t *testing.T, srcName string) (*Converter, store.Media, stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := New(Deps{Store: st, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDir: media})
+	c := New(Deps{Store: st, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
 	return c, m, media
 }
 
@@ -55,7 +55,7 @@ func TestSwapNeverOverwritesAnExistingTarget(t *testing.T) {
 	c, m, media := newSwapFixture(t, "Movie.mkv")
 	src := filepath.Join(media, "Movie.mkv")
 	target := filepath.Join(media, "Movie.mp4")
-	tmp := filepath.Join(media, ".Movie"+tmpSuffix)
+	tmp := filepath.Join(media, ".Movie"+temporarySuffix)
 	os.WriteFile(tmp, []byte("converted"), 0o644)
 	os.WriteFile(target, []byte("the user's own file"), 0o644) // appeared mid-conversion
 
@@ -80,7 +80,7 @@ func TestSwapDatabaseFailureRemovesOnlyItsOwnFile(t *testing.T) {
 	c, m, media := newSwapFixture(t, "Movie.mkv")
 	src := filepath.Join(media, "Movie.mkv")
 	target := filepath.Join(media, "Movie.mp4")
-	tmp := filepath.Join(media, ".Movie"+tmpSuffix)
+	tmp := filepath.Join(media, ".Movie"+temporarySuffix)
 	os.WriteFile(tmp, []byte("converted"), 0o644)
 	// Another row already uses the target path, so the update hits the unique index.
 	if _, _, err := c.deps.Store.(*store.Store).InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "Movie.mp4", Title: "x"}); err != nil {
@@ -103,7 +103,7 @@ func TestSwapReplacesAndDeletesOriginal(t *testing.T) {
 	c, m, media := newSwapFixture(t, "Movie.mkv")
 	src := filepath.Join(media, "Movie.mkv")
 	target := filepath.Join(media, "Movie.mp4")
-	tmp := filepath.Join(media, ".Movie"+tmpSuffix)
+	tmp := filepath.Join(media, ".Movie"+temporarySuffix)
 	os.WriteFile(tmp, []byte("converted"), 0o644)
 
 	if err := c.swap(context.Background(), m, src, tmp, target, store.ReplacedFile{Path: "Movie.mp4", VideoCodec: "h264"}); err != nil {
@@ -126,7 +126,7 @@ func TestSwapReplacesAndDeletesOriginal(t *testing.T) {
 func TestSwapSameNameReplacesInPlace(t *testing.T) {
 	c, m, media := newSwapFixture(t, "Movie.mp4")
 	path := filepath.Join(media, "Movie.mp4")
-	tmp := filepath.Join(media, ".Movie"+tmpSuffix)
+	tmp := filepath.Join(media, ".Movie"+temporarySuffix)
 	os.WriteFile(tmp, []byte("converted"), 0o644)
 
 	if err := c.swap(context.Background(), m, path, tmp, path, store.ReplacedFile{Path: "Movie.mp4", VideoCodec: "h264"}); err != nil {
@@ -143,7 +143,7 @@ func TestSwapRefusesWhenTheRowChanged(t *testing.T) {
 	c, m, media := newSwapFixture(t, "Movie.mkv")
 	src := filepath.Join(media, "Movie.mkv")
 	target := filepath.Join(media, "Movie.mp4")
-	tmp := filepath.Join(media, ".Movie"+tmpSuffix)
+	tmp := filepath.Join(media, ".Movie"+temporarySuffix)
 	os.WriteFile(tmp, []byte("converted"), 0o644)
 	m.Path = "Something else.mkv" // the job's snapshot no longer matches the row
 

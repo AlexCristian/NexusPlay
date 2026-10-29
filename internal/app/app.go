@@ -59,7 +59,7 @@ type worker interface {
 
 // App is a configured server with its background workers.
 type App struct {
-	Cfg        config.Config
+	Config     config.Config
 	Log        *slog.Logger
 	Store      *store.Store
 	Scanner    *library.Scanner
@@ -73,41 +73,41 @@ type App struct {
 
 // New checks the environment, opens the database and builds every component.
 // Nothing runs until Serve.
-func New(ctx context.Context, cfg config.Config, log *slog.Logger) (*App, error) {
-	if err := ensureDirectories(cfg); err != nil {
+func New(ctx context.Context, config config.Config, log *slog.Logger) (*App, error) {
+	if err := ensureDirectories(config); err != nil {
 		return nil, err
 	}
-	if err := checkBinaries(cfg); err != nil {
+	if err := checkBinaries(config); err != nil {
 		return nil, err
 	}
-	st, err := store.Open(ctx, cfg.DBPath())
+	database, err := store.Open(ctx, config.DatabasePath())
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	a, err := build(cfg, st, log)
+	application, err := build(config, database, log)
 	if err != nil {
-		st.Close()
+		database.Close()
 		return nil, err
 	}
-	return a, nil
+	return application, nil
 }
 
 // ensureDirectories creates the data folders and checks the media folder exists.
-func ensureDirectories(cfg config.Config) error {
-	for _, dir := range []string{cfg.DataDir, cfg.PosterDir()} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("create %s: %w", dir, err)
+func ensureDirectories(config config.Config) error {
+	for _, directory := range []string{config.DataDirectory, config.PosterDirectory()} {
+		if err := os.MkdirAll(directory, 0o755); err != nil {
+			return fmt.Errorf("create %s: %w", directory, err)
 		}
 	}
-	if _, err := os.Stat(cfg.MediaDir); err != nil {
+	if _, err := os.Stat(config.MediaDirectory); err != nil {
 		return fmt.Errorf("media folder: %w", err)
 	}
 	return nil
 }
 
 // checkBinaries makes sure ffmpeg and ffprobe can be run.
-func checkBinaries(cfg config.Config) error {
-	for _, bin := range []string{cfg.FFmpegPath, cfg.FFprobePath} {
+func checkBinaries(config config.Config) error {
+	for _, bin := range []string{config.FFmpegPath, config.FFprobePath} {
 		if _, err := exec.LookPath(bin); err != nil {
 			return fmt.Errorf("%s not found: install ffmpeg or set NEXUSPLAY_FFMPEG / NEXUSPLAY_FFPROBE", bin)
 		}
@@ -117,41 +117,41 @@ func checkBinaries(cfg config.Config) error {
 
 // build wires the components together. Every dependency edge in the program
 // is visible here.
-func build(cfg config.Config, st *store.Store, log *slog.Logger) (*App, error) {
-	tools := ffmpeg.Tools{FFmpeg: cfg.FFmpegPath, FFprobe: cfg.FFprobePath}
-	meta := metadata.New(metadata.Config{APIKey: cfg.TMDBAPIKey, PosterDirectory: cfg.PosterDir()}, log.With("component", "tmdb"))
+func build(config config.Config, database *store.Store, log *slog.Logger) (*App, error) {
+	tools := ffmpeg.Tools{FFmpeg: config.FFmpegPath, FFprobe: config.FFprobePath}
+	meta := metadata.New(metadata.Config{APIKey: config.TMDBAPIKey, PosterDirectory: config.PosterDirectory()}, log.With("component", "tmdb"))
 	scanner := library.NewScanner(
-		library.Deps{Store: st, Prober: tools, Meta: meta, Log: log.With("component", "scanner")},
-		library.Config{MediaDir: cfg.MediaDir, Interval: cfg.ScanInterval},
+		library.Deps{Store: database, Prober: tools, Meta: meta, Log: log.With("component", "scanner")},
+		library.Config{MediaDirectory: config.MediaDirectory, Interval: config.ScanInterval},
 	)
 	transcodes, err := stream.NewManager(stream.FFmpegStarter(tools),
-		stream.Config{Dir: cfg.TranscodeDir(), Max: cfg.MaxTranscodes}, log.With("component", "transcode"))
+		stream.Config{Directory: config.TranscodeDirectory(), Max: config.MaxTranscodes}, log.With("component", "transcode"))
 	if err != nil {
 		return nil, fmt.Errorf("transcode folder: %w", err)
 	}
-	accounts, err := auth.NewAccounts(st, cfg.MaxAccounts, log.With("component", "auth"))
+	accounts, err := auth.NewAccounts(database, config.MaxAccounts, log.With("component", "auth"))
 	if err != nil {
 		return nil, err
 	}
-	sessions := auth.NewSessions(st, sessionLifetime, log.With("component", "auth"))
-	sweeper := posters.NewSweeper(st, posters.Config{Dir: cfg.PosterDir()}, log.With("component", "posters"))
+	sessions := auth.NewSessions(database, sessionLifetime, log.With("component", "auth"))
+	sweeper := posters.NewSweeper(database, posters.Config{Directory: config.PosterDirectory()}, log.With("component", "posters"))
 	workers := []worker{scanner, transcodes, sessions, sweeper}
 
 	var conversions web.Conversions = convert.Disabled{}
-	if cfg.Convert {
+	if config.Convert {
 		conv := convert.New(
-			convert.Deps{Store: st, Tools: tools, Library: scanner, Log: log.With("component", "convert")},
-			convert.Config{MediaDir: cfg.MediaDir, Max: cfg.MaxConversions},
+			convert.Deps{Store: database, Tools: tools, Library: scanner, Log: log.With("component", "convert")},
+			convert.Config{MediaDirectory: config.MediaDirectory, Max: config.MaxConversions},
 		)
 		scanner.OnAdded(conv.Wake)
 		conversions = conv
 		workers = append(workers, conv)
 	}
 
-	srv := &web.Server{Cfg: cfg, Store: st, Scanner: scanner, Meta: meta, Transcodes: transcodes,
+	srv := &web.Server{Config: config, Store: database, Scanner: scanner, Meta: meta, Transcodes: transcodes,
 		Converter: conversions, Accounts: accounts, Sessions: sessions, Log: log}
 	return &App{
-		Cfg: cfg, Log: log, Store: st, Scanner: scanner, Transcodes: transcodes,
+		Config: config, Log: log, Store: database, Scanner: scanner, Transcodes: transcodes,
 		Converter: conversions, Handler: srv.Handler(),
 		workers: workers, shutdownTimeout: shutdownTimeout,
 	}, nil
@@ -167,25 +167,25 @@ func build(cfg config.Config, st *store.Store, log *slog.Logger) (*App, error) {
 // If a worker is still running when the timeout expires, the database is
 // left open and Serve returns anyway: exiting with SQLite's write-ahead log
 // is safe, closing the database under a file swap is not.
-func (a *App) Serve(ctx context.Context, ln net.Listener) error {
+func (app *App) Serve(ctx context.Context, listener net.Listener) error {
 	workCtx, stopWorkers := context.WithCancel(context.Background())
 	defer stopWorkers()
 	var workers sync.WaitGroup
-	for _, w := range a.workers {
+	for _, worker := range app.workers {
 		workers.Go(func() {
-			if err := w.Run(workCtx); err != nil {
-				a.Log.Error("background worker stopped", "worker", fmt.Sprintf("%T", w), "err", err)
+			if err := worker.Run(workCtx); err != nil {
+				app.Log.Error("background worker stopped", "worker", fmt.Sprintf("%T", worker), "err", err)
 			}
 		})
 	}
 
-	srv := &http.Server{Handler: a.Handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
+	srv := &http.Server{Handler: app.Handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
 	served := make(chan error, 1)
-	go func() { served <- srv.Serve(ln) }()
+	go func() { served <- srv.Serve(listener) }()
 	var err error
 	select {
 	case <-ctx.Done():
-		a.Log.Info("shutting down")
+		app.Log.Info("shutting down")
 	case err = <-served:
 		if errors.Is(err, http.ErrServerClosed) {
 			err = nil
@@ -194,7 +194,7 @@ func (a *App) Serve(ctx context.Context, ln net.Listener) error {
 
 	httpCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	if shErr := srv.Shutdown(httpCtx); shErr != nil {
-		a.Log.Warn("requests still running at shutdown", "err", shErr)
+		app.Log.Warn("requests still running at shutdown", "err", shErr)
 	}
 	cancel()
 
@@ -203,12 +203,12 @@ func (a *App) Serve(ctx context.Context, ln net.Listener) error {
 	go func() { workers.Wait(); close(done) }()
 	select {
 	case <-done:
-		return errors.Join(err, a.Store.Close())
-	case <-time.After(a.shutdownTimeout):
-		a.Log.Error("background work did not stop in time; leaving the database open")
+		return errors.Join(err, app.Store.Close())
+	case <-time.After(app.shutdownTimeout):
+		app.Log.Error("background work did not stop in time; leaving the database open")
 		return err
 	}
 }
 
 // Close releases the database. Use it only when Serve was never called.
-func (a *App) Close() error { return a.Store.Close() }
+func (app *App) Close() error { return app.Store.Close() }

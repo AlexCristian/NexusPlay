@@ -391,7 +391,7 @@ func (s *server) collectionWithPoster(t *testing.T) int64 {
 	if err := png.Encode(&buf, img); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(s.App.Cfg.PosterDir(), "test-poster.png"), buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(s.App.Config.PosterDirectory(), "test-poster.png"), buf.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	c := colls[0]

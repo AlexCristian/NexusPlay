@@ -32,12 +32,12 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.Load()
+	configuration, err := config.Load()
 	if err != nil {
 		return err
 	}
 	level := slog.LevelInfo
-	if cfg.Debug {
+	if configuration.Debug {
 		level = slog.LevelDebug
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
@@ -45,17 +45,17 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	a, err := app.New(ctx, cfg, log)
+	application, err := app.New(ctx, configuration, log)
 	if err != nil {
 		return err
 	}
-	ln, err := net.Listen("tcp", cfg.Addr)
+	listener, err := net.Listen("tcp", configuration.Addr)
 	if err != nil {
-		a.Close()
+		application.Close()
 		return err
 	}
-	log.Info("NexusPlay listening", "addr", ln.Addr().String(), "media", cfg.MediaDir, "data", cfg.DataDir, "tmdb", cfg.TMDBAPIKey != "")
-	return a.Serve(ctx, ln)
+	log.Info("NexusPlay listening", "addr", listener.Addr().String(), "media", configuration.MediaDirectory, "data", configuration.DataDirectory, "tmdb", configuration.TMDBAPIKey != "")
+	return application.Serve(ctx, listener)
 }
 
 // healthcheck lets a minimal container check itself without curl.
@@ -67,15 +67,15 @@ func healthcheck() int {
 	if addr[0] == ':' {
 		addr = "127.0.0.1" + addr
 	}
-	c := &http.Client{Timeout: 3 * time.Second}
-	resp, err := c.Get("http://" + addr + "/healthz")
+	httpClient := &http.Client{Timeout: 3 * time.Second}
+	response, err := httpClient.Get("http://" + addr + "/healthz")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintln(os.Stderr, resp.Status)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		fmt.Fprintln(os.Stderr, response.Status)
 		return 1
 	}
 	return 0

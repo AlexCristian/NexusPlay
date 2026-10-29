@@ -49,7 +49,7 @@ func TestMakePlan(t *testing.T) {
 		t.Errorf("dropped subs=%d other=%d, want 1 and 1", p.DroppedSubs, p.DroppedOther)
 	}
 
-	args := strings.Join(p.ConvertArgs("in.mkv", "out.mp4"), " ")
+	args := strings.Join(p.ConvertArguments("in.mkv", "out.mp4"), " ")
 	for _, wantArg := range []string{
 		"-map 0:0 -map 0:1 -map 0:2 -map 0:3", "-c:v copy", "-c:a:0 aac -b:a:0 384k -ac:a:0 6", "-c:a:1 copy",
 		"-disposition:a:0 0 -disposition:a:1 default -disposition:a:2 0", "-sn", "-movflags +faststart",
@@ -76,7 +76,7 @@ func TestMakePlanReencodes(t *testing.T) {
 		if p.CopyVideo {
 			t.Errorf("%s/%s should be re-encoded", v.Codec, v.PixFmt)
 		}
-		if args := strings.Join(p.ConvertArgs("i", "o"), " "); !strings.Contains(args, "-c:v libx264") || strings.Contains(args, "-disposition:a") {
+		if args := strings.Join(p.ConvertArguments("i", "o"), " "); !strings.Contains(args, "-c:v libx264") || strings.Contains(args, "-disposition:a") {
 			t.Errorf("args for %s: %s", v.Codec, args)
 		}
 	}

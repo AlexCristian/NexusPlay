@@ -54,31 +54,31 @@ type NewSubtitle struct {
 // AddSubtitle stores a track and its cues. A track with a Source is imported
 // only once per media item: adding it again returns inserted == false and
 // changes nothing.
-func (s *Store) AddSubtitle(ctx context.Context, t NewSubtitle) (id int64, inserted bool, err error) {
-	err = s.tx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx,
+func (store *Store) AddSubtitle(ctx context.Context, subtitle NewSubtitle) (id int64, inserted bool, err error) {
+	err = store.withTransaction(ctx, func(transaction *sql.Tx) error {
+		result, err := transaction.ExecContext(ctx,
 			`INSERT INTO subtitles (media_id, language, label, source, created_at) VALUES (?, ?, ?, ?, ?)
 			 ON CONFLICT DO NOTHING`,
-			t.MediaID, t.Language, t.Label, t.Source, s.unix())
+			subtitle.MediaID, subtitle.Language, subtitle.Label, subtitle.Source, store.unix())
 		if err != nil {
 			return err
 		}
-		n, err := res.RowsAffected()
-		if err != nil || n == 0 {
+		rowsAffected, err := result.RowsAffected()
+		if err != nil || rowsAffected == 0 {
 			return err // already imported from this source
 		}
-		if id, err = res.LastInsertId(); err != nil {
+		if id, err = result.LastInsertId(); err != nil {
 			return err
 		}
 		inserted = true
-		stmt, err := tx.PrepareContext(ctx,
+		statement, err := transaction.PrepareContext(ctx,
 			`INSERT INTO subtitle_cues (subtitle_id, idx, start_ms, end_ms, text) VALUES (?, ?, ?, ?, ?)`)
 		if err != nil {
 			return err
 		}
-		defer stmt.Close()
-		for i, c := range t.Cues {
-			if _, err := stmt.ExecContext(ctx, id, i, c.StartMS, c.EndMS, c.Text); err != nil {
+		defer statement.Close()
+		for i, cue := range subtitle.Cues {
+			if _, err := statement.ExecContext(ctx, id, i, cue.StartMS, cue.EndMS, cue.Text); err != nil {
 				return err
 			}
 		}
@@ -91,93 +91,93 @@ func (s *Store) AddSubtitle(ctx context.Context, t NewSubtitle) (id int64, inser
 }
 
 // SubtitleSources returns the sidecar files that have already been imported.
-func (s *Store) SubtitleSources(ctx context.Context) (map[string]bool, error) {
-	sources, err := queryAll(ctx, s.db, scanString, `SELECT source FROM subtitles WHERE source <> ''`)
+func (store *Store) SubtitleSources(ctx context.Context) (map[string]bool, error) {
+	sources, err := queryAll(ctx, store.database, scanString, `SELECT source FROM subtitles WHERE source <> ''`)
 	if err != nil {
 		return nil, err
 	}
 	out := make(map[string]bool, len(sources))
-	for _, src := range sources {
-		out[src] = true
+	for _, source := range sources {
+		out[source] = true
 	}
 	return out, nil
 }
 
 // UpdateSubtitleLabel renames a track.
-func (s *Store) UpdateSubtitleLabel(ctx context.Context, id int64, language, label string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE subtitles SET language = ?, label = ? WHERE id = ?`, language, label, id)
+func (store *Store) UpdateSubtitleLabel(ctx context.Context, id int64, language, label string) error {
+	_, err := store.database.ExecContext(ctx, `UPDATE subtitles SET language = ?, label = ? WHERE id = ?`, language, label, id)
 	return err
 }
 
 // DeleteSubtitle removes a track and its cues.
-func (s *Store) DeleteSubtitle(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM subtitles WHERE id = ?`, id)
+func (store *Store) DeleteSubtitle(ctx context.Context, id int64) error {
+	_, err := store.database.ExecContext(ctx, `DELETE FROM subtitles WHERE id = ?`, id)
 	return err
 }
 
 // Subtitles lists the tracks for a media item.
-func (s *Store) Subtitles(ctx context.Context, mediaID int64) ([]Subtitle, error) {
-	return queryAll(ctx, s.db, func(r rowScanner) (Subtitle, error) {
-		var t Subtitle
-		err := r.Scan(&t.ID, &t.MediaID, &t.Language, &t.Label, &t.Source)
-		return t, err
+func (store *Store) Subtitles(ctx context.Context, mediaID int64) ([]Subtitle, error) {
+	return queryAll(ctx, store.database, func(row rowScanner) (Subtitle, error) {
+		var subtitle Subtitle
+		err := row.Scan(&subtitle.ID, &subtitle.MediaID, &subtitle.Language, &subtitle.Label, &subtitle.Source)
+		return subtitle, err
 	}, `SELECT id, media_id, language, label, source FROM subtitles WHERE media_id = ? ORDER BY label`, mediaID)
 }
 
 // SubtitleByID returns one track, or ErrNotFound.
-func (s *Store) SubtitleByID(ctx context.Context, id int64) (Subtitle, error) {
-	var t Subtitle
-	err := s.db.QueryRowContext(ctx,
+func (store *Store) SubtitleByID(ctx context.Context, id int64) (Subtitle, error) {
+	var subtitle Subtitle
+	err := store.database.QueryRowContext(ctx,
 		`SELECT id, media_id, language, label, source FROM subtitles WHERE id = ?`, id).
-		Scan(&t.ID, &t.MediaID, &t.Language, &t.Label, &t.Source)
-	return t, notFound(err)
+		Scan(&subtitle.ID, &subtitle.MediaID, &subtitle.Language, &subtitle.Label, &subtitle.Source)
+	return subtitle, notFound(err)
 }
 
 // Cues returns a track's cues in order.
-func (s *Store) Cues(ctx context.Context, subtitleID int64) ([]Cue, error) {
-	return queryAll(ctx, s.db, func(r rowScanner) (Cue, error) {
-		var c Cue
-		err := r.Scan(&c.ID, &c.StartMS, &c.EndMS, &c.Text)
-		return c, err
+func (store *Store) Cues(ctx context.Context, subtitleID int64) ([]Cue, error) {
+	return queryAll(ctx, store.database, func(row rowScanner) (Cue, error) {
+		var cue Cue
+		err := row.Scan(&cue.ID, &cue.StartMS, &cue.EndMS, &cue.Text)
+		return cue, err
 	}, `SELECT id, start_ms, end_ms, text FROM subtitle_cues WHERE subtitle_id = ? ORDER BY idx`, subtitleID)
 }
 
 // CueAt returns the cue showing at a playback time, or the closest one
 // before it. It returns ErrNotFound when no cue starts at or before ms.
-func (s *Store) CueAt(ctx context.Context, subtitleID, ms int64) (Cue, error) {
-	var c Cue
-	err := s.db.QueryRowContext(ctx, `
+func (store *Store) CueAt(ctx context.Context, subtitleID, milliseconds int64) (Cue, error) {
+	var cue Cue
+	err := store.database.QueryRowContext(ctx, `
 		SELECT id, start_ms, end_ms, text FROM subtitle_cues
-		WHERE subtitle_id = ? AND start_ms <= ? ORDER BY start_ms DESC, idx DESC LIMIT 1`, subtitleID, ms).
-		Scan(&c.ID, &c.StartMS, &c.EndMS, &c.Text)
-	return c, notFound(err)
+		WHERE subtitle_id = ? AND start_ms <= ? ORDER BY start_ms DESC, idx DESC LIMIT 1`, subtitleID, milliseconds).
+		Scan(&cue.ID, &cue.StartMS, &cue.EndMS, &cue.Text)
+	return cue, notFound(err)
 }
 
 // CueByID returns one cue and the ID of its track, or ErrNotFound.
-func (s *Store) CueByID(ctx context.Context, id int64) (Cue, int64, error) {
-	var c Cue
+func (store *Store) CueByID(ctx context.Context, id int64) (Cue, int64, error) {
+	var cue Cue
 	var subID int64
-	err := s.db.QueryRowContext(ctx,
+	err := store.database.QueryRowContext(ctx,
 		`SELECT id, start_ms, end_ms, text, subtitle_id FROM subtitle_cues WHERE id = ?`, id).
-		Scan(&c.ID, &c.StartMS, &c.EndMS, &c.Text, &subID)
-	return c, subID, notFound(err)
+		Scan(&cue.ID, &cue.StartMS, &cue.EndMS, &cue.Text, &subID)
+	return cue, subID, notFound(err)
 }
 
 // CueForChange returns the ID of the cue a proposal targets, or ErrNotFound
 // when the proposal no longer exists (applying a correction deletes every
 // proposal for its line).
-func (s *Store) CueForChange(ctx context.Context, changeID int64) (int64, error) {
+func (store *Store) CueForChange(ctx context.Context, changeID int64) (int64, error) {
 	var cueID int64
-	err := s.db.QueryRowContext(ctx, `SELECT cue_id FROM subtitle_changes WHERE id = ?`, changeID).Scan(&cueID)
+	err := store.database.QueryRowContext(ctx, `SELECT cue_id FROM subtitle_changes WHERE id = ?`, changeID).Scan(&cueID)
 	return cueID, notFound(err)
 }
 
 // Changes lists the open proposals for a cue, most votes first.
-func (s *Store) Changes(ctx context.Context, cueID, userID int64) ([]Change, error) {
-	return queryAll(ctx, s.db, func(r rowScanner) (Change, error) {
-		var c Change
-		err := r.Scan(&c.ID, &c.CueID, &c.OriginalText, &c.ProposedText, &c.Votes, &c.VotedByMe)
-		return c, err
+func (store *Store) Changes(ctx context.Context, cueID, userID int64) ([]Change, error) {
+	return queryAll(ctx, store.database, func(row rowScanner) (Change, error) {
+		var change Change
+		err := row.Scan(&change.ID, &change.CueID, &change.OriginalText, &change.ProposedText, &change.Votes, &change.VotedByMe)
+		return change, err
 	}, `
 		SELECT ch.id, ch.cue_id, cu.text, ch.proposed_text,
 		       (SELECT COUNT(*) FROM subtitle_votes v WHERE v.change_id = ch.id),
@@ -192,32 +192,32 @@ func (s *Store) Changes(ctx context.Context, cueID, userID int64) ([]Change, err
 //
 // Errors: ErrNotFound if the cue does not exist, ErrUnchanged if text is the
 // line's current text, ErrAlreadyVoted if the user already voted on this line.
-func (s *Store) ProposeChange(ctx context.Context, cueID, userID int64, text string, votesRequired int) (bool, error) {
+func (store *Store) ProposeChange(ctx context.Context, cueID, userID int64, text string, votesRequired int) (bool, error) {
 	text = strings.TrimSpace(text)
 	var applied bool
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+	err := store.withTransaction(ctx, func(transaction *sql.Tx) error {
 		var current string
-		if err := tx.QueryRowContext(ctx, `SELECT text FROM subtitle_cues WHERE id = ?`, cueID).Scan(&current); err != nil {
+		if err := transaction.QueryRowContext(ctx, `SELECT text FROM subtitle_cues WHERE id = ?`, cueID).Scan(&current); err != nil {
 			return notFound(err)
 		}
 		if text == current {
 			return ErrUnchanged
 		}
-		if err := checkNotVoted(ctx, tx, cueID, userID); err != nil {
+		if err := checkNotVoted(ctx, transaction, cueID, userID); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := transaction.ExecContext(ctx, `
 			INSERT INTO subtitle_changes (cue_id, proposed_text, created_by, created_at) VALUES (?, ?, ?, ?)
-			ON CONFLICT(cue_id, proposed_text) DO NOTHING`, cueID, text, userID, s.unix()); err != nil {
+			ON CONFLICT(cue_id, proposed_text) DO NOTHING`, cueID, text, userID, store.unix()); err != nil {
 			return err
 		}
 		var changeID int64
-		if err := tx.QueryRowContext(ctx,
+		if err := transaction.QueryRowContext(ctx,
 			`SELECT id FROM subtitle_changes WHERE cue_id = ? AND proposed_text = ?`, cueID, text).Scan(&changeID); err != nil {
 			return err
 		}
 		var err error
-		applied, err = voteTx(ctx, tx, changeID, cueID, userID, votesRequired)
+		applied, err = voteTx(ctx, transaction, changeID, cueID, userID, votesRequired)
 		return err
 	})
 	return applied, err
@@ -230,26 +230,26 @@ func (s *Store) ProposeChange(ctx context.Context, cueID, userID int64, text str
 //
 // Errors: ErrNotFound if the proposal no longer exists, ErrAlreadyVoted if
 // the user already voted on this line.
-func (s *Store) VoteChange(ctx context.Context, changeID, userID int64, votesRequired int) (bool, error) {
+func (store *Store) VoteChange(ctx context.Context, changeID, userID int64, votesRequired int) (bool, error) {
 	var applied bool
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+	err := store.withTransaction(ctx, func(transaction *sql.Tx) error {
 		var cueID int64
-		if err := tx.QueryRowContext(ctx, `SELECT cue_id FROM subtitle_changes WHERE id = ?`, changeID).Scan(&cueID); err != nil {
+		if err := transaction.QueryRowContext(ctx, `SELECT cue_id FROM subtitle_changes WHERE id = ?`, changeID).Scan(&cueID); err != nil {
 			return notFound(err)
 		}
-		if err := checkNotVoted(ctx, tx, cueID, userID); err != nil {
+		if err := checkNotVoted(ctx, transaction, cueID, userID); err != nil {
 			return err
 		}
 		var err error
-		applied, err = voteTx(ctx, tx, changeID, cueID, userID, votesRequired)
+		applied, err = voteTx(ctx, transaction, changeID, cueID, userID, votesRequired)
 		return err
 	})
 	return applied, err
 }
 
-func checkNotVoted(ctx context.Context, tx *sql.Tx, cueID, userID int64) error {
+func checkNotVoted(ctx context.Context, transaction *sql.Tx, cueID, userID int64) error {
 	var voted bool
-	err := tx.QueryRowContext(ctx, `
+	err := transaction.QueryRowContext(ctx, `
 		SELECT EXISTS (SELECT 1 FROM subtitle_votes v JOIN subtitle_changes ch ON ch.id = v.change_id
 		               WHERE ch.cue_id = ? AND v.user_id = ?)`, cueID, userID).Scan(&voted)
 	if err != nil {
@@ -261,22 +261,22 @@ func checkNotVoted(ctx context.Context, tx *sql.Tx, cueID, userID int64) error {
 	return nil
 }
 
-func voteTx(ctx context.Context, tx *sql.Tx, changeID, cueID, userID int64, votesRequired int) (bool, error) {
-	if _, err := tx.ExecContext(ctx, `INSERT INTO subtitle_votes (change_id, user_id) VALUES (?, ?)`, changeID, userID); err != nil {
+func voteTx(ctx context.Context, transaction *sql.Tx, changeID, cueID, userID int64, votesRequired int) (bool, error) {
+	if _, err := transaction.ExecContext(ctx, `INSERT INTO subtitle_votes (change_id, user_id) VALUES (?, ?)`, changeID, userID); err != nil {
 		return false, err
 	}
 	var votes int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM subtitle_votes WHERE change_id = ?`, changeID).Scan(&votes); err != nil {
+	if err := transaction.QueryRowContext(ctx, `SELECT COUNT(*) FROM subtitle_votes WHERE change_id = ?`, changeID).Scan(&votes); err != nil {
 		return false, err
 	}
 	if votes < votesRequired {
 		return false, nil
 	}
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := transaction.ExecContext(ctx, `
 		UPDATE subtitle_cues SET text = (SELECT proposed_text FROM subtitle_changes WHERE id = ?) WHERE id = ?`,
 		changeID, cueID); err != nil {
 		return false, err
 	}
-	_, err := tx.ExecContext(ctx, `DELETE FROM subtitle_changes WHERE cue_id = ?`, cueID)
+	_, err := transaction.ExecContext(ctx, `DELETE FROM subtitle_changes WHERE cue_id = ?`, cueID)
 	return err == nil, err
 }
