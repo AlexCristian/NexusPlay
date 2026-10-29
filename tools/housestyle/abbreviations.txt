@@ -66,6 +66,7 @@ pos position
 prev previous
 proc process
 ptr pointer
+re pattern
 rel relative
 req request
 res result

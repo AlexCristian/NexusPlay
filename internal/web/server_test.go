@@ -118,7 +118,7 @@ func (client *client) send(method, path string, body io.Reader, headers map[stri
 	return response, string(content)
 }
 
-var csrfRe = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
+var csrfPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
 func (client *client) register(nick string) {
 	client.environment.t.Helper()
@@ -127,7 +127,7 @@ func (client *client) register(nick string) {
 		client.environment.t.Fatalf("register %s: status %d", nick, response.StatusCode)
 	}
 	_, page := client.sendForm("GET", "/", nil, nil)
-	match := csrfRe.FindStringSubmatch(page)
+	match := csrfPattern.FindStringSubmatch(page)
 	if match == nil {
 		client.environment.t.Fatalf("no CSRF token on the home page after registering %s", nick)
 	}
