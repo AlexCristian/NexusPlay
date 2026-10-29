@@ -9,9 +9,11 @@ import (
 )
 
 // [checkFileLayout] reports exported types that are not in a file named
-// after them, and methods of exported types that are not in their type's
-// file. [metadata.Episode] belongs in episode.go, and [ConversionView] in
-// conversion_view.go.
+// after them, and methods of exported types that are neither in their
+// type's file nor in a file whose name starts with it and an underscore.
+// [metadata.Episode] belongs in episode.go, and [ConversionView] in
+// conversion_view.go; methods of a [store.Store] may also be split into
+// store_media.go and store_users.go, but not session_store.go.
 //
 // Parameters:
 //   - [pass]: where problems are reported.
@@ -36,8 +38,10 @@ func checkFileLayout(pass *analysis.Pass, file *ast.File, fileName string) {
 			if !ast.IsExported(typeName) {
 				continue
 			}
-			if want := typeFileName(typeName); baseName != want {
-				pass.Reportf(declaration.Name.Pos(), "method [%s.%s] should be in %s with [%s]", typeName, declaration.Name.Name, want, typeName)
+			want := typeFileName(typeName)
+			stem := strings.TrimSuffix(want, ".go")
+			if baseName != want && !strings.HasPrefix(baseName, stem+"_") {
+				pass.Reportf(declaration.Name.Pos(), "method [%s.%s] should be in %s or a %s_*.go file, with [%s]", typeName, declaration.Name.Name, want, stem, typeName)
 			}
 		}
 	}

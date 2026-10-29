@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"go/ast"
 	"go/token"
-	"go/types"
 	"regexp"
 	"strings"
 	"unicode"
@@ -17,43 +16,31 @@ import (
 // as "metadata.Episode". A dot that ends a sentence is not part of the word.
 var commentWord = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*`)
 
-// [bracketCandidates] collects the names declared in a package that
-// comments must write in brackets: package-level names, methods and struct
-// fields that are exported or camelCase. Lowercase one-word names such as
-// "similarity" are left out, because they cannot be told apart from
+// [bracketCandidates] collects the names declared in a package's non-test
+// files that comments must write in brackets: every exported or camelCase
+// name, including methods, struct fields, parameters and local variables,
+// plus the words in code_words.txt such as "nil". Lowercase one-word names
+// such as "similarity" are left out, because they cannot be told apart from
 // ordinary English words; so are all-caps acronyms such as "ID".
 //
 // Parameters:
-//   - [typesPackage]: the package whose declarations are collected.
+//   - [pass]: the package whose declarations are collected.
 //
 // Returns:
 //   - [collections.Set[string]]: every name to check.
-func bracketCandidates(typesPackage *types.Package) collections.Set[string] {
+func bracketCandidates(pass *analysis.Pass) collections.Set[string] {
 	candidates := collections.NewSet[string]()
-	add := func(name string) {
-		if looksLikeCode(name) {
-			candidates.Add(name)
-		}
+	for word := range codeWords.All() {
+		candidates.Add(word)
 	}
-	scope := typesPackage.Scope()
-	for _, name := range scope.Names() {
-		add(name)
-		typeName, isTypeName := scope.Lookup(name).(*types.TypeName)
-		if !isTypeName {
+	for identifier, object := range pass.TypesInfo.Defs {
+		if object == nil || !looksLikeCode(identifier.Name) {
 			continue
 		}
-		named, isNamed := typeName.Type().(*types.Named)
-		if !isNamed {
+		if strings.HasSuffix(pass.Fset.File(identifier.Pos()).Name(), "_test.go") {
 			continue
 		}
-		for index := range named.NumMethods() {
-			add(named.Method(index).Name())
-		}
-		if structure, isStruct := named.Underlying().(*types.Struct); isStruct {
-			for index := range structure.NumFields() {
-				add(structure.Field(index).Name())
-			}
-		}
+		candidates.Add(identifier.Name)
 	}
 	return candidates
 }
@@ -75,10 +62,13 @@ func looksLikeCode(name string) bool {
 }
 
 // [checkBrackets] reports names in a file's comments that should be written
-// in brackets: the package's own names from [bracketCandidates], and any
-// name qualified with a package the file imports, such as
-// "metadata.Episode". Text already in brackets or quotes, code blocks and
-// directives such as "//go:embed" are skipped.
+// in brackets: the package's own names from [bracketCandidates], alone or
+// followed by a member such as "Info.Poster" or qualified with the
+// package's own name, and any exported name qualified with a package the
+// file imports, such as "metadata.Episode". A qualified word whose member is
+// not exported, such as the file name "strings.txt", is not reported. Text
+// already in brackets or quotes, code blocks and directives such as
+// "//go:embed" are skipped.
 //
 // Parameters:
 //   - [pass]: where problems are reported.
@@ -86,21 +76,21 @@ func looksLikeCode(name string) bool {
 //   - [candidates]: the package's own names to look for, from
 //     [bracketCandidates].
 func checkBrackets(pass *analysis.Pass, file *ast.File, candidates collections.Set[string]) {
-	imports := collections.NewSet[string]()
+	packageNames := collections.NewSet(pass.Pkg.Name())
 	for _, importSpecification := range file.Imports {
-		if importSpecification.Name != nil {
-			imports.Add(importSpecification.Name.Name)
-			continue
+		if packageName := pass.TypesInfo.PkgNameOf(importSpecification); packageName != nil {
+			packageNames.Add(packageName.Name())
 		}
-		path := strings.Trim(importSpecification.Path.Value, `"`)
-		imports.Add(path[strings.LastIndex(path, "/")+1:])
 	}
 	for _, group := range file.Comments {
 		text, lines := maskedCommentText(group)
 		for _, location := range commentWord.FindAllStringIndex(text, -1) {
 			word := text[location[0]:location[1]]
-			qualifier, _, isQualified := strings.Cut(word, ".")
-			if candidates.Contains(word) || (isQualified && imports.Contains(qualifier)) {
+			qualifier, member, isQualified := strings.Cut(word, ".")
+			memberName, _, _ := strings.Cut(member, ".")
+			isOwnName := qualifier == pass.Pkg.Name() && candidates.Contains(memberName)
+			isQualifiedName := isQualified && packageNames.Contains(qualifier) && (ast.IsExported(member) || isOwnName)
+			if candidates.Contains(qualifier) || isQualifiedName {
 				pass.Reportf(commentPosition(lines, location[0]), "write %q in a comment as [%s]", word, word)
 			}
 		}
