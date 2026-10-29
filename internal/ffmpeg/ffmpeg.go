@@ -11,16 +11,36 @@ import (
 	"time"
 )
 
-// command prepares a process that is killed when ctx is cancelled. WaitDelay
-// bounds how long Wait then waits for output pipes to close, so a child
-// process that inherited them cannot hold up shutdown.
+// [command] prepares a program run that is killed when [ctx] is cancelled.
+// Once it is killed, waiting for its output pipes to close is limited to 2
+// seconds, so a child process that inherited them cannot hold up shutdown.
+//
+// Parameters:
+//   - [ctx]: kills the program when cancelled.
+//   - [name]: the program to run: a name looked up on the PATH, or a path.
+//   - [arguments]: the program's command-line arguments.
+//
+// Returns:
+//   - [*exec.Cmd]: the prepared command, not yet started.
 func command(ctx context.Context, name string, arguments ...string) *exec.Cmd {
 	command := exec.CommandContext(ctx, name, arguments...)
 	command.WaitDelay = 2 * time.Second
 	return command
 }
 
-// exitError turns the result of cmd.Wait into this package's error vocabulary.
+// [exitError] turns the result of waiting for a program into this package's
+// errors: a program killed because [ctx] was cancelled did not fail.
+//
+// Parameters:
+//   - [program]: "ffmpeg" or "ffprobe", for the message.
+//   - [ctx]: the context the program ran under.
+//   - [err]: the error from [exec.Cmd.Wait] or [exec.Cmd.Output].
+//   - [stderr]: the program's captured stderr.
+//
+// Returns:
+//   - [error]: [nil] if [err] is [nil]; [ctx]'s error
+//     ([context.Canceled] or [context.DeadlineExceeded]) if [ctx] has ended;
+//     otherwise an [*ExitError] with the last line of stderr.
 func exitError(program string, ctx context.Context, err error, stderr *lastLineWriter) error {
 	switch {
 	case err == nil:
@@ -32,7 +52,16 @@ func exitError(program string, ctx context.Context, err error, stderr *lastLineW
 	}
 }
 
-// readProgress parses ffmpeg's "-progress pipe:1" key=value stream.
+// [readProgress] reads ffmpeg's "-progress pipe:1" output, a stream of
+// key=value lines, and reports how far the output has got each time ffmpeg
+// says so. It returns when the stream ends, and reads it to the end even
+// after an error, so ffmpeg never blocks on a full pipe.
+//
+// Parameters:
+//   - [reader]: ffmpeg's standard output.
+//   - [report]: called with the seconds of output written so far, from each
+//     positive "out_time_us" or "out_time_ms" value (both are microseconds,
+//     despite the second's name).
 func readProgress(reader io.Reader, report func(seconds float64)) {
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
@@ -49,14 +78,27 @@ func readProgress(reader io.Reader, report func(seconds float64)) {
 	_, _ = io.Copy(io.Discard, reader)
 }
 
-// lastLineWriter keeps the tail of a program's stderr. ffmpeg can write a
-// lot (one line per bad frame), and only the end matters for the error.
+// [lastLineWriter] keeps only the end of a program's stderr, for the error
+// message. ffmpeg can write a lot (one line per bad frame), and only the end
+// matters. It keeps at least the last [keepStderr] bytes and at most twice
+// that. It is not safe for concurrent use.
 type lastLineWriter struct {
+	// [buffer] holds the most recent stderr output.
 	buffer bytes.Buffer
 }
 
+// [keepStderr] is how many bytes of stderr [lastLineWriter] keeps at least.
 const keepStderr = 4096
 
+// [Write] appends stderr output, dropping all but the last [keepStderr]
+// bytes once more than twice that is held. It never fails.
+//
+// Parameters:
+//   - [data]: the bytes the program wrote.
+//
+// Returns:
+//   - [int]: the length of [data], since everything is accepted.
+//   - [error]: always [nil].
 func (writer *lastLineWriter) Write(data []byte) (int, error) {
 	writer.buffer.Write(data)
 	if writer.buffer.Len() > 2*keepStderr {
@@ -66,6 +108,11 @@ func (writer *lastLineWriter) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
+// [last] gets the last line the program wrote.
+//
+// Returns:
+//   - [string]: the last line of the kept output that is not blank, with
+//     spaces around it trimmed, or "" if nothing was written.
 func (writer *lastLineWriter) last() string {
 	text := strings.TrimSpace(writer.buffer.String())
 	if i := strings.LastIndexByte(text, '\n'); i >= 0 {

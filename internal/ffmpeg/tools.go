@@ -6,15 +6,28 @@ import (
 	"io"
 )
 
-// Tools locates the ffmpeg and ffprobe binaries (names on PATH or paths).
-// The zero value is not usable; set both fields.
+// [Tools] locates the ffmpeg and ffprobe programs. The zero value is not
+// usable; set both fields.
 type Tools struct {
-	FFmpeg  string
+	// [FFmpeg] is the ffmpeg program: a name looked up on the PATH, or a path.
+	FFmpeg string
+	// [FFprobe] is the ffprobe program: a name looked up on the PATH, or a path.
 	FFprobe string
 }
 
-// Run runs ffmpeg to completion. It returns ctx.Err() when ctx was cancelled
-// (the process is killed) and an *ExitError when ffmpeg failed.
+// [Run] runs ffmpeg to completion, killing it if [ctx] ends first.
+//
+// Parameters:
+//   - [ctx]: kills ffmpeg when cancelled.
+//   - [arguments]: ffmpeg's command-line arguments, without the program
+//     name.
+//   - [options]: progress reporting and priority; the zero value for neither.
+//
+// Returns:
+//   - [error]: [nil] if ffmpeg succeeded; [ctx]'s error
+//     ([context.Canceled] or [context.DeadlineExceeded]) if ffmpeg was
+//     killed because [ctx] ended; an [*ExitError] if ffmpeg failed; or an
+//     error wrapping the cause if ffmpeg could not be started.
 func (tools Tools) Run(ctx context.Context, arguments []string, options RunOptions) error {
 	if options.OnProgress != nil {
 		arguments = append([]string{"-progress", "pipe:1", "-nostats"}, arguments...)
@@ -42,8 +55,18 @@ func (tools Tools) Run(ctx context.Context, arguments []string, options RunOptio
 	return exitError("ffmpeg", ctx, execCommand.Wait(), stderr)
 }
 
-// Start launches ffmpeg and returns without waiting for it. Cancelling ctx
-// kills the process. The caller must call Wait.
+// [Start] launches ffmpeg and returns without waiting for it to finish. The
+// caller must call [Process.Wait] once.
+//
+// Parameters:
+//   - [ctx]: kills ffmpeg when cancelled, at any point until it exits.
+//   - [arguments]: ffmpeg's command-line arguments, without the program
+//     name.
+//
+// Returns:
+//   - [*Process]: the running process, or [nil] if [error] is not [nil].
+//   - [error]: [nil] on success, or an error wrapping the cause if ffmpeg
+//     could not be started.
 func (tools Tools) Start(ctx context.Context, arguments []string) (*Process, error) {
 	execCommand := command(ctx, tools.FFmpeg, arguments...)
 	process := &Process{command: execCommand, ctx: ctx, stderr: &lastLineWriter{}}
