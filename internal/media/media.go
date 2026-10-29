@@ -1,7 +1,3 @@
-// Package media is NexusPlay's browser-compatibility policy: which files are
-// videos, which a browser can play as they are, and which the converter
-// rewrites. It holds pure functions only, so every rule lives in one table
-// and one test.
 package media
 
 import (
@@ -29,17 +25,6 @@ func MIMEType(name string) (string, bool) {
 	mimeType, known := videoTypes[strings.ToLower(path.Ext(name))]
 	return mimeType, known
 }
-
-// Format is what the policy needs to know about a file.
-type Format struct {
-	Path       string // only the extension matters
-	VideoCodec string // ffprobe codec name, e.g. "h264"
-	AudioCodec string // "" when the file has no audio
-	PixFmt     string // ffprobe pixel format; "" when unknown
-}
-
-// Delivery is how a file reaches the browser.
-type Delivery int
 
 const (
 	// DirectPlay serves the original file with range requests.

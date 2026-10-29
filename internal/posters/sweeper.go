@@ -1,9 +1,3 @@
-// Package posters removes poster images nothing uses any more. Posters are
-// written by TMDB lookups (metadata) and by uploads in the control panel
-// (web), and several rows can share one file, so neither writer deletes a
-// file when it replaces one. The Sweeper deletes files that no media or
-// collection refers to, once they are old enough that a row may not simply
-// be about to refer to them.
 package posters
 
 import (
@@ -13,18 +7,6 @@ import (
 	"path/filepath"
 	"time"
 )
-
-// Store lists the poster files in use; *store.Store implements it.
-type Store interface {
-	PosterNames(ctx context.Context) (map[string]bool, error)
-}
-
-// Config sets where posters live and how careful the sweep is.
-type Config struct {
-	Directory string
-	MinAge    time.Duration // a file younger than this is kept (default 1 h)
-	Interval  time.Duration // time between sweeps (default 1 h)
-}
 
 // Sweeper deletes unused poster files.
 type Sweeper struct {

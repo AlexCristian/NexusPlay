@@ -11,19 +11,11 @@ import (
 
 	"github.com/a-h/templ"
 
-	"github.com/AlexCristian/NexusPlay/internal/convert"
 	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
 // ---- Every page ----
-
-// Page carries what every full page needs.
-type Page struct {
-	Title  string
-	Viewer Viewer
-	Query  string // the search box's text
-}
 
 // newPage describes the page being rendered for r.
 func newPage(r *http.Request, title string) Page {
@@ -108,12 +100,6 @@ func registrationClosedMessage(maxAccounts int) string {
 
 // ---- Library ----
 
-// Season is one season's episodes in a collection.
-type Season struct {
-	Number   int
-	Episodes []store.Media
-}
-
 // seasonLabel names a season; season 0 holds specials.
 func seasonLabel(season int) string {
 	if season == 0 {
@@ -155,12 +141,6 @@ func displayTitle(media store.Media) string {
 }
 
 // ---- Player ----
-
-// Playback describes how the browser should load a video.
-type Playback struct {
-	Direct bool   // the file itself; otherwise an HLS conversion
-	URL    string // the file or the HLS playlist
-}
 
 // episodeNumbers is an episode's number, or its range for a file holding
 // several ("1–2" for a two-part pilot in one file).
@@ -215,19 +195,6 @@ func subscriptionCount(count int) string {
 	return "your " + strconv.Itoa(count) + " subscriptions"
 }
 
-// MediaForm is the data behind the edit and publish form.
-type MediaForm struct {
-	Media          store.Media
-	CollectionName string
-	Collections    []store.Collection
-	Categories     []string
-	Subtitles      []store.Subtitle
-	MetaEnabled    bool
-	Error          string
-	Saved          bool
-	Refreshed      bool // details were just fetched again from TMDB
-}
-
 // ownPoster is m's own poster, or "" when it shows its collection's. Only
 // its own can be removed on its edit page.
 func ownPoster(media store.Media) string {
@@ -263,18 +230,6 @@ func techSummary(media store.Media) string {
 	}
 	summary += " · " + fileSize(media.Size)
 	return summary
-}
-
-// ConversionView is the control panel's view of the conversion queue.
-type ConversionView struct {
-	Status   convert.Status
-	Failures []store.ConversionFailure
-}
-
-// busy reports whether conversions are running or waiting, which makes the
-// panel refresh itself.
-func (view ConversionView) busy() bool {
-	return !view.Status.Off && (len(view.Status.Active) > 0 || view.Status.Queued > 0)
 }
 
 func queuedLabel(count int) string {

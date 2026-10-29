@@ -1,7 +1,6 @@
 package ffmpeg
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,19 +13,6 @@ type Probe struct {
 	Duration  float64 // seconds; 0 when ffprobe cannot tell
 	Container string  // ffprobe's format names, e.g. "mov,mp4,m4a,3gp,3g2,mj2"
 	Streams   []Stream
-}
-
-// Stream is one stream of a file.
-type Stream struct {
-	Index     int    // position in the file, as used by ffmpeg's -map 0:N
-	Type      string // "video", "audio", "subtitle", "data" or "attachment"
-	Codec     string // e.g. "h264", "aac", "subrip"
-	PixFmt    string // video only, e.g. "yuv420p"
-	Channels  int    // audio only
-	Language  string // lower-case language tag from the file; untrusted
-	Title     string
-	Default   bool // the file marks this stream as the one to play by default
-	AttachPic bool // cover art stored as a video stream
 }
 
 // ErrNoVideo means a file has no video stream (other than cover art).
@@ -72,22 +58,6 @@ func (probe Probe) AudioCodec() string { stream, _ := probe.Audio(); return stre
 // without the attached_pic flag.
 func isImageCodec(codec string) bool {
 	return codec == "mjpeg" || codec == "png" || codec == "bmp"
-}
-
-// Probe inspects a media file with ffprobe. Failures of ffprobe itself are
-// *ExitError.
-func (tools Tools) Probe(ctx context.Context, file string) (Probe, error) {
-	cmd := command(ctx, tools.FFprobe, "-v", "error", "-print_format", "json",
-		"-show_format", "-show_streams", file)
-	stderr := &lastLineWriter{}
-	cmd.Stderr = stderr
-	out, err := cmd.Output()
-	if err != nil {
-		if exitErr := exitError("ffprobe", ctx, err, stderr); exitErr != nil {
-			return Probe{}, exitErr
-		}
-	}
-	return parseProbe(out)
 }
 
 // parseProbe decodes ffprobe's JSON output.

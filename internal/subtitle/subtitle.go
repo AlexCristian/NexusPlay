@@ -1,6 +1,3 @@
-// Package subtitle parses SRT and WebVTT files into cues and writes WebVTT,
-// and names languages for track labels. It holds pure functions only: it
-// reads no files and knows nothing about the database.
 package subtitle
 
 import (
@@ -12,13 +9,6 @@ import (
 	"strings"
 	"unicode/utf8"
 )
-
-// Cue is one timed subtitle line (possibly several text lines).
-type Cue struct {
-	StartMS int64
-	EndMS   int64
-	Text    string
-}
 
 // ErrNoCues is returned when a file holds no recognizable cues.
 var ErrNoCues = errors.New("no subtitle cues found")

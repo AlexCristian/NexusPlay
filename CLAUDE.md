@@ -66,6 +66,10 @@ are required.
 - One file per exported type, named after it in snake_case:
   `metadata.Episode` lives in `internal/metadata/episode.go`, with its
   methods and constructor.
+- A type with many methods may split them by topic into files that start
+  with the type's file name: `Store`'s methods live in `store.go`,
+  `store_media.go`, `store_users.go` and so on, so everything about `Store`
+  is in `store*.go`.
 - Small unexported helper types used by only one type stay in that type's
   file.
 - Sentinel errors go in `errors.go`; the package comment goes in `doc.go`.

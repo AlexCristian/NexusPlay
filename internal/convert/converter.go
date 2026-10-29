@@ -4,54 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/AlexCristian/NexusPlay/internal/ffmpeg"
 	"github.com/AlexCristian/NexusPlay/internal/media"
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
-
-// Store is the database as the converter uses it; *store.Store implements it.
-type Store interface {
-	ConversionCandidates(ctx context.Context) ([]store.ConversionCandidate, error)
-	MediaByID(ctx context.Context, id int64) (store.Media, error)
-	ReplaceMediaFile(ctx context.Context, id int64, replaced store.ReplacedFile) error
-	SetConvertFailed(ctx context.Context, id int64, reason string) error
-}
-
-// Tools runs ffprobe and ffmpeg; ffmpeg.Tools is the real one.
-type Tools interface {
-	Probe(ctx context.Context, file string) (ffmpeg.Probe, error)
-	Run(ctx context.Context, arguments []string, options ffmpeg.RunOptions) error
-}
-
-// Library is the scanner as the converter sees it: the lock it shares with
-// scans, and a way to ask for a rescan (which imports extracted subtitles).
-type Library interface {
-	Exclusive(operation func() error) error
-	Trigger()
-}
-
-// Deps are the converter's collaborators.
-type Deps struct {
-	Store   Store
-	Tools   Tools
-	Library Library // nil in tests that run without a scanner
-	Log     *slog.Logger
-}
-
-// Config tunes the converter.
-type Config struct {
-	MediaDirectory string
-	Max            int // conversions at once (at least 1)
-	// FreeSpace reports the free bytes in a folder's file system. Nil uses
-	// the operating system; tests replace it.
-	FreeSpace func(directory string) (uint64, error)
-}
 
 // Converter works through the queue of files that need converting, at most
 // Max at a time, newest first, and deletes each original once its MP4 is
@@ -212,21 +172,6 @@ func (converter *Converter) queue(ctx context.Context) (queued []int64, postpone
 	return queued, postponed, nil
 }
 
-// JobStatus describes a conversion in progress.
-type JobStatus struct {
-	Media   store.Media
-	Percent int
-}
-
-// Status is a snapshot for the control panel.
-type Status struct {
-	Off         bool   // conversion is turned off in the configuration
-	Unavailable string // why conversion cannot run (a read-only folder), if it cannot
-	Active      []JobStatus
-	Queued      int
-	Postponed   int // waiting for disk space
-}
-
 // Status reports what the converter is doing.
 func (converter *Converter) Status(ctx context.Context) (Status, error) {
 	converter.mutex.Lock()
@@ -242,16 +187,6 @@ func (converter *Converter) Status(ctx context.Context) (Status, error) {
 	status.Queued, status.Postponed = len(queued), postponed
 	return status, err
 }
-
-// Disabled stands in for the converter when conversion is turned off, so
-// callers never need a nil check.
-type Disabled struct{}
-
-// Status reports that conversion is off.
-func (Disabled) Status(context.Context) (Status, error) { return Status{Off: true}, nil }
-
-// Wake does nothing.
-func (Disabled) Wake() {}
 
 // runJob converts one file and records the outcome. Shutdown, a changed
 // source and a full disk are not failures; anything else is recorded so the

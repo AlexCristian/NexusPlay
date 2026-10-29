@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io/fs"
-	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -20,52 +19,6 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
 )
-
-// Store is the database as the scanner uses it; *store.Store implements it.
-type Store interface {
-	MediaPaths(ctx context.Context) (map[string]int64, error)
-	InsertScannedMedia(ctx context.Context, media store.ScannedMedia) (id int64, inserted bool, err error)
-	SetScannedMetadata(ctx context.Context, id int64, scannedMetadata store.ScannedMetadata) error
-	ReplaceMetadata(ctx context.Context, id int64, scannedMetadata store.ScannedMetadata) error
-	MarkMetadataChecked(ctx context.Context, id int64) error
-	MediaNeedingMetadata(ctx context.Context, checkedBefore time.Time, limit int) ([]store.Media, error)
-	MediaByID(ctx context.Context, id int64) (store.Media, error)
-	DeleteMedia(ctx context.Context, id int64) error
-	SubtitleSources(ctx context.Context) (map[string]bool, error)
-	AddSubtitle(ctx context.Context, subtitle store.NewSubtitle) (id int64, inserted bool, err error)
-	H264MissingPixFmt(ctx context.Context) (map[string]int64, error)
-	SetEpisodeEnd(ctx context.Context, id int64, episode, end int) error
-	SetPixFmt(ctx context.Context, id int64, pixFmt string) error
-}
-
-// Prober reads a media file's streams; ffmpeg.Tools is the real one.
-type Prober interface {
-	Probe(ctx context.Context, file string) (ffmpeg.Probe, error)
-}
-
-// Metadata looks titles up online; *metadata.Client is the real one. Its
-// ErrDisabled and ErrNoMatch are expected and not logged.
-type Metadata interface {
-	Movie(ctx context.Context, title, year string) (metadata.Info, error)
-	Show(ctx context.Context, name, year string) (metadata.Info, error)
-	Episode(ctx context.Context, showID, season, episode int) (metadata.Info, error)
-	Season(ctx context.Context, showID, season int) ([]metadata.Episode, error)
-}
-
-// Deps are the scanner's collaborators.
-type Deps struct {
-	Store  Store
-	Prober Prober
-	Meta   Metadata // nil turns lookups off
-	Log    *slog.Logger
-}
-
-// Config tunes the scanner. Zero durations use the defaults.
-type Config struct {
-	MediaDirectory string
-	Interval       time.Duration // full rescan period (default 5 min)
-	Settle         time.Duration // how long a new file must go unmodified before import (default 30 s)
-}
 
 // Scanner keeps the database in step with the media folder. It rescans on a
 // timer and shortly after any filesystem change. Build it with NewScanner;
@@ -86,14 +39,6 @@ type Scanner struct {
 	scan      sync.Mutex
 	reconcile sync.Mutex
 	onAdded   func() // set before Run; called after a scan that added media
-}
-
-// Result summarizes one scan.
-type Result struct {
-	Added     int
-	Removed   int
-	Subtitles int // sidecar subtitle files imported
-	Waiting   int // new files skipped because they are still being written
 }
 
 // NewScanner returns a scanner. Call Run to keep it scanning.

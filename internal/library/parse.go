@@ -1,17 +1,3 @@
-// Package library discovers media files and keeps the database in step with
-// the media folder.
-//
-// The Scanner walks the folder, probes new videos with ffprobe, adds them as
-// unpublished media, imports sidecar subtitles and removes rows whose files
-// are gone. ParsePath guesses a title, year, show, season and episode from a
-// file's path; the control panel shows that guess for review.
-//
-// The scanner never publishes anything and never deletes files. It removes
-// database rows only for files it could look for and did not find: rows
-// under an unreadable folder, or every row when the folder is empty
-// (an unmounted drive), are kept.
-//
-// The scan lock (Exclusive) serialises scans with the converter's file swap.
 package library
 
 import (
@@ -21,21 +7,6 @@ import (
 	"strings"
 	"time"
 )
-
-// Guess is what a file path says about its content.
-type Guess struct {
-	Title   string
-	Year    string
-	Show    string // set for TV episodes
-	Season  int
-	Episode int
-	// EpisodeEnd is the last episode in a file that holds several, such as
-	// 2 for "S01E01E02" (a two-part pilot); 0 for a single episode.
-	EpisodeEnd int
-}
-
-// IsEpisode reports whether the path looked like a TV episode.
-func (guess Guess) IsEpisode() bool { return guess.Show != "" }
 
 var (
 	// The last group holds more episode numbers of a file with several:

@@ -12,31 +12,6 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-// Viewer is who is making a request. User is nil for anonymous visitors.
-type Viewer struct {
-	User *store.User
-	CSRF string // the session's CSRF token; "" when anonymous
-}
-
-// ID returns the user's ID, or 0 for anonymous visitors (no user has ID 0).
-func (viewer Viewer) ID() int64 {
-	if viewer.User == nil {
-		return 0
-	}
-	return viewer.User.ID
-}
-
-// IsAdmin reports whether the viewer administers this install.
-func (viewer Viewer) IsAdmin() bool { return viewer.User != nil && viewer.User.IsAdmin }
-
-// UserStore is the database as Accounts uses it; *store.Store implements it.
-type UserStore interface {
-	CreateUser(ctx context.Context, email, nickname, passwordHash string, maxUsers int) (store.User, error)
-	UserByEmail(ctx context.Context, email string) (store.User, error)
-	UpdatePasswordHash(ctx context.Context, id int64, hash string) error
-	UserCount(ctx context.Context) (int, error)
-}
-
 // ErrInvalidCredentials means the email or the password is wrong. It never
 // says which, so the login form does not reveal who has an account.
 var ErrInvalidCredentials = errors.New("wrong e-mail or password")
@@ -44,21 +19,6 @@ var ErrInvalidCredentials = errors.New("wrong e-mail or password")
 // ErrRegistrationClosed means the install has as many accounts as
 // NEXUSPLAY_MAX_ACCOUNTS allows.
 var ErrRegistrationClosed = errors.New("registration is closed")
-
-// ValidationError is input the user can fix; Msg is shown to them.
-type ValidationError struct {
-	Field   string
-	Message string
-}
-
-func (validationError *ValidationError) Error() string {
-	return validationError.Field + ": " + validationError.Message
-}
-
-// Registration is what the sign-up form submits.
-type Registration struct {
-	Email, Nickname, Password string
-}
 
 // Accounts holds the rules for creating accounts and logging in. It is safe
 // for concurrent use.
@@ -82,13 +42,6 @@ func NewAccounts(users UserStore, maxAccounts int, log *slog.Logger) (*Accounts,
 		return nil, fmt.Errorf("creating the timing-equalizer hash: %w", err)
 	}
 	return &Accounts{users: users, maxAccounts: maxAccounts, log: log, verify: VerifyPassword, dummyHash: hash}, nil
-}
-
-// RegistrationStatus tells the sign-up form what to say.
-type RegistrationStatus struct {
-	FirstUser   bool // the next account becomes the administrator
-	Closed      bool // the account limit is reached
-	MaxAccounts int  // the limit; 0 for none
 }
 
 // RegistrationStatus reports whether registering is possible and whether

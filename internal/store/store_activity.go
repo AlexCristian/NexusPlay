@@ -4,13 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-)
 
-// Resume is a partly watched item for the "Previously watching" list.
-type Resume struct {
-	Media    Media
-	Position float64
-}
+	_ "modernc.org/sqlite"
+)
 
 // SaveProgress records a playback position. A position of zero, or one
 // close to the end, clears it and marks the media as watched.

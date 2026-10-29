@@ -1,16 +1,3 @@
-// Package web serves NexusPlay's pages, htmx fragments and media streams.
-//
-// Server holds the route table and the middleware (logging, panic recovery,
-// security headers, sessions, CSRF). The handlers are in five groups, each
-// given only what it uses: library, playback, subtitles, accounts and admin
-// (handlers_*.go). Handlers return an error, and respondError turns it into
-// the response (respond.go), so every handler reports "not found" or "try
-// later" the same way. Templates are templ components (*.templ); the data
-// they show is in views.go.
-//
-// The package holds no business rules of its own beyond who may see what
-// (access.go): accounts are auth's, data is store's, playback policy is
-// media's.
 package web
 
 import (
@@ -29,7 +16,6 @@ import (
 
 	"github.com/AlexCristian/NexusPlay/internal/auth"
 	"github.com/AlexCristian/NexusPlay/internal/config"
-	"github.com/AlexCristian/NexusPlay/internal/convert"
 	"github.com/AlexCristian/NexusPlay/internal/library"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
 	"github.com/AlexCristian/NexusPlay/internal/store"
@@ -58,19 +44,9 @@ type Server struct {
 	responder // set by Handler; used by the middleware
 }
 
-// Conversions is the MP4 converter as the control panel sees it.
-// convert.Disabled stands in when conversion is turned off.
-type Conversions interface {
-	Status(ctx context.Context) (convert.Status, error)
-	Wake()
-}
-
 type ctxKey int
 
 const viewerKey ctxKey = 0
-
-// Viewer is who is making a request (see auth.Viewer).
-type Viewer = auth.Viewer
 
 // viewer is who made the request; the zero Viewer for a visitor who is not
 // logged in. The session middleware sets it.
