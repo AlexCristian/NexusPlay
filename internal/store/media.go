@@ -26,7 +26,7 @@ type Media struct {
 	Container    string
 	VideoCodec   string
 	AudioCodec   string
-	PixelFormat       string // video pixel format, e.g. "yuv420p"; "" if not probed yet
+	PixelFormat  string // video pixel format, e.g. "yuv420p"; "" if not probed yet
 	Size         int64
 	Published    bool
 	Views        int

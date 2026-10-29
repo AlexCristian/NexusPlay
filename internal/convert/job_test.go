@@ -92,7 +92,7 @@ func newJobFixture(t *testing.T, tools *fakeTools, free uint64) jobFixture {
 	}
 	media, _ := database.MediaByID(ctx, id)
 	lib := &fakeLibrary{}
-	converter := New(Deps{Store: database, Tools: tools, Library: lib, Log: slog.New(slog.NewTextHandler(io.Discard, nil))},
+	converter := New(Dependencies{Store: database, Tools: tools, Library: lib, Log: slog.New(slog.NewTextHandler(io.Discard, nil))},
 		Config{MediaDirectory: mediaDirectory, FreeSpace: func(string) (uint64, error) { return free, nil }})
 	return jobFixture{converter: converter, database: database, library: lib, tools: tools, media: media, directory: mediaDirectory}
 }

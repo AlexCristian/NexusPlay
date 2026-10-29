@@ -67,7 +67,7 @@ func newEnvironment(t *testing.T, mutate func(*config.Config)) *environment {
 	}
 	testServer := &Server{Config: configuration, Store: database, Meta: meta, Transcodes: manager, Converter: convert.Disabled{}, Log: log,
 		Accounts: accounts, Sessions: auth.NewSessions(database, time.Hour, log),
-		Scanner: library.NewScanner(library.Deps{Store: database, Meta: meta, Log: log}, library.Config{MediaDirectory: configuration.MediaDirectory})}
+		Scanner: library.NewScanner(library.Dependencies{Store: database, Meta: meta, Log: log}, library.Config{MediaDirectory: configuration.MediaDirectory})}
 	server := httptest.NewServer(testServer.Handler())
 	t.Cleanup(func() { server.Close(); database.Close() })
 	return &environment{t: t, srv: server, store: database, config: configuration}

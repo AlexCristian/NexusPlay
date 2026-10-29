@@ -5,8 +5,8 @@ import (
 	"log/slog"
 )
 
-// Deps are the scanner's collaborators.
-type Deps struct {
+// Dependencies are the scanner's collaborators.
+type Dependencies struct {
 	Store  Store
 	Prober Prober
 	Meta   Metadata // nil turns lookups off

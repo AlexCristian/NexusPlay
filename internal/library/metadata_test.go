@@ -65,8 +65,8 @@ func (fakeMeta *fakeMeta) Season(ctx context.Context, showID, season int) ([]met
 func newMetaScanner(t *testing.T, meta Metadata) (*Scanner, *store.Store, string) {
 	t.Helper()
 	scanner, store, media := newUnitScanner(t, &fakeProber{})
-	scanner.deps.Meta = meta
-	scanner.deps.Log = slog.New(slog.NewTextHandler(io.Discard, nil))
+	scanner.dependencies.Meta = meta
+	scanner.dependencies.Log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	return scanner, store, media
 }
 
@@ -114,7 +114,7 @@ func TestLookupAfterKeyIsSet(t *testing.T) {
 	writeSettled(t, filepath.Join(media, "Movies", "Alien (1979).mp4"), "video")
 	scanner.Scan(ctx)
 
-	scanner.deps.Meta = &fakeMeta{}
+	scanner.dependencies.Meta = &fakeMeta{}
 	scanner.Scan(ctx)
 	if media := mediaByPath(t, store, "Movies/Alien (1979).mp4"); media.Poster != "alien.jpg" {
 		t.Errorf("poster = %q, want it looked up once lookups were on", media.Poster)

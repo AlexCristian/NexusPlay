@@ -177,10 +177,10 @@ func (handlers *libraryHandlers) notificationList(w http.ResponseWriter, r *http
 	if err != nil {
 		return err
 	}
-	subs, err := handlers.store.SubscriptionCount(r.Context(), viewer(r).ID())
+	subscriptionCount, err := handlers.store.SubscriptionCount(r.Context(), viewer(r).ID())
 	if err != nil {
 		return err
 	}
-	handlers.render(w, r, http.StatusOK, notificationList(items, subs))
+	handlers.render(w, r, http.StatusOK, notificationList(items, subscriptionCount))
 	return nil
 }

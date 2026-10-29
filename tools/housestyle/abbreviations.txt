@@ -12,6 +12,7 @@ args arguments
 attr attribute
 btn button
 buf buffer
+cands candidates
 cb callback
 cfg config
 cmd command
@@ -22,10 +23,13 @@ ctrl controller
 cur current
 db database
 decl declaration
+def default
+deps dependencies
 desc description
 dest destination
 dir directory
 dirs directories
+disp disposition
 dst destination
 elem element
 env environment
@@ -65,12 +69,14 @@ req request
 res result
 resp response
 ret result
+rm remove
 sec seconds
 sess session
 src source
 stmt statement
 str string
 sub subtitle
+subs subtitles
 svc service
 temp temporary
 tmp temporary

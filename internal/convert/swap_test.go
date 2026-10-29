@@ -36,7 +36,7 @@ func newSwapFixture(t *testing.T, sourceName string) (*Converter, store.Media, s
 	if err != nil {
 		t.Fatal(err)
 	}
-	converter := New(Deps{Store: database, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
+	converter := New(Dependencies{Store: database, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
 	return converter, mediaItem, media
 }
 
@@ -69,7 +69,7 @@ func TestSwapNeverOverwritesAnExistingTarget(t *testing.T) {
 	if got := readFile(t, source); got != "original" {
 		t.Errorf("original = %q, want it untouched", got)
 	}
-	if current, _ := converter.deps.Store.MediaByID(context.Background(), mediaItem.ID); current.Path != "Movie.mkv" {
+	if current, _ := converter.dependencies.Store.MediaByID(context.Background(), mediaItem.ID); current.Path != "Movie.mkv" {
 		t.Errorf("row now points at %q, want the original", current.Path)
 	}
 }
@@ -83,7 +83,7 @@ func TestSwapDatabaseFailureRemovesOnlyItsOwnFile(t *testing.T) {
 	temporaryDirectory := filepath.Join(media, ".Movie"+temporarySuffix)
 	os.WriteFile(temporaryDirectory, []byte("converted"), 0o644)
 	// Another row already uses the target path, so the update hits the unique index.
-	if _, _, err := converter.deps.Store.(*store.Store).InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "Movie.mp4", Title: "x"}); err != nil {
+	if _, _, err := converter.dependencies.Store.(*store.Store).InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "Movie.mp4", Title: "x"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -117,7 +117,7 @@ func TestSwapReplacesAndDeletesOriginal(t *testing.T) {
 			t.Errorf("%s should be gone, stat err = %v", filepath.Base(gone), err)
 		}
 	}
-	if current, _ := converter.deps.Store.MediaByID(context.Background(), mediaItem.ID); current.Path != "Movie.mp4" || current.VideoCodec != "h264" {
+	if current, _ := converter.dependencies.Store.MediaByID(context.Background(), mediaItem.ID); current.Path != "Movie.mp4" || current.VideoCodec != "h264" {
 		t.Errorf("row = %+v", current)
 	}
 }

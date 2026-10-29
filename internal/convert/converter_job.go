@@ -22,7 +22,7 @@ func (converter *Converter) convert(ctx context.Context, job *job) (string, erro
 	}
 	converter.extractSubtitles(ctx, job.media.Path, work)
 	defer os.Remove(work.temporaryPath) // only matters if we stop before the swap
-	err = converter.deps.Tools.Run(ctx, work.plan.ConvertArguments(work.sourcePath, work.temporaryPath), ffmpeg.RunOptions{
+	err = converter.dependencies.Tools.Run(ctx, work.plan.ConvertArguments(work.sourcePath, work.temporaryPath), ffmpeg.RunOptions{
 		LowPriority: true,
 		OnProgress:  func(seconds float64) { converter.setProgress(job, seconds) },
 	})
@@ -56,13 +56,13 @@ func (converter *Converter) prepare(ctx context.Context, job *job) (work, error)
 	switch {
 	case err != nil:
 		// Not knowing is not a reason to stop; ffmpeg fails cleanly if the disk fills.
-		converter.deps.Log.Debug("could not check free disk space", "dir", directory, "err", err)
+		converter.dependencies.Log.Debug("could not check free disk space", "dir", directory, "err", err)
 	case free < need:
 		return work{}, fmt.Errorf("%w: %d MB free, %d MB needed", ErrNoSpace, free>>20, need>>20)
 	}
 
-	pctx, cancel := context.WithTimeout(ctx, time.Minute)
-	source, err := converter.deps.Tools.Probe(pctx, sourcePath)
+	probeContext, cancel := context.WithTimeout(ctx, time.Minute)
+	source, err := converter.dependencies.Tools.Probe(probeContext, sourcePath)
 	cancel()
 	if err != nil {
 		return work{}, err
@@ -88,29 +88,29 @@ func (converter *Converter) prepare(ctx context.Context, job *job) (work, error)
 func (converter *Converter) extractSubtitles(ctx context.Context, path string, work work) {
 	for _, subtitlePlan := range work.plan.Subtitles {
 		if err := converter.extractSubtitle(ctx, work.sourcePath, work.directory, subtitlePlan); err != nil {
-			converter.deps.Log.Warn("could not extract a subtitle track", "path", path, "file", subtitlePlan.File, "err", err)
+			converter.dependencies.Log.Warn("could not extract a subtitle track", "path", path, "file", subtitlePlan.File, "err", err)
 		}
 	}
-	if work.plan.DroppedSubs > 0 {
-		converter.deps.Log.Info("image-based subtitles cannot be kept in MP4", "path", path, "tracks", work.plan.DroppedSubs)
+	if work.plan.DroppedSubtitles > 0 {
+		converter.dependencies.Log.Info("image-based subtitles cannot be kept in MP4", "path", path, "tracks", work.plan.DroppedSubtitles)
 	}
 }
 
 func (converter *Converter) extractSubtitle(ctx context.Context, source, directory string, subtitlePlan SubtitlePlan) error {
-	out := filepath.Join(directory, subtitlePlan.File)
+	outputPath := filepath.Join(directory, subtitlePlan.File)
 	// Defence in depth on top of safeLanguage: sidecars live next to the video.
-	if filepath.Dir(out) != filepath.Clean(directory) {
+	if filepath.Dir(outputPath) != filepath.Clean(directory) {
 		return fmt.Errorf("refusing to write subtitle %q outside the video's folder", subtitlePlan.File)
 	}
-	if _, err := os.Lstat(out); err == nil {
+	if _, err := os.Lstat(outputPath); err == nil {
 		return nil // keep an existing file of the same name
 	}
 	temporaryPath := filepath.Join(directory, "."+subtitlePlan.File+".part")
 	defer os.Remove(temporaryPath)
-	if err := converter.deps.Tools.Run(ctx, SubtitleArguments(source, subtitlePlan, temporaryPath), ffmpeg.RunOptions{}); err != nil {
+	if err := converter.dependencies.Tools.Run(ctx, SubtitleArguments(source, subtitlePlan, temporaryPath), ffmpeg.RunOptions{}); err != nil {
 		return err
 	}
-	return os.Rename(temporaryPath, out)
+	return os.Rename(temporaryPath, outputPath)
 }
 
 // verify checks the converted file before anything is deleted and returns
@@ -118,7 +118,7 @@ func (converter *Converter) extractSubtitle(ctx context.Context, source, directo
 func (converter *Converter) verify(ctx context.Context, work work) (store.ReplacedFile, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	got, err := converter.deps.Tools.Probe(ctx, work.temporaryPath)
+	got, err := converter.dependencies.Tools.Probe(ctx, work.temporaryPath)
 	if err != nil {
 		return store.ReplacedFile{}, err
 	}
@@ -139,10 +139,10 @@ func (converter *Converter) commit(ctx context.Context, media store.Media, work 
 	swap := func() error {
 		return converter.swap(ctx, media, work.sourcePath, work.temporaryPath, work.target, result)
 	}
-	if converter.deps.Library == nil {
+	if converter.dependencies.Library == nil {
 		return swap()
 	}
-	return converter.deps.Library.Exclusive(swap)
+	return converter.dependencies.Library.Exclusive(swap)
 }
 
 // swap makes the verified MP4 the library's copy of the media. The order of
@@ -166,7 +166,7 @@ func (converter *Converter) commit(ctx context.Context, media store.Media, work 
 // worse than a slow shutdown.
 func (converter *Converter) swap(ctx context.Context, media store.Media, source, temporaryPath, target string, result store.ReplacedFile) error {
 	ctx = context.WithoutCancel(ctx)
-	current, err := converter.deps.Store.MediaByID(ctx, media.ID)
+	current, err := converter.dependencies.Store.MediaByID(ctx, media.ID)
 	if err != nil {
 		return fmt.Errorf("re-reading media %d: %w", media.ID, err)
 	}
@@ -181,17 +181,17 @@ func (converter *Converter) swap(ctx context.Context, media store.Media, source,
 	} else if err := moveNoReplace(temporaryPath, target); err != nil {
 		return err
 	}
-	if err := converter.deps.Store.ReplaceMediaFile(ctx, media.ID, result); err != nil {
+	if err := converter.dependencies.Store.ReplaceMediaFile(ctx, media.ID, result); err != nil {
 		if !sameName {
-			if rmErr := os.Remove(target); rmErr != nil {
-				converter.deps.Log.Error("could not remove the converted file after a failed update", "path", target, "err", rmErr)
+			if removeErr := os.Remove(target); removeErr != nil {
+				converter.dependencies.Log.Error("could not remove the converted file after a failed update", "path", target, "err", removeErr)
 			}
 		}
 		return fmt.Errorf("updating the library: %w", err)
 	}
 	if !sameName {
 		if err := os.Remove(source); err != nil {
-			converter.deps.Log.Error("could not delete the original; delete it by hand", "path", source, "err", err)
+			converter.dependencies.Log.Error("could not delete the original; delete it by hand", "path", source, "err", err)
 		}
 	}
 	return nil

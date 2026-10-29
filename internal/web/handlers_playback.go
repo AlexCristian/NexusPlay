@@ -49,7 +49,7 @@ func (handlers *playbackHandlers) watch(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 	ctx := r.Context()
-	subs, err := handlers.store.Subtitles(ctx, media.ID)
+	subtitles, err := handlers.store.Subtitles(ctx, media.ID)
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func (handlers *playbackHandlers) watch(w http.ResponseWriter, r *http.Request) 
 	if media.CollectionName != "" {
 		title = media.CollectionName + " · " + media.Title
 	}
-	handlers.render(w, r, http.StatusOK, watchPage(newPage(r, title), media, playbackFor(media), subs, resumeAt))
+	handlers.render(w, r, http.StatusOK, watchPage(newPage(r, title), media, playbackFor(media), subtitles, resumeAt))
 	return nil
 }
 

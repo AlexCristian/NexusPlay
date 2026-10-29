@@ -26,10 +26,10 @@ import (
 //
 // Only "failed" is stored; the queue is computed from the library.
 type Converter struct {
-	deps   Deps
-	config Config
-	now    func() time.Time
-	wake   chan struct{}
+	dependencies Dependencies
+	config       Config
+	now          func() time.Time
+	wake         chan struct{}
 
 	mutex       sync.Mutex // guards everything below
 	active      map[int64]*job
@@ -54,7 +54,7 @@ func (job *job) percent() int {
 }
 
 // New returns a converter. Call Run to start working through the queue.
-func New(dependencies Deps, config Config) *Converter {
+func New(dependencies Dependencies, config Config) *Converter {
 	if config.Max < 1 {
 		config.Max = 1
 	}
@@ -62,7 +62,7 @@ func New(dependencies Deps, config Config) *Converter {
 		config.FreeSpace = freeBytes
 	}
 	return &Converter{
-		deps: dependencies, config: config, now: time.Now, wake: make(chan struct{}, 1),
+		dependencies: dependencies, config: config, now: time.Now, wake: make(chan struct{}, 1),
 		active: map[int64]*job{}, waitUntil: map[int64]time.Time{},
 	}
 }
@@ -85,11 +85,11 @@ func (converter *Converter) Run(ctx context.Context) error {
 			"server's user (UID %d), so originals cannot be replaced. In Docker, mount it without :ro and make "+
 			"sure that user owns it, or set user: in docker-compose.yml to the folder's owner.", os.Getuid())
 		converter.mutex.Unlock()
-		converter.deps.Log.Warn("automatic conversion disabled", "reason", err)
+		converter.dependencies.Log.Warn("automatic conversion disabled", "reason", err)
 		return nil
 	}
 	if err := removeLeftovers(converter.config.MediaDirectory); err != nil {
-		converter.deps.Log.Warn("could not remove files left by an interrupted conversion", "err", err)
+		converter.dependencies.Log.Warn("could not remove files left by an interrupted conversion", "err", err)
 	}
 
 	tick := time.NewTicker(time.Minute)
@@ -120,18 +120,18 @@ func (converter *Converter) fill(ctx context.Context, waitGroup *sync.WaitGroup)
 	queue, _, err := converter.queue(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
-			converter.deps.Log.Error("reading the conversion queue", "err", err)
+			converter.dependencies.Log.Error("reading the conversion queue", "err", err)
 		}
 		return
 	}
 	for _, id := range queue[:min(free, len(queue))] {
-		media, err := converter.deps.Store.MediaByID(ctx, id)
+		media, err := converter.dependencies.Store.MediaByID(ctx, id)
 		if errors.Is(err, store.ErrNotFound) {
 			continue // removed by a scan since the queue was read
 		}
 		if err != nil {
 			if ctx.Err() == nil {
-				converter.deps.Log.Error("reading the conversion queue", "err", err)
+				converter.dependencies.Log.Error("reading the conversion queue", "err", err)
 			}
 			return
 		}
@@ -152,14 +152,14 @@ func (converter *Converter) fill(ctx context.Context, waitGroup *sync.WaitGroup)
 // queue lists the IDs of files waiting for conversion, newest first,
 // leaving out running ones. It also counts postponed ones.
 func (converter *Converter) queue(ctx context.Context) (queued []int64, postponed int, err error) {
-	cands, err := converter.deps.Store.ConversionCandidates(ctx)
+	candidates, err := converter.dependencies.Store.ConversionCandidates(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
 	now := converter.now()
 	converter.mutex.Lock()
 	defer converter.mutex.Unlock()
-	for _, candidate := range cands {
+	for _, candidate := range candidates {
 		format := media.Format{Path: candidate.Path, VideoCodec: candidate.VideoCodec, AudioCodec: candidate.AudioCodec, PixelFormat: candidate.PixelFormat}
 		switch {
 		case !media.NeedsConversion(format) || converter.active[candidate.ID] != nil:
@@ -194,28 +194,28 @@ func (converter *Converter) Status(ctx context.Context) (Status, error) {
 func (converter *Converter) runJob(ctx context.Context, job *job) {
 	media := job.media
 	start := converter.now()
-	converter.deps.Log.Info("converting", "media", media.ID, "path", media.Path)
+	converter.dependencies.Log.Info("converting", "media", media.ID, "path", media.Path)
 	newPath, err := converter.convert(ctx, job)
 	switch {
 	case ctx.Err() != nil:
-		converter.deps.Log.Info("conversion stopped by shutdown; it starts over after the restart",
+		converter.dependencies.Log.Info("conversion stopped by shutdown; it starts over after the restart",
 			"path", media.Path, "progress", fmt.Sprintf("%d%%", converter.percent(job)))
 	case errors.Is(err, ErrSourceChanged):
-		converter.deps.Log.Info("conversion discarded; the file changed while converting", "path", media.Path)
+		converter.dependencies.Log.Info("conversion discarded; the file changed while converting", "path", media.Path)
 	case errors.Is(err, ErrNoSpace):
 		converter.mutex.Lock()
 		converter.waitUntil[media.ID] = converter.now().Add(noSpaceRetry)
 		converter.mutex.Unlock()
-		converter.deps.Log.Warn("conversion postponed", "path", media.Path, "err", err)
+		converter.dependencies.Log.Warn("conversion postponed", "path", media.Path, "err", err)
 	case err != nil:
-		converter.deps.Log.Error("conversion failed", "path", media.Path, "err", err)
-		if err := converter.deps.Store.SetConvertFailed(context.WithoutCancel(ctx), media.ID, err.Error()); err != nil {
-			converter.deps.Log.Error("recording a failed conversion", "err", err)
+		converter.dependencies.Log.Error("conversion failed", "path", media.Path, "err", err)
+		if err := converter.dependencies.Store.SetConvertFailed(context.WithoutCancel(ctx), media.ID, err.Error()); err != nil {
+			converter.dependencies.Log.Error("recording a failed conversion", "err", err)
 		}
 	default:
-		converter.deps.Log.Info("converted", "media", media.ID, "from", media.Path, "to", newPath, "took", converter.now().Sub(start).Round(time.Second))
-		if converter.deps.Library != nil {
-			converter.deps.Library.Trigger() // imports the extracted subtitles
+		converter.dependencies.Log.Info("converted", "media", media.ID, "from", media.Path, "to", newPath, "took", converter.now().Sub(start).Round(time.Second))
+		if converter.dependencies.Library != nil {
+			converter.dependencies.Library.Trigger() // imports the extracted subtitles
 		}
 	}
 }

@@ -264,8 +264,8 @@ func TestSidecarImportIsIdempotent(t *testing.T) {
 	if _, inserted, err := store.AddSubtitle(ctx, sidecar); err != nil || inserted {
 		t.Errorf("second import: inserted=%v err=%v, want false and nil", inserted, err)
 	}
-	if subs, _ := store.Subtitles(ctx, mediaID); len(subs) != 1 {
-		t.Errorf("%d tracks after importing the same sidecar twice, want 1", len(subs))
+	if subtitles, _ := store.Subtitles(ctx, mediaID); len(subtitles) != 1 {
+		t.Errorf("%d tracks after importing the same sidecar twice, want 1", len(subtitles))
 	}
 	srcs, _ := store.SubtitleSources(ctx)
 	if !srcs.Contains("m.en.srt") {
@@ -283,7 +283,7 @@ func TestDeletingMediaCascades(t *testing.T) {
 	if err := store.DeleteMedia(ctx, mediaID); err != nil {
 		t.Fatal(err)
 	}
-	if subs, _ := store.Subtitles(ctx, mediaID); len(subs) != 0 {
+	if subtitles, _ := store.Subtitles(ctx, mediaID); len(subtitles) != 0 {
 		t.Error("subtitles survived media deletion")
 	}
 	if list, _ := store.InProgress(ctx, user.ID, 10); len(list) != 0 {

@@ -61,7 +61,7 @@ func (server *Server) Handler() http.Handler {
 	lib := &libraryHandlers{responder: server.responder, store: server.Store}
 	play := &playbackHandlers{responder: server.responder, store: server.Store, transcodes: server.Transcodes,
 		mediaDirectory: server.Config.MediaDirectory, posterDirectory: server.Config.PosterDirectory()}
-	subs := &subtitleHandlers{responder: server.responder, store: server.Store, votesRequired: server.Config.VotesRequired}
+	subtitleRoutes := &subtitleHandlers{responder: server.responder, store: server.Store, votesRequired: server.Config.VotesRequired}
 	acct := &accountHandlers{responder: server.responder, accounts: server.Accounts, sessions: server.Sessions,
 		secureCookies: server.Config.SecureCookies}
 	adm := &adminHandlers{responder: server.responder, store: server.Store, meta: server.Meta, scanner: server.Scanner, refresher: server.Scanner,
@@ -81,7 +81,7 @@ func (server *Server) Handler() http.Handler {
 	mux.Handle("GET /media/{id}/file", server.browse(server.handle(play.mediaFile)))
 	mux.Handle("GET /media/{id}/hls/index.m3u8", server.browse(server.handle(play.hlsPlaylist)))
 	mux.Handle("GET /media/{id}/hls/{segment}", server.browse(server.handle(play.hlsSegment)))
-	mux.Handle("GET /subtitles/{id}", server.browse(server.handle(subs.subtitleVTT)))
+	mux.Handle("GET /subtitles/{id}", server.browse(server.handle(subtitleRoutes.subtitleVTT)))
 	mux.Handle("GET /posters/{name}", server.browse(server.handle(play.poster)))
 
 	// Accounts.
@@ -96,9 +96,9 @@ func (server *Server) Handler() http.Handler {
 	mux.Handle("GET /me/notifications", server.member(server.handle(lib.notificationList)))
 	mux.Handle("POST /me/progress", server.member(server.handle(play.saveProgress)))
 	mux.Handle("POST /collections/{id}/subscribe", server.member(server.handle(lib.toggleSubscription)))
-	mux.Handle("GET /media/{id}/subtitle-report", server.member(server.handle(subs.subtitleReport)))
-	mux.Handle("POST /cues/{id}/changes", server.member(server.handle(subs.proposeChange)))
-	mux.Handle("POST /changes/{id}/vote", server.member(server.handle(subs.voteChange)))
+	mux.Handle("GET /media/{id}/subtitle-report", server.member(server.handle(subtitleRoutes.subtitleReport)))
+	mux.Handle("POST /cues/{id}/changes", server.member(server.handle(subtitleRoutes.proposeChange)))
+	mux.Handle("POST /changes/{id}/vote", server.member(server.handle(subtitleRoutes.voteChange)))
 
 	// Administration.
 	mux.Handle("GET /admin", server.admin(server.handle(adm.controlPanel)))

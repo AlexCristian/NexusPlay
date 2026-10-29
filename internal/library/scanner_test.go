@@ -52,7 +52,7 @@ func TestScan(t *testing.T) {
 	makeVideo(t, fresh)
 	os.Chtimes(fresh, time.Now(), time.Now())
 
-	scanner := NewScanner(Deps{Store: database, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
+	scanner := NewScanner(Dependencies{Store: database, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
 	result, err := scanner.Scan(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -73,9 +73,9 @@ func TestScan(t *testing.T) {
 	if mediaItem.Season != 1 || mediaItem.Episode != 2 {
 		t.Errorf("episode = %+v", mediaItem)
 	}
-	subs, _ := database.Subtitles(ctx, alien.ID)
-	if len(subs) != 1 || subs[0].Language != "ro" || subs[0].Label != "Română" {
-		t.Errorf("sidecar subtitles = %+v", subs)
+	subtitles, _ := database.Subtitles(ctx, alien.ID)
+	if len(subtitles) != 1 || subtitles[0].Language != "ro" || subtitles[0].Label != "Română" {
+		t.Errorf("sidecar subtitles = %+v", subtitles)
 	}
 
 	// A second scan changes nothing.
@@ -115,7 +115,7 @@ func TestScanKeepsMediaInUnreadableFolders(t *testing.T) {
 	defer database.Close()
 	makeVideo(t, filepath.Join(media, "Movies", "Alien (1979).mp4"))
 	makeVideo(t, filepath.Join(media, "Share", "Cosmos.S01E01.mp4"))
-	scanner := NewScanner(Deps{Store: database, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
+	scanner := NewScanner(Dependencies{Store: database, Prober: ffmpeg.Tools{FFprobe: "ffprobe"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}, Config{MediaDirectory: media})
 	if result, err := scanner.Scan(ctx); err != nil || result.Added != 2 {
 		t.Fatalf("first scan = %+v, %v", result, err)
 	}

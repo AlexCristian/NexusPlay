@@ -14,12 +14,12 @@ import (
 
 // Plan is how one file will be converted.
 type Plan struct {
-	Video        ffmpeg.Stream
-	CopyVideo    bool
-	Audio        []AudioPlan
-	Subtitles    []SubtitlePlan // text subtitles extracted to .srt files next to the video
-	DroppedSubs  int            // image-based subtitles MP4 cannot hold
-	DroppedOther int            // data and attachment streams (fonts, timecodes)
+	Video            ffmpeg.Stream
+	CopyVideo        bool
+	Audio            []AudioPlan
+	Subtitles        []SubtitlePlan // text subtitles extracted to .srt files next to the video
+	DroppedSubtitles int            // image-based subtitles MP4 cannot hold
+	DroppedOther     int            // data and attachment streams (fonts, timecodes)
 }
 
 // [textSubtitleCodecsFile] is the contents of text_subtitle_codecs.txt,
@@ -54,7 +54,7 @@ func MakePlan(probe ffmpeg.Probe, videoBase string) (Plan, error) {
 			if textSubtitleCodecs.Contains(stream.Codec) {
 				plan.Subtitles = append(plan.Subtitles, SubtitlePlan{Stream: stream})
 			} else {
-				plan.DroppedSubs++
+				plan.DroppedSubtitles++
 			}
 		default:
 			plan.DroppedOther++
@@ -87,16 +87,16 @@ func planAudio(stream ffmpeg.Stream) AudioPlan {
 
 // nameSubtitles names sidecar files the way the scanner reads them back:
 // "Movie.en.srt", and "Movie.track2.en.srt" for a second English track.
-func nameSubtitles(subs []SubtitlePlan, base string) {
+func nameSubtitles(subtitles []SubtitlePlan, base string) {
 	seen := map[string]int{}
-	for i := range subs {
-		language := safeLanguage(subs[i].Stream.Language)
+	for i := range subtitles {
+		language := safeLanguage(subtitles[i].Stream.Language)
 		seen[language]++
 		name := base + "." + language + ".srt"
 		if count := seen[language]; count > 1 {
 			name = base + ".track" + strconv.Itoa(count) + "." + language + ".srt"
 		}
-		subs[i].File = name
+		subtitles[i].File = name
 	}
 }
 
@@ -117,7 +117,7 @@ func safeLanguage(tag string) string {
 }
 
 // ConvertArguments builds the ffmpeg command that writes the MP4.
-func (plan Plan) ConvertArguments(source, out string) []string {
+func (plan Plan) ConvertArguments(source, outputPath string) []string {
 	arguments := []string{"-nostdin", "-hide_banner", "-loglevel", "error",
 		"-i", source, "-map", fmt.Sprintf("0:%d", plan.Video.Index)}
 	for _, audioPlan := range plan.Audio {
@@ -139,27 +139,27 @@ func (plan Plan) ConvertArguments(source, out string) []string {
 	}
 	if len(plan.Audio) > 0 {
 		// Players start with the first audio track; keep the original's default one first in line.
-		def := 0
+		defaultIndex := 0
 		for i, audioPlan := range plan.Audio {
 			if audioPlan.Stream.Default {
-				def = i
+				defaultIndex = i
 				break
 			}
 		}
 		for i := range plan.Audio {
-			disp := "0"
-			if i == def {
-				disp = "default"
+			disposition := "0"
+			if i == defaultIndex {
+				disposition = "default"
 			}
-			arguments = append(arguments, "-disposition:a:"+strconv.Itoa(i), disp)
+			arguments = append(arguments, "-disposition:a:"+strconv.Itoa(i), disposition)
 		}
 	}
 	return append(arguments, "-map_metadata", "0", "-map_chapters", "0", "-sn", "-dn",
-		"-max_muxing_queue_size", "9999", "-movflags", "+faststart", "-f", "mp4", "-y", out)
+		"-max_muxing_queue_size", "9999", "-movflags", "+faststart", "-f", "mp4", "-y", outputPath)
 }
 
 // SubtitleArguments builds the ffmpeg command that extracts one text subtitle as SRT.
-func SubtitleArguments(source string, subtitlePlan SubtitlePlan, out string) []string {
+func SubtitleArguments(source string, subtitlePlan SubtitlePlan, outputPath string) []string {
 	return []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-i", source,
-		"-map", fmt.Sprintf("0:%d", subtitlePlan.Stream.Index), "-c:s", "srt", "-f", "srt", "-y", out}
+		"-map", fmt.Sprintf("0:%d", subtitlePlan.Stream.Index), "-c:s", "srt", "-f", "srt", "-y", outputPath}
 }

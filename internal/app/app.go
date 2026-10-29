@@ -117,7 +117,7 @@ func build(config config.Config, database *store.Store, log *slog.Logger) (*App,
 	tools := ffmpeg.Tools{FFmpeg: config.FFmpegPath, FFprobe: config.FFprobePath}
 	meta := metadata.New(metadata.Config{APIKey: config.TMDBAPIKey, PosterDirectory: config.PosterDirectory()}, log.With("component", "tmdb"))
 	scanner := library.NewScanner(
-		library.Deps{Store: database, Prober: tools, Meta: meta, Log: log.With("component", "scanner")},
+		library.Dependencies{Store: database, Prober: tools, Meta: meta, Log: log.With("component", "scanner")},
 		library.Config{MediaDirectory: config.MediaDirectory, Interval: config.ScanInterval},
 	)
 	transcodes, err := stream.NewManager(stream.FFmpegStarter(tools),
@@ -136,7 +136,7 @@ func build(config config.Config, database *store.Store, log *slog.Logger) (*App,
 	var conversions web.Conversions = convert.Disabled{}
 	if config.Convert {
 		converter := convert.New(
-			convert.Deps{Store: database, Tools: tools, Library: scanner, Log: log.With("component", "convert")},
+			convert.Dependencies{Store: database, Tools: tools, Library: scanner, Log: log.With("component", "convert")},
 			convert.Config{MediaDirectory: config.MediaDirectory, Max: config.MaxConversions},
 		)
 		scanner.OnAdded(converter.Wake)

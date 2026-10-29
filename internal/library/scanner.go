@@ -32,10 +32,10 @@ import (
 // scan never sees a file renamed but not yet updated in the database. Neither
 // lock is reentrant: never call Scan from inside Exclusive.
 type Scanner struct {
-	deps    Deps
-	config  Config
-	trigger chan struct{}
-	now     func() time.Time
+	dependencies Dependencies
+	config       Config
+	trigger      chan struct{}
+	now          func() time.Time
 
 	scan      sync.Mutex
 	reconcile sync.Mutex
@@ -43,14 +43,14 @@ type Scanner struct {
 }
 
 // NewScanner returns a scanner. Call Run to keep it scanning.
-func NewScanner(dependencies Deps, config Config) *Scanner {
+func NewScanner(dependencies Dependencies, config Config) *Scanner {
 	if config.Interval <= 0 {
 		config.Interval = 5 * time.Minute
 	}
 	if config.Settle <= 0 {
 		config.Settle = 30 * time.Second
 	}
-	return &Scanner{deps: dependencies, config: config, trigger: make(chan struct{}, 1), now: time.Now}
+	return &Scanner{dependencies: dependencies, config: config, trigger: make(chan struct{}, 1), now: time.Now}
 }
 
 // OnAdded registers fn to be called after a scan that added media (the
@@ -79,7 +79,7 @@ func (scanner *Scanner) Exclusive(operation func() error) error {
 func (scanner *Scanner) Run(ctx context.Context) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		scanner.deps.Log.Warn("filesystem watching unavailable; relying on periodic scans", "err", err)
+		scanner.dependencies.Log.Warn("filesystem watching unavailable; relying on periodic scans", "err", err)
 	} else {
 		defer watcher.Close()
 	}
@@ -132,11 +132,11 @@ func (scanner *Scanner) onEvent(event fsnotify.Event, soon *time.Timer) {
 // lost, and only a full scan can catch up.
 func (scanner *Scanner) onWatchError(err error, soon *time.Timer) {
 	if errors.Is(err, fsnotify.ErrEventOverflow) {
-		scanner.deps.Log.Info("too many filesystem changes at once; rescanning")
+		scanner.dependencies.Log.Info("too many filesystem changes at once; rescanning")
 		soon.Reset(time.Second)
 		return
 	}
-	scanner.deps.Log.Warn("filesystem watcher", "err", err)
+	scanner.dependencies.Log.Warn("filesystem watcher", "err", err)
 }
 
 // scanOnce runs one scan for Run and acts on its result.
@@ -144,7 +144,7 @@ func (scanner *Scanner) scanOnce(ctx context.Context, watcher *fsnotify.Watcher,
 	result, directories, err := scanner.scanAll(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
-			scanner.deps.Log.Error("library scan failed", "err", err)
+			scanner.dependencies.Log.Error("library scan failed", "err", err)
 		}
 		return
 	}
@@ -152,12 +152,12 @@ func (scanner *Scanner) scanOnce(ctx context.Context, watcher *fsnotify.Watcher,
 		for _, directory := range directories {
 			if err := watcher.Add(directory); err != nil {
 				// Usually the inotify watch limit; periodic scans still work.
-				scanner.deps.Log.Debug("not watching folder for changes", "path", directory, "err", err)
+				scanner.dependencies.Log.Debug("not watching folder for changes", "path", directory, "err", err)
 			}
 		}
 	}
 	if result.Added+result.Removed+result.Subtitles > 0 {
-		scanner.deps.Log.Info("library scan", "added", result.Added, "removed", result.Removed, "subtitles", result.Subtitles)
+		scanner.dependencies.Log.Info("library scan", "added", result.Added, "removed", result.Removed, "subtitles", result.Subtitles)
 	}
 	if result.Waiting > 0 {
 		soon.Reset(scanner.config.Settle + 5*time.Second) // come back once they have settled
@@ -184,7 +184,7 @@ func (scanner *Scanner) scanAll(ctx context.Context) (Result, []string, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	known, err := scanner.deps.Store.MediaPaths(ctx)
+	known, err := scanner.dependencies.Store.MediaPaths(ctx)
 	if err != nil {
 		return result, nil, err
 	}
@@ -229,7 +229,7 @@ type found struct {
 func (scanner *Scanner) walk() (tree, error) {
 	mediaTree := tree{subtitlesByDirectory: map[string][]string{}}
 	unreadable := func(path string, err error) {
-		scanner.deps.Log.Warn("skipping unreadable path; its library entries are kept", "path", path, "err", err)
+		scanner.dependencies.Log.Warn("skipping unreadable path; its library entries are kept", "path", path, "err", err)
 		if relativePath, relativeErr := filepath.Rel(scanner.config.MediaDirectory, path); relativeErr == nil {
 			mediaTree.unreadable = append(mediaTree.unreadable, filepath.ToSlash(relativePath))
 		}
@@ -297,7 +297,7 @@ func (scanner *Scanner) probeNew(ctx context.Context, videos []found, known map[
 			if ctx.Err() != nil {
 				return out, waiting
 			}
-			scanner.deps.Log.Warn("could not add media", "path", video.relativePath, "err", err)
+			scanner.dependencies.Log.Warn("could not add media", "path", video.relativePath, "err", err)
 			continue
 		}
 		out = append(out, probed)
@@ -308,7 +308,7 @@ func (scanner *Scanner) probeNew(ctx context.Context, videos []found, known map[
 func (scanner *Scanner) probe(ctx context.Context, candidate found) (probedFile, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	probe, err := scanner.deps.Prober.Probe(ctx, candidate.absolutePath)
+	probe, err := scanner.dependencies.Prober.Probe(ctx, candidate.absolutePath)
 	if err != nil {
 		return probedFile{}, err
 	}
@@ -335,7 +335,7 @@ type addedMedia struct {
 // the walk: the converter may have swapped a file in the meantime. It
 // returns the added media, the number removed, and the updated path→ID map.
 func (scanner *Scanner) applyChanges(ctx context.Context, tree tree, probed []probedFile) ([]addedMedia, int, map[string]int64, error) {
-	known, err := scanner.deps.Store.MediaPaths(ctx)
+	known, err := scanner.dependencies.Store.MediaPaths(ctx)
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -344,7 +344,7 @@ func (scanner *Scanner) applyChanges(ctx context.Context, tree tree, probed []pr
 		if _, isKnown := known[candidate.relativePath]; isKnown || !exists(candidate.absolutePath) {
 			continue
 		}
-		id, inserted, err := scanner.deps.Store.InsertScannedMedia(ctx, candidate.media)
+		id, inserted, err := scanner.dependencies.Store.InsertScannedMedia(ctx, candidate.media)
 		if err != nil {
 			return added, 0, known, err
 		}
@@ -357,7 +357,7 @@ func (scanner *Scanner) applyChanges(ctx context.Context, tree tree, probed []pr
 	// If the folder has no videos while the database has rows, the drive is
 	// most likely unmounted: keep everything rather than wipe the library.
 	if len(tree.videos) == 0 && len(known) > 0 {
-		scanner.deps.Log.Warn("media folder has no videos; skipping removals in case it is unmounted", "dir", scanner.config.MediaDirectory)
+		scanner.dependencies.Log.Warn("media folder has no videos; skipping removals in case it is unmounted", "dir", scanner.config.MediaDirectory)
 		return added, 0, known, nil
 	}
 	onDisk := collections.NewSet[string]()
@@ -369,7 +369,7 @@ func (scanner *Scanner) applyChanges(ctx context.Context, tree tree, probed []pr
 		if exists(filepath.Join(scanner.config.MediaDirectory, filepath.FromSlash(relativePath))) {
 			continue // appeared after the walk (a converted file)
 		}
-		if err := scanner.deps.Store.DeleteMedia(ctx, known[relativePath]); err != nil {
+		if err := scanner.dependencies.Store.DeleteMedia(ctx, known[relativePath]); err != nil {
 			return added, removed, known, err
 		}
 		delete(known, relativePath)
@@ -418,7 +418,7 @@ const (
 // lookupMetadata enriches an unpublished item from TMDB. It is optional:
 // failures are logged and the file-name guess stays.
 func (scanner *Scanner) lookupMetadata(ctx context.Context, id int64, guess Guess) {
-	if scanner.deps.Meta == nil {
+	if scanner.dependencies.Meta == nil {
 		return
 	}
 	scannedMetadata, err := scanner.metadataFor(ctx, guess)
@@ -426,27 +426,27 @@ func (scanner *Scanner) lookupMetadata(ctx context.Context, id int64, guess Gues
 	case errors.Is(err, metadata.ErrDisabled):
 		return // not a lookup: try again once a key is set
 	case errors.Is(err, metadata.ErrNoMatch):
-		err = scanner.deps.Store.MarkMetadataChecked(ctx, id)
+		err = scanner.dependencies.Store.MarkMetadataChecked(ctx, id)
 	case err != nil:
-		scanner.deps.Log.Warn("metadata lookup failed; it is retried later", "title", guess.Title, "err", err)
-		err = scanner.deps.Store.MarkMetadataChecked(ctx, id)
+		scanner.dependencies.Log.Warn("metadata lookup failed; it is retried later", "title", guess.Title, "err", err)
+		err = scanner.dependencies.Store.MarkMetadataChecked(ctx, id)
 	default:
-		err = scanner.deps.Store.SetScannedMetadata(ctx, id, scannedMetadata)
+		err = scanner.dependencies.Store.SetScannedMetadata(ctx, id, scannedMetadata)
 	}
 	if err != nil {
-		scanner.deps.Log.Warn("saving metadata failed", "media", id, "err", err)
+		scanner.dependencies.Log.Warn("saving metadata failed", "media", id, "err", err)
 	}
 }
 
 // retryMetadata looks up again unpublished media that is still missing a
 // poster or description (see metadataRetryAfter).
 func (scanner *Scanner) retryMetadata(ctx context.Context) {
-	if scanner.deps.Meta == nil {
+	if scanner.dependencies.Meta == nil {
 		return
 	}
-	list, err := scanner.deps.Store.MediaNeedingMetadata(ctx, scanner.now().Add(-metadataRetryAfter), metadataRetryBatch)
+	list, err := scanner.dependencies.Store.MediaNeedingMetadata(ctx, scanner.now().Add(-metadataRetryAfter), metadataRetryBatch)
 	if err != nil {
-		scanner.deps.Log.Warn("listing media without metadata", "err", err)
+		scanner.dependencies.Log.Warn("listing media without metadata", "err", err)
 		return
 	}
 	for _, media := range list {
@@ -463,10 +463,10 @@ func (scanner *Scanner) retryMetadata(ctx context.Context) {
 // administrator may have corrected. It returns metadata.ErrNoMatch when
 // TMDB has nothing and metadata.ErrDisabled without an API key.
 func (scanner *Scanner) RefreshMetadata(ctx context.Context, id int64) error {
-	if scanner.deps.Meta == nil {
+	if scanner.dependencies.Meta == nil {
 		return metadata.ErrDisabled
 	}
-	media, err := scanner.deps.Store.MediaByID(ctx, id)
+	media, err := scanner.dependencies.Store.MediaByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -474,7 +474,7 @@ func (scanner *Scanner) RefreshMetadata(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	return scanner.deps.Store.ReplaceMetadata(ctx, id, scannedMetadata)
+	return scanner.dependencies.Store.ReplaceMetadata(ctx, id, scannedMetadata)
 }
 
 // guessForMedia is what to look a stored item up by: the guess from its
@@ -510,9 +510,9 @@ func (scanner *Scanner) metadataFor(ctx context.Context, guess Guess) (store.Sca
 // findMetadata looks up a film, or an episode with its show's poster.
 func (scanner *Scanner) findMetadata(ctx context.Context, guess Guess) (metadata.Info, error) {
 	if !guess.IsEpisode() {
-		return scanner.deps.Meta.Movie(ctx, guess.Title, guess.Year)
+		return scanner.dependencies.Meta.Movie(ctx, guess.Title, guess.Year)
 	}
-	show, err := scanner.deps.Meta.Show(ctx, guess.Show, guess.Year)
+	show, err := scanner.dependencies.Meta.Show(ctx, guess.Show, guess.Year)
 	if err != nil {
 		return metadata.Info{}, err
 	}
@@ -530,15 +530,15 @@ func (scanner *Scanner) findMetadata(ctx context.Context, guess Guess) (metadata
 func (scanner *Scanner) findEpisode(ctx context.Context, showID int, guess Guess) (metadata.Info, error) {
 	title := fileEpisodeTitle(guess)
 	if title == "" {
-		return scanner.deps.Meta.Episode(ctx, showID, guess.Season, guess.Episode)
+		return scanner.dependencies.Meta.Episode(ctx, showID, guess.Season, guess.Episode)
 	}
-	episodes, err := scanner.deps.Meta.Season(ctx, showID, guess.Season)
+	episodes, err := scanner.dependencies.Meta.Season(ctx, showID, guess.Season)
 	if err != nil {
 		return metadata.Info{}, err
 	}
 	if episode, found := episodeByTitle(episodes, title, guess.Episode); found {
 		if episode.Number != guess.Episode {
-			scanner.deps.Log.Debug("episode matched by title", "show", guess.Show, "season", guess.Season,
+			scanner.dependencies.Log.Debug("episode matched by title", "show", guess.Show, "season", guess.Season,
 				"file_episode", guess.Episode, "tmdb_episode", episode.Number, "title", episode.Title)
 		}
 		return episode.Info, nil
@@ -551,9 +551,9 @@ func (scanner *Scanner) findEpisode(ctx context.Context, showID int, guess Guess
 
 // importAllSidecars imports subtitle files next to every known video.
 func (scanner *Scanner) importAllSidecars(ctx context.Context, tree tree, known map[string]int64) int {
-	imported, err := scanner.deps.Store.SubtitleSources(ctx)
+	imported, err := scanner.dependencies.Store.SubtitleSources(ctx)
 	if err != nil {
-		scanner.deps.Log.Warn("could not list imported subtitles", "err", err)
+		scanner.dependencies.Log.Warn("could not list imported subtitles", "err", err)
 		return 0
 	}
 	importedCount := 0
@@ -580,20 +580,20 @@ func (scanner *Scanner) importSidecars(ctx context.Context, mediaID int64, video
 		}
 		data, err := os.ReadFile(filepath.Join(scanner.config.MediaDirectory, filepath.FromSlash(subtitlePath)))
 		if err != nil {
-			scanner.deps.Log.Warn("could not read subtitle", "path", subtitlePath, "err", err)
+			scanner.dependencies.Log.Warn("could not read subtitle", "path", subtitlePath, "err", err)
 			continue
 		}
 		cues, err := subtitle.Parse(data)
 		if err != nil {
-			scanner.deps.Log.Warn("could not parse subtitle", "path", subtitlePath, "err", err)
+			scanner.dependencies.Log.Warn("could not parse subtitle", "path", subtitlePath, "err", err)
 			imported.Add(subtitlePath) // do not retry a broken file on every scan of this run
 			continue
 		}
-		_, inserted, err := scanner.deps.Store.AddSubtitle(ctx, store.NewSubtitle{
+		_, inserted, err := scanner.dependencies.Store.AddSubtitle(ctx, store.NewSubtitle{
 			MediaID: mediaID, Language: language, Label: subtitle.LanguageName(language), Source: subtitlePath, Cues: cues,
 		})
 		if err != nil {
-			scanner.deps.Log.Warn("could not save subtitle", "path", subtitlePath, "err", err)
+			scanner.dependencies.Log.Warn("could not save subtitle", "path", subtitlePath, "err", err)
 			continue
 		}
 		imported.Add(subtitlePath)
@@ -636,8 +636,8 @@ func (scanner *Scanner) backfillEpisodeEnd(ctx context.Context, videos []found, 
 			continue
 		}
 		if guess := ParsePath(video.relativePath); guess.EpisodeEnd > 0 {
-			if err := scanner.deps.Store.SetEpisodeEnd(ctx, id, guess.Episode, guess.EpisodeEnd); err != nil {
-				scanner.deps.Log.Warn("recording an episode range", "path", video.relativePath, "err", err)
+			if err := scanner.dependencies.Store.SetEpisodeEnd(ctx, id, guess.Episode, guess.EpisodeEnd); err != nil {
+				scanner.dependencies.Log.Warn("recording an episode range", "path", video.relativePath, "err", err)
 			}
 		}
 	}
@@ -647,9 +647,9 @@ func (scanner *Scanner) backfillEpisodeEnd(ctx context.Context, videos []found, 
 // stored. Without it, a 10-bit H.264 file (which no browser plays) would be
 // served as is and never converted.
 func (scanner *Scanner) backfillPixelFormat(ctx context.Context, videos []found) {
-	missing, err := scanner.deps.Store.H264MissingPixelFormat(ctx)
+	missing, err := scanner.dependencies.Store.H264MissingPixelFormat(ctx)
 	if err != nil {
-		scanner.deps.Log.Warn("could not list media to re-probe", "err", err)
+		scanner.dependencies.Log.Warn("could not list media to re-probe", "err", err)
 		return
 	}
 	done := 0
@@ -660,15 +660,15 @@ func (scanner *Scanner) backfillPixelFormat(ctx context.Context, videos []found)
 		}
 		done++
 		pctx, cancel := context.WithTimeout(ctx, time.Minute)
-		probe, err := scanner.deps.Prober.Probe(pctx, scannedVideo.absolutePath)
+		probe, err := scanner.dependencies.Prober.Probe(pctx, scannedVideo.absolutePath)
 		cancel()
 		if err != nil {
-			scanner.deps.Log.Warn("could not re-probe media", "path", scannedVideo.relativePath, "err", err)
+			scanner.dependencies.Log.Warn("could not re-probe media", "path", scannedVideo.relativePath, "err", err)
 			continue
 		}
 		if video, hasVideo := probe.Video(); hasVideo && video.PixelFormat != "" {
-			if err := scanner.deps.Store.SetPixelFormat(ctx, id, video.PixelFormat); err != nil {
-				scanner.deps.Log.Warn("could not record pixel format", "path", scannedVideo.relativePath, "err", err)
+			if err := scanner.dependencies.Store.SetPixelFormat(ctx, id, video.PixelFormat); err != nil {
+				scanner.dependencies.Log.Warn("could not record pixel format", "path", scannedVideo.relativePath, "err", err)
 			}
 		}
 	}

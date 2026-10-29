@@ -45,8 +45,8 @@ func TestMakePlan(t *testing.T) {
 	if !slices.Equal(files, want) {
 		t.Errorf("subtitle files = %v, want %v", files, want)
 	}
-	if plan.DroppedSubs != 1 || plan.DroppedOther != 1 {
-		t.Errorf("dropped subs=%d other=%d, want 1 and 1", plan.DroppedSubs, plan.DroppedOther)
+	if plan.DroppedSubtitles != 1 || plan.DroppedOther != 1 {
+		t.Errorf("dropped subs=%d other=%d, want 1 and 1", plan.DroppedSubtitles, plan.DroppedOther)
 	}
 
 	arguments := strings.Join(plan.ConvertArguments("in.mkv", "out.mp4"), " ")
