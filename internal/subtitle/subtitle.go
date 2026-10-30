@@ -3,15 +3,11 @@ package subtitle
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 )
-
-// [ErrNoCues] is returned by [Parse] when a file holds no cue with text.
-var ErrNoCues = errors.New("no subtitle cues found")
 
 // [Parse] reads a subtitle file in SRT or WebVTT format into its cues. The
 // format is detected from the content, not the file name. A leading UTF-8

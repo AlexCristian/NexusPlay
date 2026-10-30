@@ -14,14 +14,18 @@ import (
 //     [Collection.CreatedAt] are ignored.
 //
 // Returns:
-//   - [int64] ([id]): the new collection's ID, or 0 if [error] is not [nil].
-//   - [error] ([err]): [nil] on success; [ErrDuplicate] if the name is
+//   - [int64]: the new collection's ID; not meaningful if [error] is not
+//     [nil].
+//   - [error]: [nil] on success; [ErrDuplicate] if the name is
 //     taken, regardless of letter case; otherwise the database error.
-func (store *Store) CreateCollection(ctx context.Context, collection Collection) (id int64, err error) {
-	err = store.withTransaction(ctx, func(transaction *sql.Tx) error {
-		if collection.Category, err = canonicalCategory(ctx, transaction, collection.Category); err != nil {
+func (store *Store) CreateCollection(ctx context.Context, collection Collection) (int64, error) {
+	var id int64
+	err := store.withTransaction(ctx, func(transaction *sql.Tx) error {
+		category, err := canonicalCategory(ctx, transaction, collection.Category)
+		if err != nil {
 			return err
 		}
+		collection.Category = category
 		result, err := transaction.ExecContext(ctx,
 			`INSERT INTO collections (name, category, year, overview, poster, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
 			collection.Name, collection.Category, collection.Year, collection.Overview, collection.Poster, store.unix())

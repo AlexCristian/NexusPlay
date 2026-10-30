@@ -3,17 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"errors"
-)
-
-// Errors returned by the subtitle voting flow.
-var (
-	// [ErrAlreadyVoted] is returned when a user proposes or votes on a line they
-	// already voted on: each user gets one vote per line.
-	ErrAlreadyVoted = errors.New("you have already voted on this line")
-	// [ErrUnchanged] is returned when a proposed correction is the line's
-	// current text.
-	ErrUnchanged = errors.New("the proposed text is the same as the current line")
 )
 
 // [checkNotVoted] makes sure a user has not voted on any proposal for a

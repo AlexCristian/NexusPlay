@@ -9,17 +9,13 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-// [ErrNoSession] is returned by [Sessions.Lookup] when a session token is
-// empty, unknown or expired.
-var ErrNoSession = errors.New("no such session")
-
 // [Sessions] creates and checks login sessions. Tokens are stored only as
 // SHA-256 hashes (see [HashToken]), so a leaked database does not leak live
 // sessions, and each session has its own CSRF token. Create one with
 // [NewSessions]. It is safe for concurrent use.
 type Sessions struct {
-	// [store] saves and finds sessions.
-	store SessionStore
+	// [database] saves and finds sessions.
+	database SessionStore
 	// [lifetime] is how long a new session stays valid.
 	lifetime time.Duration
 	// [log] records failed clean-ups of expired sessions.
@@ -40,7 +36,7 @@ type Sessions struct {
 // Returns:
 //   - [*Sessions]: the session manager.
 func NewSessions(database SessionStore, lifetime time.Duration, log *slog.Logger) *Sessions {
-	return &Sessions{store: database, lifetime: lifetime, log: log, now: time.Now}
+	return &Sessions{database: database, lifetime: lifetime, log: log, now: time.Now}
 }
 
 // [Start] signs a user in: it creates a session with a new token and a new
@@ -66,7 +62,7 @@ func (sessions *Sessions) Start(ctx context.Context, userID int64) (token string
 		return "", time.Time{}, err
 	}
 	expires = sessions.now().Add(sessions.lifetime)
-	if err := sessions.store.CreateSession(ctx, HashToken(token), userID, csrf, expires); err != nil {
+	if err := sessions.database.CreateSession(ctx, HashToken(token), userID, csrf, expires); err != nil {
 		return "", time.Time{}, err
 	}
 	return token, expires, nil
@@ -87,7 +83,7 @@ func (sessions *Sessions) Lookup(ctx context.Context, token string) (Viewer, err
 	if token == "" {
 		return Viewer{}, ErrNoSession
 	}
-	session, user, err := sessions.store.SessionUser(ctx, HashToken(token))
+	session, user, err := sessions.database.SessionUser(ctx, HashToken(token))
 	if errors.Is(err, store.ErrNotFound) {
 		return Viewer{}, ErrNoSession
 	}
@@ -107,7 +103,7 @@ func (sessions *Sessions) Lookup(ctx context.Context, token string) (Viewer, err
 // Returns:
 //   - [error]: [nil] on success, or the database error.
 func (sessions *Sessions) End(ctx context.Context, token string) error {
-	return sessions.store.DeleteSession(ctx, HashToken(token))
+	return sessions.database.DeleteSession(ctx, HashToken(token))
 }
 
 // [Run] deletes expired sessions every hour until [ctx] ends, logging
@@ -127,7 +123,7 @@ func (sessions *Sessions) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			if err := sessions.store.DeleteExpiredSessions(ctx); err != nil && ctx.Err() == nil {
+			if err := sessions.database.DeleteExpiredSessions(ctx); err != nil && ctx.Err() == nil {
 				sessions.log.Warn("could not delete expired sessions", "err", err)
 			}
 		}

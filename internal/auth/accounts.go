@@ -12,15 +12,6 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-// [ErrInvalidCredentials] is returned by [Accounts.Login] when the e-mail or
-// the password is wrong. It never says which, so the login form does not
-// reveal who has an account.
-var ErrInvalidCredentials = errors.New("wrong e-mail or password")
-
-// [ErrRegistrationClosed] is returned by [Accounts.Register] when the install
-// already has as many accounts as NEXUSPLAY_MAX_ACCOUNTS allows.
-var ErrRegistrationClosed = errors.New("registration is closed")
-
 // [Accounts] holds the rules for creating accounts and logging in. Create one
 // with [NewAccounts]. It is safe for concurrent use.
 type Accounts struct {
@@ -115,6 +106,22 @@ func (accounts *Accounts) Register(ctx context.Context, registration Registratio
 	return user, nil
 }
 
+// Limits on what a sign-up may contain. The messages shown for them in
+// [validate] repeat the numbers, so change both together.
+const (
+	// [maximumEmailBytes] is the longest e-mail address accepted, in bytes.
+	maximumEmailBytes = 254
+	// [minimumNicknameCharacters] is the shortest nickname accepted.
+	minimumNicknameCharacters = 2
+	// [maximumNicknameCharacters] is the longest nickname accepted.
+	maximumNicknameCharacters = 40
+	// [minimumPasswordCharacters] is the shortest password accepted.
+	minimumPasswordCharacters = 8
+	// [maximumPasswordBytes] is the longest password accepted, in bytes,
+	// which bounds the time spent hashing it.
+	maximumPasswordBytes = 1024
+)
+
 // [validate] checks a sign-up's fields: the e-mail must be a plain address
 // (no display name) of at most 254 bytes, the nickname 2 to 40 characters,
 // and the password at least 8 characters and at most 1024 bytes.
@@ -127,13 +134,13 @@ func (accounts *Accounts) Register(ctx context.Context, registration Registratio
 //   - [error]: [nil] if every field is valid, or a [*ValidationError] for
 //     the first field that is not, with a message to show the user.
 func validate(registration Registration) error {
-	if address, err := mail.ParseAddress(registration.Email); err != nil || address.Address != registration.Email || len(registration.Email) > 254 {
+	if address, err := mail.ParseAddress(registration.Email); err != nil || address.Address != registration.Email || len(registration.Email) > maximumEmailBytes {
 		return &ValidationError{"email", "Enter a valid e-mail address."}
 	}
-	if length := utf8.RuneCountInString(registration.Nickname); length < 2 || length > 40 {
+	if length := utf8.RuneCountInString(registration.Nickname); length < minimumNicknameCharacters || length > maximumNicknameCharacters {
 		return &ValidationError{"nickname", "Your nickname must be between 2 and 40 characters."}
 	}
-	if utf8.RuneCountInString(registration.Password) < 8 || len(registration.Password) > 1024 {
+	if utf8.RuneCountInString(registration.Password) < minimumPasswordCharacters || len(registration.Password) > maximumPasswordBytes {
 		return &ValidationError{"password", "Your password must be at least 8 characters and at most 1024 bytes long."}
 	}
 	return nil

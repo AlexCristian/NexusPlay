@@ -2,6 +2,7 @@ package housestyle
 
 import (
 	"go/ast"
+	"go/types"
 	"path/filepath"
 	"strings"
 
@@ -25,6 +26,10 @@ func checkFileLayout(pass *analysis.Pass, file *ast.File, fileName string) {
 		switch declaration := declaration.(type) {
 		case *ast.GenDecl:
 			for _, specification := range declaration.Specs {
+				if valueSpecification, isValue := specification.(*ast.ValueSpec); isValue {
+					checkErrorFile(pass, valueSpecification, baseName)
+					continue
+				}
 				typeSpecification, isType := specification.(*ast.TypeSpec)
 				if !isType || !typeSpecification.Name.IsExported() {
 					continue
@@ -43,6 +48,28 @@ func checkFileLayout(pass *analysis.Pass, file *ast.File, fileName string) {
 			if baseName != want && !strings.HasPrefix(baseName, stem+"_") {
 				pass.Reportf(declaration.Name.Pos(), "method [%s.%s] should be in %s or a %s_*.go file, with [%s]", typeName, declaration.Name.Name, want, stem, typeName)
 			}
+		}
+	}
+}
+
+// [checkErrorFile] reports exported sentinel errors, package-level variables
+// of type [error] whose name starts with "Err", that are not in errors.go.
+//
+// Parameters:
+//   - [pass]: where problems are reported.
+//   - [specification]: a package-level "var" or "const" entry.
+//   - [baseName]: the name of the file it is declared in.
+func checkErrorFile(pass *analysis.Pass, specification *ast.ValueSpec, baseName string) {
+	if baseName == "errors.go" {
+		return
+	}
+	for _, name := range specification.Names {
+		object := pass.TypesInfo.Defs[name]
+		if object == nil || !name.IsExported() || !strings.HasPrefix(name.Name, "Err") {
+			continue
+		}
+		if object.Parent() == pass.Pkg.Scope() && types.Identical(object.Type(), types.Universe.Lookup("error").Type()) {
+			pass.Reportf(name.Pos(), "sentinel error [%s] should be in errors.go", name.Name)
 		}
 	}
 }

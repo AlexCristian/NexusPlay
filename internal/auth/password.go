@@ -30,6 +30,10 @@ const (
 	saltLength = 16
 )
 
+// [tokenLength] is how many random bytes a token from [NewToken] holds: 256
+// bits.
+const tokenLength = 32
+
 // [maximumArgonMemory] is the most memory, in KiB (1 GiB), a stored hash may
 // ask for. A larger value can only come from a damaged hash, and would make
 // checking it allocate that much.
@@ -39,10 +43,6 @@ const maximumArgonMemory = 1 << 20
 // hold. A shorter one can only come from a damaged hash; an empty one would
 // crash the Argon2 library.
 const minimumKeyLength = 16
-
-// [ErrMismatch] is returned by [VerifyPassword] when a password does not
-// match its hash.
-var ErrMismatch = errors.New("password does not match")
 
 // [HashPassword] hashes a password for storage with Argon2id and a new random
 // salt, so hashing the same password twice gives different results.
@@ -128,7 +128,7 @@ func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 //   - [error]: [nil] on success, or an error only if the system's random
 //     source is broken.
 func NewToken() (string, error) {
-	randomBytes := make([]byte, 32)
+	randomBytes := make([]byte, tokenLength)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return "", err
 	}

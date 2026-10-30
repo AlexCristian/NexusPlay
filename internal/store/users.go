@@ -1,18 +1,8 @@
 package store
 
 import (
-	"errors"
 	"time"
 )
-
-// [ErrDuplicate] is returned when a write would repeat a value that must be
-// unique: an e-mail, nickname or collection name, compared without regard
-// to letter case.
-var ErrDuplicate = errors.New("already exists")
-
-// [ErrUserLimit] is returned by [Store.CreateUser] when the account limit is
-// reached.
-var ErrUserLimit = errors.New("account limit reached")
 
 // [userColumns] are the columns every user query selects, in the order
 // [scanUser] reads them.

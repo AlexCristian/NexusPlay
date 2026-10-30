@@ -8,9 +8,6 @@ import (
 	database "store"
 )
 
-// [ErrNoMatch] means nothing matched.
-var ErrNoMatch = errors.New("no match")
-
 // [errHidden] is an unexported sentinel.
 var errHidden = errors.New("hidden")
 

@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+// [maximumConversionErrorBytes] is the most of a conversion error's text
+// that is stored, in bytes.
+const maximumConversionErrorBytes = 2000
+
 // [ConversionCandidates] lists the media that have not failed conversion,
 // newest first. The caller decides which of them actually need converting.
 // The control panel polls this while conversions run, so it reads only the
@@ -54,13 +58,13 @@ func (store *Store) ConversionFailures(ctx context.Context) ([]ConversionFailure
 //   - [ctx]: cancels the update.
 //   - [id]: the media item.
 //   - [reason]: the error to show; spaces around it are trimmed and it is
-//     cut to 2000 bytes.
+//     cut to [maximumConversionErrorBytes].
 //
 // Returns:
 //   - [error]: [nil] on success, or the database error.
 func (store *Store) SetConvertFailed(ctx context.Context, id int64, reason string) error {
 	_, err := store.database.ExecContext(ctx, `UPDATE media SET convert_status = 'failed', convert_error = ? WHERE id = ?`,
-		truncateRunes(strings.TrimSpace(reason), 2000), id)
+		truncateToBytes(strings.TrimSpace(reason), maximumConversionErrorBytes), id)
 	return err
 }
 

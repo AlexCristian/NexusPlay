@@ -22,8 +22,11 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// [ErrNotFound] is returned when a lookup of one row matches none.
-var ErrNotFound = errors.New("not found")
+// [maximumOpenConnections] is how many SQLite connections the pool keeps
+// open at most. WAL lets readers run alongside the single writer, so one
+// connection would make every page load wait behind every write; eight is
+// plenty for a household server.
+const maximumOpenConnections = 8
 
 // [Store] is the NexusPlay database. Get one from [Open]. It is safe for
 // concurrent use.
@@ -57,7 +60,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	// one connection would make every page load wait behind every write (and
 	// a query issued while a result set is still open would deadlock). Eight
 	// is plenty for a household server.
-	pool.SetMaxOpenConns(8)
+	pool.SetMaxOpenConns(maximumOpenConnections)
 	store := &Store{database: pool, now: time.Now}
 	if err := store.migrate(ctx); err != nil {
 		pool.Close()

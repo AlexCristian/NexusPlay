@@ -59,7 +59,7 @@ func TestTruncateRunes(t *testing.T) {
 		{"ăîș", 4, "ăî"},
 		{"日本", 4, "日"},
 	} {
-		if got := truncateRunes(testCase.input, testCase.limit); got != testCase.want {
+		if got := truncateToBytes(testCase.input, testCase.limit); got != testCase.want {
 			t.Errorf("truncateRunes(%q, %d) = %q, want %q", testCase.input, testCase.limit, got, testCase.want)
 		}
 	}

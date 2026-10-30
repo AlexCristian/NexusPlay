@@ -127,7 +127,7 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
 }
 
-// [truncateRunes] shortens text to fit a byte limit without cutting a UTF-8
+// [truncateToBytes] shortens text to fit a byte limit without cutting a UTF-8
 // character in half.
 //
 // Parameters:
@@ -137,7 +137,7 @@ func isUniqueViolation(err error) bool {
 // Returns:
 //   - [string]: [text] unchanged if it fits; otherwise its longest prefix of
 //     at most [limit] bytes that ends between characters.
-func truncateRunes(text string, limit int) string {
+func truncateToBytes(text string, limit int) string {
 	if len(text) <= limit {
 		return text
 	}

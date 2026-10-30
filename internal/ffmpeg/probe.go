@@ -2,7 +2,6 @@ package ffmpeg
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -19,9 +18,6 @@ type Probe struct {
 	// [Streams] holds every stream in the file, in file order.
 	Streams []Stream
 }
-
-// [ErrNoVideo] means a file has no video stream other than cover art.
-var ErrNoVideo = errors.New("no video stream")
 
 // [Video] finds the main video stream: the first video stream that is not
 // cover art (see [Stream.AttachedPicture] and [isImageCodec]).

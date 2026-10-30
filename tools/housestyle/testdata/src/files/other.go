@@ -1,5 +1,7 @@
 package files
 
+import "errors"
+
 // [Title] is a method in the wrong file.
 func (episode Episode) Title() {} // want "method \\[Episode.Title\\] should be in episode.go or a episode_\\*.go file, with \\[Episode\\]"
 
@@ -14,3 +16,12 @@ func (helper episodeHelper) describe() {}
 // Returns:
 //   - [Episode]: a new episode.
 func NewEpisode() Episode { return Episode{} }
+
+// [ErrMisplaced] is a sentinel error outside errors.go.
+var ErrMisplaced = errors.New("misplaced") // want "sentinel error \\[ErrMisplaced\\] should be in errors.go"
+
+// [errQuiet] is unexported, so it may be anywhere.
+var errQuiet = errors.New("quiet")
+
+// [ErrorCount] starts with "Err" but is not an error.
+var ErrorCount = 3
