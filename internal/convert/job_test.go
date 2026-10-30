@@ -91,10 +91,10 @@ func newJobFixture(t *testing.T, tools *fakeTools, free uint64) jobFixture {
 		t.Fatal(err)
 	}
 	media, _ := database.MediaByID(ctx, id)
-	lib := &fakeLibrary{}
-	converter := New(Dependencies{Store: database, Tools: tools, Library: lib, Log: slog.New(slog.NewTextHandler(io.Discard, nil))},
+	library := &fakeLibrary{}
+	converter := New(Dependencies{Store: database, Tools: tools, Library: library, Log: slog.New(slog.NewTextHandler(io.Discard, nil))},
 		Config{MediaDirectory: mediaDirectory, FreeSpace: func(string) (uint64, error) { return free, nil }})
-	return jobFixture{converter: converter, database: database, library: lib, tools: tools, media: media, directory: mediaDirectory}
+	return jobFixture{converter: converter, database: database, library: library, tools: tools, media: media, directory: mediaDirectory}
 }
 
 func (jobFixture jobFixture) files(t *testing.T) []string {

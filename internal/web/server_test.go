@@ -186,7 +186,7 @@ func TestCSRF(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := "/collections/" + itoa(coll) + "/subscribe"
+	path := "/collections/" + formatInteger(coll) + "/subscribe"
 
 	if response, _ := client.sendForm("POST", path, url.Values{}, nil); response.StatusCode != http.StatusForbidden {
 		t.Errorf("no token: %d, want 403", response.StatusCode)
@@ -208,12 +208,12 @@ func TestUnpublishedMediaIsHidden(t *testing.T) {
 	admin := environment.client()
 	admin.register("alex")
 	id, _, _ := environment.store.InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "secret.mp4", Title: "Secret", VideoCodec: "h264", AudioCodec: "aac"})
-	path := "/watch/" + itoa(id)
+	path := "/watch/" + formatInteger(id)
 
 	if response, _ := environment.client().sendForm("GET", path, nil, nil); response.StatusCode != http.StatusNotFound {
 		t.Errorf("anonymous, unpublished: %d, want 404", response.StatusCode)
 	}
-	if response, body := admin.sendForm("GET", path, nil, nil); response.StatusCode != 200 || !strings.Contains(body, `data-src="/media/`+itoa(id)+`/file"`) {
+	if response, body := admin.sendForm("GET", path, nil, nil); response.StatusCode != 200 || !strings.Contains(body, `data-src="/media/`+formatInteger(id)+`/file"`) {
 		t.Errorf("admin preview: %d", response.StatusCode)
 	}
 	environment.store.UpdateMedia(context.Background(), id, store.MediaUpdate{Title: "Secret"}, true)
@@ -230,7 +230,7 @@ func TestMediaStreamingSupportsRanges(t *testing.T) {
 	ctx := context.Background()
 	id, _, _ := environment.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "clip.mp4", Title: "Clip", VideoCodec: "h264"})
 	environment.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "Clip"}, true)
-	response, body := environment.client().sendForm("GET", "/media/"+itoa(id)+"/file", nil, map[string]string{"Range": "bytes=2-5"})
+	response, body := environment.client().sendForm("GET", "/media/"+formatInteger(id)+"/file", nil, map[string]string{"Range": "bytes=2-5"})
 	if response.StatusCode != http.StatusPartialContent || body != "2345" || response.Header.Get("Content-Type") != "video/mp4" {
 		t.Errorf("range request: %d %q %q", response.StatusCode, body, response.Header.Get("Content-Type"))
 	}
@@ -246,7 +246,7 @@ func TestSubtitleFlow(t *testing.T) {
 	environment.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "M"}, true)
 	subtitleID, _, _ := environment.store.AddSubtitle(ctx, store.NewSubtitle{MediaID: id, Language: "en", Label: "English", Cues: []subtitle.Cue{{StartMS: 1000, EndMS: 2000, Text: "Helo"}}})
 
-	response, body := firstClient.sendForm("GET", "/media/"+itoa(id)+"/subtitle-report?track="+itoa(subtitleID)+"&t=1500", nil, nil)
+	response, body := firstClient.sendForm("GET", "/media/"+formatInteger(id)+"/subtitle-report?track="+formatInteger(subtitleID)+"&t=1500", nil, nil)
 	if response.StatusCode != 200 || !strings.Contains(body, "Helo") {
 		t.Fatalf("report dialog: %d", response.StatusCode)
 	}
@@ -254,21 +254,21 @@ func TestSubtitleFlow(t *testing.T) {
 	htmx := func(client *client) map[string]string {
 		return map[string]string{"X-CSRF-Token": client.csrf, "HX-Request": "true"}
 	}
-	response, body = firstClient.sendForm("POST", "/cues/"+itoa(cue.ID)+"/changes", url.Values{"text": {"Hello"}}, htmx(firstClient))
+	response, body = firstClient.sendForm("POST", "/cues/"+formatInteger(cue.ID)+"/changes", url.Values{"text": {"Hello"}}, htmx(firstClient))
 	if response.StatusCode != 200 || !strings.Contains(body, "Correction submitted") {
 		t.Fatalf("propose: %d %s", response.StatusCode, body)
 	}
 	changes, _ := environment.store.Changes(ctx, cue.ID, 0)
-	response, body = secondClient.sendForm("POST", "/changes/"+itoa(changes[0].ID)+"/vote", url.Values{}, htmx(secondClient))
+	response, body = secondClient.sendForm("POST", "/changes/"+formatInteger(changes[0].ID)+"/vote", url.Values{}, htmx(secondClient))
 	if response.StatusCode != 200 || !strings.Contains(body, "Change applied") {
 		t.Fatalf("vote: %d %s", response.StatusCode, body)
 	}
 	// Without htmx (scripts not loaded yet) the form still works and returns to the video.
-	response, _ = firstClient.sendForm("POST", "/cues/"+itoa(cue.ID)+"/changes", url.Values{"text": {"Hello!"}, "csrf_token": {firstClient.csrf}}, nil)
-	if response.StatusCode != http.StatusSeeOther || response.Header.Get("Location") != "/watch/"+itoa(id) {
+	response, _ = firstClient.sendForm("POST", "/cues/"+formatInteger(cue.ID)+"/changes", url.Values{"text": {"Hello!"}, "csrf_token": {firstClient.csrf}}, nil)
+	if response.StatusCode != http.StatusSeeOther || response.Header.Get("Location") != "/watch/"+formatInteger(id) {
 		t.Errorf("plain form post: %d to %q", response.StatusCode, response.Header.Get("Location"))
 	}
-	_, vtt := environment.client().sendForm("GET", "/subtitles/"+itoa(subtitleID), nil, nil)
+	_, vtt := environment.client().sendForm("GET", "/subtitles/"+formatInteger(subtitleID), nil, nil)
 	if !strings.Contains(vtt, "WEBVTT") || !strings.Contains(vtt, "Hello") {
 		t.Errorf("vtt after vote:\n%s", vtt)
 	}
@@ -351,7 +351,7 @@ func TestOversizeUploadIsRejectedAsTooLarge(t *testing.T) {
 		if headerToken {
 			headers["X-CSRF-Token"] = admin.csrf
 		}
-		request, _ := http.NewRequest("POST", environment.srv.URL+"/admin/media/"+itoa(id)+"/subtitles", &buffer)
+		request, _ := http.NewRequest("POST", environment.srv.URL+"/admin/media/"+formatInteger(id)+"/subtitles", &buffer)
 		request.Header.Set("Origin", environment.srv.URL)
 		for key, value := range headers {
 			request.Header.Set(key, value)
@@ -403,11 +403,11 @@ func TestUnpublishedMediaRejectsProgressAndVotes(t *testing.T) {
 	subtitleID, _, _ := environment.store.AddSubtitle(ctx, store.NewSubtitle{MediaID: id, Language: "en", Label: "English", Cues: []subtitle.Cue{{StartMS: 0, EndMS: 1000, Text: "Helo"}}})
 	cue, _ := environment.store.CueAt(ctx, subtitleID, 500)
 
-	if response, _ := member.sendForm("POST", "/me/progress", url.Values{"csrf_token": {member.csrf}, "media_id": {itoa(id)}, "position": {"5"}}, nil); response.StatusCode != http.StatusNotFound {
+	if response, _ := member.sendForm("POST", "/me/progress", url.Values{"csrf_token": {member.csrf}, "media_id": {formatInteger(id)}, "position": {"5"}}, nil); response.StatusCode != http.StatusNotFound {
 		t.Errorf("progress on unpublished media: %d, want 404", response.StatusCode)
 	}
 	headers := map[string]string{"X-CSRF-Token": member.csrf, "HX-Request": "true"}
-	if response, _ := member.sendForm("POST", "/cues/"+itoa(cue.ID)+"/changes", url.Values{"text": {"Hello"}}, headers); response.StatusCode != http.StatusNotFound {
+	if response, _ := member.sendForm("POST", "/cues/"+formatInteger(cue.ID)+"/changes", url.Values{"text": {"Hello"}}, headers); response.StatusCode != http.StatusNotFound {
 		t.Errorf("correction on unpublished media: %d, want 404", response.StatusCode)
 	}
 	if changes, _ := environment.store.Changes(ctx, cue.ID, 0); len(changes) != 0 {
@@ -416,11 +416,11 @@ func TestUnpublishedMediaRejectsProgressAndVotes(t *testing.T) {
 
 	environment.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "Secret"}, true)
 	for _, bad := range []string{"NaN", "Inf", "-1", "abc"} {
-		if response, _ := member.sendForm("POST", "/me/progress", url.Values{"csrf_token": {member.csrf}, "media_id": {itoa(id)}, "position": {bad}}, nil); response.StatusCode != http.StatusBadRequest {
+		if response, _ := member.sendForm("POST", "/me/progress", url.Values{"csrf_token": {member.csrf}, "media_id": {formatInteger(id)}, "position": {bad}}, nil); response.StatusCode != http.StatusBadRequest {
 			t.Errorf("position %q: %d, want 400", bad, response.StatusCode)
 		}
 	}
-	if response, _ := member.sendForm("POST", "/me/progress", url.Values{"csrf_token": {member.csrf}, "media_id": {itoa(id)}, "position": {"5"}}, nil); response.StatusCode != http.StatusNoContent {
+	if response, _ := member.sendForm("POST", "/me/progress", url.Values{"csrf_token": {member.csrf}, "media_id": {formatInteger(id)}, "position": {"5"}}, nil); response.StatusCode != http.StatusNoContent {
 		t.Errorf("progress on published media: %d, want 204", response.StatusCode)
 	}
 }
@@ -448,7 +448,7 @@ func TestRemovePoster(t *testing.T) {
 			writer.Write(png)
 		}
 		multipartWriter.Close()
-		response, body := admin.send("POST", "/admin/media/"+itoa(id), &buffer, map[string]string{"Content-Type": multipartWriter.FormDataContentType()})
+		response, body := admin.send("POST", "/admin/media/"+formatInteger(id), &buffer, map[string]string{"Content-Type": multipartWriter.FormDataContentType()})
 		return response.StatusCode, body
 	}
 	poster := func() string {
@@ -459,7 +459,7 @@ func TestRemovePoster(t *testing.T) {
 		return media.Poster
 	}
 
-	_, page := admin.sendForm("GET", "/admin/media/"+itoa(id), nil, nil)
+	_, page := admin.sendForm("GET", "/admin/media/"+formatInteger(id), nil, nil)
 	if !strings.Contains(page, `name="remove_poster"`) {
 		t.Error("the edit page has no remove box although the media has a poster")
 	}
@@ -475,7 +475,7 @@ func TestRemovePoster(t *testing.T) {
 	if got := poster(); got != "" {
 		t.Errorf("after remove, poster = %q", got)
 	}
-	_, page = admin.sendForm("GET", "/admin/media/"+itoa(id), nil, nil)
+	_, page = admin.sendForm("GET", "/admin/media/"+formatInteger(id), nil, nil)
 	if strings.Contains(page, `name="remove_poster"`) {
 		t.Error("the edit page offers to remove a poster that is not there")
 	}
@@ -503,7 +503,7 @@ func TestRefreshMetadataWithoutKey(t *testing.T) {
 	admin := environment.client()
 	admin.register("alex")
 	id, _, _ := environment.store.InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "m.mp4", Title: "M", VideoCodec: "h264"})
-	response, body := admin.sendForm("POST", "/admin/media/"+itoa(id)+"/refresh-metadata", url.Values{"csrf_token": {admin.csrf}}, nil)
+	response, body := admin.sendForm("POST", "/admin/media/"+formatInteger(id)+"/refresh-metadata", url.Values{"csrf_token": {admin.csrf}}, nil)
 	if response.StatusCode != http.StatusBadRequest || !strings.Contains(body, "Metadata lookups are off") {
 		t.Errorf("refresh without a key: %d", response.StatusCode)
 	}

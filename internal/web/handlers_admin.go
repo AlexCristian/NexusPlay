@@ -91,7 +91,7 @@ func (handlers *adminHandlers) controlPanel(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		return err
 	}
-	cats, err := handlers.store.CategoryNames(ctx)
+	categories, err := handlers.store.CategoryNames(ctx)
 	if err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func (handlers *adminHandlers) controlPanel(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		return err
 	}
-	handlers.render(w, r, http.StatusOK, controlPanel(newPage(r, "Control panel"), pending, colls, cats, handlers.metadata.Enabled(), conversions,
+	handlers.render(w, r, http.StatusOK, controlPanel(newPage(r, "Control panel"), pending, colls, categories, handlers.metadata.Enabled(), conversions,
 		doneMessages[r.URL.Query().Get("done")]))
 	return nil
 }
@@ -238,7 +238,7 @@ func (handlers *adminHandlers) saveMedia(w http.ResponseWriter, r *http.Request)
 	if input.publish {
 		http.Redirect(w, r, "/admin?done=published", http.StatusSeeOther)
 	} else {
-		http.Redirect(w, r, "/admin/media/"+itoa(media.ID)+"?saved=1", http.StatusSeeOther)
+		http.Redirect(w, r, "/admin/media/"+formatInteger(media.ID)+"?saved=1", http.StatusSeeOther)
 	}
 	return nil
 }
@@ -403,17 +403,17 @@ func (handlers *adminHandlers) refreshMetadata(w http.ResponseWriter, r *http.Re
 	err = handlers.refresher.RefreshMetadata(r.Context(), media.ID)
 	switch {
 	case errors.Is(err, metadata.ErrDisabled):
-		err = formErr("Metadata lookups are off. Set NEXUSPLAY_TMDB_API_KEY to use them.")
+		err = newFormError("Metadata lookups are off. Set NEXUSPLAY_TMDB_API_KEY to use them.")
 	case errors.Is(err, metadata.ErrNoMatch):
-		err = formErr("TMDB has nothing for this item. Check its title, collection, season and episode, save, and try again.")
+		err = newFormError("TMDB has nothing for this item. Check its title, collection, season and episode, save, and try again.")
 	case err != nil && !errors.Is(err, store.ErrNotFound) && r.Context().Err() == nil:
 		handlers.log.Warn("metadata refresh failed", "media", media.ID, "err", err)
-		err = formErr("The lookup failed: " + err.Error() + ". Try again in a minute.")
+		err = newFormError("The lookup failed: " + err.Error() + ". Try again in a minute.")
 	}
 	if err != nil {
 		return handlers.showMediaFormError(w, r, media, err)
 	}
-	http.Redirect(w, r, "/admin/media/"+itoa(media.ID)+"?refreshed=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/media/"+formatInteger(media.ID)+"?refreshed=1", http.StatusSeeOther)
 	return nil
 }
 
@@ -433,7 +433,7 @@ func (handlers *adminHandlers) uploadSubtitle(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		return err
 	}
-	http.Redirect(w, r, "/admin/media/"+itoa(media.ID)+"?saved=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/media/"+formatInteger(media.ID)+"?saved=1", http.StatusSeeOther)
 	return nil
 }
 
@@ -456,7 +456,7 @@ func (handlers *adminHandlers) saveSubtitle(w http.ResponseWriter, r *http.Reque
 	if err := handlers.store.UpdateSubtitleLabel(r.Context(), id, language, label); err != nil {
 		return err
 	}
-	http.Redirect(w, r, "/admin/media/"+itoa(subtitle.MediaID)+"?saved=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/media/"+formatInteger(subtitle.MediaID)+"?saved=1", http.StatusSeeOther)
 	return nil
 }
 
@@ -473,7 +473,7 @@ func (handlers *adminHandlers) deleteSubtitle(w http.ResponseWriter, r *http.Req
 	if err := handlers.store.DeleteSubtitle(r.Context(), id); err != nil {
 		return err
 	}
-	http.Redirect(w, r, "/admin/media/"+itoa(subtitle.MediaID)+"?saved=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/media/"+formatInteger(subtitle.MediaID)+"?saved=1", http.StatusSeeOther)
 	return nil
 }
 
@@ -503,7 +503,7 @@ func (handlers *adminHandlers) createCollection(w http.ResponseWriter, r *http.R
 	if err != nil {
 		return err
 	}
-	http.Redirect(w, r, "/admin/collections/"+itoa(id), http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/collections/"+formatInteger(id), http.StatusSeeOther)
 	return nil
 }
 
@@ -517,11 +517,11 @@ func (handlers *adminHandlers) editCollectionPage(w http.ResponseWriter, r *http
 	if err != nil {
 		return err
 	}
-	cats, err := handlers.store.CategoryNames(r.Context())
+	categories, err := handlers.store.CategoryNames(r.Context())
 	if err != nil {
 		return err
 	}
-	handlers.render(w, r, http.StatusOK, editCollectionPage(newPage(r, "Edit "+collection.Name), collection, cats, handlers.metadata.Enabled(), ""))
+	handlers.render(w, r, http.StatusOK, editCollectionPage(newPage(r, "Edit "+collection.Name), collection, categories, handlers.metadata.Enabled(), ""))
 	return nil
 }
 
@@ -548,12 +548,12 @@ func (handlers *adminHandlers) saveCollection(w http.ResponseWriter, r *http.Req
 	}
 	err = handlers.store.UpdateCollection(r.Context(), id, update)
 	if errors.Is(err, store.ErrDuplicate) {
-		return handlers.showCollectionFormError(w, r, existing, update, formErr("Another collection already has that name."))
+		return handlers.showCollectionFormError(w, r, existing, update, newFormError("Another collection already has that name."))
 	}
 	if err != nil {
 		return err
 	}
-	http.Redirect(w, r, "/admin/collections/"+itoa(id), http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/collections/"+formatInteger(id), http.StatusSeeOther)
 	return nil
 }
 
@@ -564,12 +564,12 @@ func (handlers *adminHandlers) showCollectionFormError(w http.ResponseWriter, r 
 	if !errors.As(err, &formErr) {
 		return err
 	}
-	cats, err := handlers.store.CategoryNames(r.Context())
+	categories, err := handlers.store.CategoryNames(r.Context())
 	if err != nil {
 		return err
 	}
 	collection.Name, collection.Category, collection.Year, collection.Overview = typed.Name, typed.Category, typed.Year, typed.Overview
-	handlers.render(w, r, http.StatusBadRequest, editCollectionPage(newPage(r, "Edit collection"), collection, cats, handlers.metadata.Enabled(), formErr.message))
+	handlers.render(w, r, http.StatusBadRequest, editCollectionPage(newPage(r, "Edit collection"), collection, categories, handlers.metadata.Enabled(), formErr.message))
 	return nil
 }
 

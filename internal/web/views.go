@@ -17,12 +17,27 @@ import (
 
 // ---- Every page ----
 
-// newPage describes the page being rendered for r.
+// [newPage] describes the full page being rendered for a request.
+//
+// Parameters:
+//   - [r]: the request; its "q" parameter fills the search box.
+//   - [title]: the page's title, or "" for the site's name alone.
+//
+// Returns:
+//   - [Page]: the title, the viewer and the search box's text.
 func newPage(r *http.Request, title string) Page {
 	return Page{Title: title, Viewer: viewer(r), Query: r.URL.Query().Get("q")}
 }
 
-// csrfHeaders is the hx-headers value that makes htmx send the CSRF token.
+// [csrfHeaders] makes the hx-headers attribute value that has htmx send the
+// CSRF token with every request.
+//
+// Parameters:
+//   - [viewer]: who is viewing the page.
+//
+// Returns:
+//   - [string]: a JSON object with the "X-CSRF-Token" header for a signed-in
+//     viewer, or "{}" for an anonymous one.
 func csrfHeaders(viewer Viewer) string {
 	if viewer.User == nil {
 		return "{}"
@@ -30,7 +45,14 @@ func csrfHeaders(viewer Viewer) string {
 	return fmt.Sprintf(`{"X-CSRF-Token": %q}`, viewer.CSRF)
 }
 
-// posterURL is where a poster file is served, or the placeholder image.
+// [posterURL] gives the address to show a poster from.
+//
+// Parameters:
+//   - [name]: the poster's file name in the poster folder, or "".
+//
+// Returns:
+//   - [string]: "/posters/" and [name], or the placeholder image's address
+//     if [name] is "".
 func posterURL(name string) string {
 	if name == "" {
 		return asset("/static/img/no-poster.svg")
@@ -38,14 +60,43 @@ func posterURL(name string) string {
 	return "/posters/" + name
 }
 
-func watchURL(id int64) templ.SafeURL { return templ.SafeURL("/watch/" + itoa(id)) }
+// [watchURL] gives the player page's address for a media item.
+//
+// Parameters:
+//   - [id]: the media item.
+//
+// Returns:
+//   - [templ.SafeURL]: "/watch/" and [id], marked safe for an href.
+func watchURL(id int64) templ.SafeURL { return templ.SafeURL("/watch/" + formatInteger(id)) }
 
-func collectionURL(id int64) string { return "/collections/" + itoa(id) }
+// [collectionURL] gives a collection dialog's address.
+//
+// Parameters:
+//   - [id]: the collection.
+//
+// Returns:
+//   - [string]: "/collections/" and [id].
+func collectionURL(id int64) string { return "/collections/" + formatInteger(id) }
 
-func itoa(number int64) string { return strconv.FormatInt(number, 10) }
+// [formatInteger] writes a whole number in decimal, for URLs and labels.
+//
+// Parameters:
+//   - [number]: the number.
+//
+// Returns:
+//   - [string]: its decimal digits, with "-" if negative.
+func formatInteger(number int64) string { return strconv.FormatInt(number, 10) }
 
-// duration formats a length in seconds for people: "8 s", "42 min",
+// [duration] writes a length for people: "8 s", "42 min", "2 h" or
 // "1 h 5 min".
+//
+// Parameters:
+//   - [durationSeconds]: the length in seconds, rounded to the nearest
+//     second.
+//
+// Returns:
+//   - [string]: seconds under a minute, whole minutes under an hour, and
+//     hours and minutes otherwise.
 func duration(durationSeconds float64) string {
 	seconds := int(durationSeconds + .5)
 	switch {
@@ -60,7 +111,15 @@ func duration(durationSeconds float64) string {
 	}
 }
 
-// clock formats a position in seconds as "0:05", "42:10" or "1:02:03".
+// [clock] writes a playback position like a clock: "0:05", "42:10" or
+// "1:02:03".
+//
+// Parameters:
+//   - [seconds]: the position in seconds; a negative one counts as 0 and
+//     fractions are dropped.
+//
+// Returns:
+//   - [string]: minutes and seconds, with hours in front from one hour on.
 func clock(seconds float64) string {
 	totalSeconds := int(seconds)
 	if totalSeconds < 0 {
@@ -72,7 +131,16 @@ func clock(seconds float64) string {
 	return fmt.Sprintf("%d:%02d", totalSeconds/60, totalSeconds%60)
 }
 
-// percent is how far pos is through total, 0–100, for a progress bar.
+// [percent] writes how far a position is through a total, for a progress
+// bar's width.
+//
+// Parameters:
+//   - [position]: how far, such as seconds watched.
+//   - [total]: the whole, such as the video's length.
+//
+// Returns:
+//   - [string]: the share from "0.0%" to "100.0%" with one decimal, or
+//     "0%" if [total] is 0 or less.
 func percent(position, total float64) string {
 	if total <= 0 {
 		return "0%"
@@ -80,7 +148,15 @@ func percent(position, total float64) string {
 	return strconv.FormatFloat(min(100, max(0, position/total*100)), 'f', 1, 64) + "%"
 }
 
-// fileSize formats a size in bytes with a unit that fits: "820 KB", "1.2 MB", "4.37 GB".
+// [fileSize] writes a size in bytes with a unit that fits: "820 KB",
+// "1.2 MB" or "4.37 GB". Units are binary (1 KB is 1024 bytes).
+//
+// Parameters:
+//   - [size]: the size in bytes.
+//
+// Returns:
+//   - [string]: whole kilobytes (rounded up) below 1 MB, megabytes with one
+//     decimal below 1 GB, and gigabytes with two decimals otherwise.
 func fileSize(size int64) string {
 	switch {
 	case size >= 1<<30:
@@ -92,7 +168,13 @@ func fileSize(size int64) string {
 	}
 }
 
-// registrationClosedMessage explains why the sign-up form is not shown.
+// [registrationClosedMessage] explains why the sign-up form is not shown.
+//
+// Parameters:
+//   - [maxAccounts]: the account limit.
+//
+// Returns:
+//   - [string]: the explanation, naming the limit.
 func registrationClosedMessage(maxAccounts int) string {
 	return "Registration is closed: this server allows " + strconv.Itoa(maxAccounts) +
 		" accounts and all of them are taken. Ask the administrator if you need one."
@@ -100,7 +182,13 @@ func registrationClosedMessage(maxAccounts int) string {
 
 // ---- Library ----
 
-// seasonLabel names a season; season 0 holds specials.
+// [seasonLabel] names a season for its tab.
+//
+// Parameters:
+//   - [season]: the season number.
+//
+// Returns:
+//   - [string]: "Specials" for season 0, otherwise "Season N".
 func seasonLabel(season int) string {
 	if season == 0 {
 		return "Specials"
@@ -108,8 +196,16 @@ func seasonLabel(season int) string {
 	return "Season " + strconv.Itoa(season)
 }
 
-// seasonSummary is the line under a collection's title: "2 Seasons, 2019".
-// Specials (season 0) are not counted as a season.
+// [seasonSummary] writes the line under a collection's title, such as "2
+// Seasons, 2019". Specials (season 0) are not counted as a season.
+//
+// Parameters:
+//   - [collection]: the collection, for its year.
+//   - [seasons]: the collection's seasons.
+//
+// Returns:
+//   - [string]: "Specials", "1 Season" or "N Seasons", with ", " and the
+//     year added when it is known.
 func seasonSummary(collection store.Collection, seasons []Season) string {
 	count := 0
 	for _, season := range seasons {
@@ -132,7 +228,15 @@ func seasonSummary(collection store.Collection, seasons []Season) string {
 	return summary
 }
 
-// displayTitle names an episode with its show, e.g. "Cosmos · S1E3 · The Harmony of the Worlds".
+// [displayTitle] names a media item with its show, such as "Cosmos · S1E3 ·
+// The Harmony of the Worlds".
+//
+// Parameters:
+//   - [media]: the media item.
+//
+// Returns:
+//   - [string]: the collection, [episodeLabel] and title joined with " · ",
+//     or the title alone for an item without a collection.
 func displayTitle(media store.Media) string {
 	if media.CollectionName == "" {
 		return media.Title
@@ -142,8 +246,15 @@ func displayTitle(media store.Media) string {
 
 // ---- Player ----
 
-// episodeNumbers is an episode's number, or its range for a file holding
-// several ("1–2" for a two-part pilot in one file).
+// [episodeNumbers] writes an episode's number, or its range for a file
+// holding several, such as "1–2" for a two-part pilot in one file.
+//
+// Parameters:
+//   - [media]: the episode.
+//
+// Returns:
+//   - [string]: the number, with an en dash and the last number when
+//     [store.Media.EpisodeEnd] is greater than [store.Media.Episode].
 func episodeNumbers(media store.Media) string {
 	number := strconv.Itoa(media.Episode)
 	if media.EpisodeEnd > media.Episode {
@@ -152,8 +263,14 @@ func episodeNumbers(media store.Media) string {
 	return number
 }
 
-// episodeLabel is an episode's short number, "S3E4" or "S1E1–2", shown
-// before its title everywhere. Season 0 holds specials: "Special 3".
+// [episodeLabel] writes an episode's short number, shown before its title
+// everywhere: "S3E4" or "S1E1–2", and "Special 3" for season 0.
+//
+// Parameters:
+//   - [media]: the episode.
+//
+// Returns:
+//   - [string]: the label.
 func episodeLabel(media store.Media) string {
 	if media.Season == 0 {
 		return "Special " + episodeNumbers(media)
@@ -161,16 +278,37 @@ func episodeLabel(media store.Media) string {
 	return "S" + strconv.Itoa(media.Season) + "E" + episodeNumbers(media)
 }
 
-// formatSeconds formats a resume position for player.js.
+// [formatSeconds] writes a number of seconds for player.js to read, such as
+// "125.0".
+//
+// Parameters:
+//   - [seconds]: the number of seconds.
+//
+// Returns:
+//   - [string]: the number with one decimal.
 func formatSeconds(seconds float64) string { return strconv.FormatFloat(seconds, 'f', 1, 64) }
 
-// cueTime formats a subtitle time in milliseconds as H:MM:SS.
+// [cueTime] writes a subtitle time as H:MM:SS, such as "0:01:05".
+//
+// Parameters:
+//   - [milliseconds]: the time in milliseconds; fractions of a second are
+//     dropped.
+//
+// Returns:
+//   - [string]: hours, minutes and seconds.
 func cueTime(milliseconds int64) string {
 	seconds := milliseconds / 1000
-	return strconv.FormatInt(seconds/3600, 10) + ":" + pad2(seconds/60%60) + ":" + pad2(seconds%60)
+	return strconv.FormatInt(seconds/3600, 10) + ":" + twoDigits(seconds/60%60) + ":" + twoDigits(seconds%60)
 }
 
-func pad2(number int64) string {
+// [twoDigits] writes a number from 0 to 99 with at least two digits.
+//
+// Parameters:
+//   - [number]: the number.
+//
+// Returns:
+//   - [string]: [number] with a leading "0" if it is below 10.
+func twoDigits(number int64) string {
 	if number < 10 {
 		return "0" + strconv.FormatInt(number, 10)
 	}
@@ -179,7 +317,14 @@ func pad2(number int64) string {
 
 // ---- Control panel ----
 
-// blankZero shows 0 as an empty field (a film has no season or episode).
+// [blankZero] writes a number for a form field, leaving 0 blank, since a
+// film has no season or episode.
+//
+// Parameters:
+//   - [number]: the number.
+//
+// Returns:
+//   - [string]: "" for 0, otherwise the number.
 func blankZero(number int) string {
 	if number == 0 {
 		return ""
@@ -187,7 +332,14 @@ func blankZero(number int) string {
 	return strconv.Itoa(number)
 }
 
-// subscriptionCount is "your 1 subscription" / "your 3 subscriptions".
+// [subscriptionCount] writes "your 1 subscription" or "your 3
+// subscriptions".
+//
+// Parameters:
+//   - [count]: the number of subscriptions.
+//
+// Returns:
+//   - [string]: the phrase, singular for exactly 1.
 func subscriptionCount(count int) string {
 	if count == 1 {
 		return "your 1 subscription"
@@ -195,8 +347,15 @@ func subscriptionCount(count int) string {
 	return "your " + strconv.Itoa(count) + " subscriptions"
 }
 
-// ownPoster is m's own poster, or "" when it shows its collection's. Only
-// its own can be removed on its edit page.
+// [ownPoster] gets a media item's own poster, for its edit page, where only
+// its own can be removed.
+//
+// Parameters:
+//   - [media]: the media item.
+//
+// Returns:
+//   - [string]: the poster's file name, or "" when the item shows its
+//     collection's poster or none.
 func ownPoster(media store.Media) string {
 	if !media.OwnPoster {
 		return ""
@@ -204,10 +363,25 @@ func ownPoster(media store.Media) string {
 	return media.Poster
 }
 
-// guessFor is what the scanner makes of a file's path.
+// [guessFor] works out what the scanner makes of a media item's path.
+//
+// Parameters:
+//   - [media]: the media item.
+//
+// Returns:
+//   - [library.Guess]: [library.ParsePath]'s guess for its path.
 func guessFor(media store.Media) library.Guess { return library.ParsePath(media.Path) }
 
-// detectedAs is what the scanner made of a pending file's name.
+// [detectedAs] describes what the scanner made of a pending file, for the
+// control panel: "Show · S1E2 · Title" for an episode, or "Title (Year)"
+// for a film.
+//
+// Parameters:
+//   - [media]: the pending media item.
+//
+// Returns:
+//   - [string]: the description, using the item's current season, episode,
+//     title and year, and the show from its path.
 func detectedAs(media store.Media) string {
 	guess := guessFor(media)
 	if guess.IsEpisode() {
@@ -219,7 +393,15 @@ func detectedAs(media store.Media) string {
 	return media.Title
 }
 
-// techSummary is a file's codecs, length and size: "h264 / aac · 42 min · 1.20 GB".
+// [techSummary] describes a file's codecs, length and size, such as "h264 /
+// aac · 42 min · 1.20 GB".
+//
+// Parameters:
+//   - [media]: the media item.
+//
+// Returns:
+//   - [string]: the video codec, the audio codec if there is one, the length
+//     if known, and the size, joined with " · ".
 func techSummary(media store.Media) string {
 	summary := media.VideoCodec
 	if media.AudioCodec != "" {
@@ -232,6 +414,13 @@ func techSummary(media store.Media) string {
 	return summary
 }
 
+// [queuedLabel] writes "1 file" or "N files", for the conversion queue.
+//
+// Parameters:
+//   - [count]: the number of files.
+//
+// Returns:
+//   - [string]: the phrase, singular for exactly 1.
 func queuedLabel(count int) string {
 	if count == 1 {
 		return "1 file"

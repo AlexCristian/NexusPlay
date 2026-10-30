@@ -6,13 +6,16 @@
 # lines and lines starting with # are skipped. This file is built into the
 # analyzer, so a change takes effect on the next build.
 abs absolute
+acct account
 addr address
+adm admin
 arg argument
 args arguments
 attr attribute
 btn button
 buf buffer
 cands candidates
+cats categories
 cb callback
 cfg config
 cmd command
@@ -21,6 +24,7 @@ cols columns
 conf config
 conv conversion
 ctrl controller
+ctx context
 cur current
 db database
 decl declaration
@@ -49,6 +53,7 @@ img image
 impl implementation
 lang language
 len length
+lib library
 lit literal
 mem memory
 meta metadata
@@ -86,5 +91,6 @@ tmp temporary
 tmpl template
 tx transaction
 typ type
+uid user ID
 val value
 vals values

@@ -16,7 +16,7 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 				controls
 				playsinline
 				preload="metadata"
-				data-media-id={ itoa(m.ID) }
+				data-media-id={ formatInteger(m.ID) }
 				data-src={ pb.URL }
 				data-hls={ strconv.FormatBool(!pb.Direct) }
 				data-resume={ formatSeconds(resumeAt) }
@@ -25,7 +25,7 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 				data-signed-in={ strconv.FormatBool(p.Viewer.User != nil) }
 			>
 				for _, s := range subs {
-					<track kind="subtitles" id={ "sub-" + itoa(s.ID) } src={ "/subtitles/" + itoa(s.ID) } srclang={ s.Language } label={ s.Label }/>
+					<track kind="subtitles" id={ "sub-" + formatInteger(s.ID) } src={ "/subtitles/" + formatInteger(s.ID) } srclang={ s.Language } label={ s.Label }/>
 				}
 			</video>
 			<div class="cues" id="cues"></div>
@@ -40,7 +40,7 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 			if p.Viewer.User != nil {
 				<div class="player-actions">
 					if p.Viewer.IsAdmin() {
-						<a class="player-action" href={ templ.SafeURL("/admin/media/" + itoa(m.ID)) } title="Edit metadata" aria-label="Edit metadata">
+						<a class="player-action" href={ templ.SafeURL("/admin/media/" + formatInteger(m.ID)) } title="Edit metadata" aria-label="Edit metadata">
 							@icon("pencil")
 						</a>
 					}
@@ -129,7 +129,7 @@ templ subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes [
 								<button
 									type="button"
 									class={ "vote-box", templ.KV("voted", c.VotedByMe) }
-									hx-post={ "/changes/" + itoa(c.ID) + "/vote" }
+									hx-post={ "/changes/" + formatInteger(c.ID) + "/vote" }
 									hx-target="#subtitle-report"
 									hx-swap="outerHTML"
 									title="Vote for this correction"
@@ -149,8 +149,8 @@ templ subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes [
 			<form
 				class="proposed-change"
 				method="post"
-				action={ templ.SafeURL("/cues/" + itoa(cue.ID) + "/changes") }
-				hx-post={ "/cues/" + itoa(cue.ID) + "/changes" }
+				action={ templ.SafeURL("/cues/" + formatInteger(cue.ID) + "/changes") }
+				hx-post={ "/cues/" + formatInteger(cue.ID) + "/changes" }
 				hx-target="#subtitle-report"
 				hx-swap="outerHTML"
 			>

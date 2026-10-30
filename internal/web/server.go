@@ -22,49 +22,80 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/stream"
 )
 
+// [staticFiles] holds the stylesheets, scripts, fonts and images in static/,
+// built into the program.
+//
 //go:embed static
 var staticFiles embed.FS
 
+// [sessionCookie] is the name of the cookie that carries the session token.
 const sessionCookie = "nexusplay_session"
 
-// Server is the web front end. Its fields are the dependencies; Handler
-// hands each feature group (library, playback, subtitles, accounts, admin)
-// only the ones it uses.
+// [Server] is the web front end. Its fields are the dependencies; set them,
+// then call [Server.Handler], which hands each feature group (library,
+// playback, subtitles, accounts, admin) only the ones it uses.
 type Server struct {
-	Config     config.Config
-	Store      *store.Store
-	Scanner    *library.Scanner
-	Metadata   *metadata.Client
+	// [Config] holds the settings: folders, limits and cookie security.
+	Config config.Config
+	// [Store] is the database.
+	Store *store.Store
+	// [Scanner] is the library scanner, for "Scan now" and "Refresh metadata".
+	Scanner *library.Scanner
+	// [Metadata] looks titles up on TMDB for the control panel.
+	Metadata *metadata.Client
+	// [Transcodes] runs the HLS transcodes for playback.
 	Transcodes *stream.Manager
-	Accounts   *auth.Accounts
-	Sessions   *auth.Sessions
-	Converter  Conversions
-	Log        *slog.Logger
+	// [Accounts] checks credentials and creates accounts.
+	Accounts *auth.Accounts
+	// [Sessions] starts, finds and ends sign-in sessions.
+	Sessions *auth.Sessions
+	// [Converter] is the MP4 converter, or [convert.Disabled].
+	Converter Conversions
+	// [Log] records errors, and every request at debug level.
+	Log *slog.Logger
 
-	responder // set by Handler; used by the middleware
+	// [responder] writes the middleware's error responses; [Server.Handler] sets
+	// it.
+	responder
 }
 
-type ctxKey int
+// [contextKey] is the type of this package's keys for values stored in a
+// request's context, so they cannot clash with other packages' keys.
+type contextKey int
 
-const viewerKey ctxKey = 0
+// [viewerKey] is the context key under which [Server.session] stores the
+// [Viewer].
+const viewerKey contextKey = 0
 
-// viewer is who made the request; the zero Viewer for a visitor who is not
-// logged in. The session middleware sets it.
+// [viewer] tells who made a request. [Server.session] sets it for every
+// request.
+//
+// Parameters:
+//   - [r]: the request.
+//
+// Returns:
+//   - [Viewer]: the signed-in viewer, or the zero [Viewer] for a visitor
+//     who is not signed in.
 func viewer(r *http.Request) Viewer {
 	viewer, _ := r.Context().Value(viewerKey).(Viewer)
 	return viewer
 }
 
-// Handler returns the complete HTTP handler.
+// [Handler] builds the complete HTTP handler: the route table, with each
+// route's access rule ([Server.browse], [Server.member] or [Server.admin]),
+// wrapped in the middleware. Call it once, after setting the fields.
+//
+// Returns:
+//   - [http.Handler]: the handler to serve.
 func (server *Server) Handler() http.Handler {
 	server.responder = responder{log: server.Log}
-	lib := &libraryHandlers{responder: server.responder, store: server.Store}
-	play := &playbackHandlers{responder: server.responder, store: server.Store, transcodes: server.Transcodes,
+	libraryRoutes := &libraryHandlers{responder: server.responder, store: server.Store}
+	playbackRoutes := &playbackHandlers{responder: server.responder, store: server.Store, transcodes: server.Transcodes,
 		mediaDirectory: server.Config.MediaDirectory, posterDirectory: server.Config.PosterDirectory()}
 	subtitleRoutes := &subtitleHandlers{responder: server.responder, store: server.Store, votesRequired: server.Config.VotesRequired}
-	acct := &accountHandlers{responder: server.responder, accounts: server.Accounts, sessions: server.Sessions,
+	accountRoutes := &accountHandlers{responder: server.responder, accounts: server.Accounts, sessions: server.Sessions,
 		secureCookies: server.Config.SecureCookies}
-	adm := &adminHandlers{responder: server.responder, store: server.Store, metadata: server.Metadata, scanner: server.Scanner, refresher: server.Scanner,
+	adminRoutes := &adminHandlers{responder: server.responder, store: server.Store, metadata: server.Metadata, scanner: server.Scanner, refresher: server.Scanner,
 		conversions: server.Converter, posterDirectory: server.Config.PosterDirectory()}
 
 	mux := http.NewServeMux()
@@ -74,47 +105,47 @@ func (server *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", server.healthz)
 
 	// Pages anyone may see unless NEXUSPLAY_REQUIRE_LOGIN is set.
-	mux.Handle("GET /{$}", server.browse(server.handle(lib.home)))
-	mux.Handle("GET /search", server.browse(server.handle(lib.search)))
-	mux.Handle("GET /collections/{id}", server.browse(server.handle(lib.collection)))
-	mux.Handle("GET /watch/{id}", server.browse(server.handle(play.watch)))
-	mux.Handle("GET /media/{id}/file", server.browse(server.handle(play.mediaFile)))
-	mux.Handle("GET /media/{id}/hls/index.m3u8", server.browse(server.handle(play.hlsPlaylist)))
-	mux.Handle("GET /media/{id}/hls/{segment}", server.browse(server.handle(play.hlsSegment)))
+	mux.Handle("GET /{$}", server.browse(server.handle(libraryRoutes.home)))
+	mux.Handle("GET /search", server.browse(server.handle(libraryRoutes.search)))
+	mux.Handle("GET /collections/{id}", server.browse(server.handle(libraryRoutes.collection)))
+	mux.Handle("GET /watch/{id}", server.browse(server.handle(playbackRoutes.watch)))
+	mux.Handle("GET /media/{id}/file", server.browse(server.handle(playbackRoutes.mediaFile)))
+	mux.Handle("GET /media/{id}/hls/index.m3u8", server.browse(server.handle(playbackRoutes.hlsPlaylist)))
+	mux.Handle("GET /media/{id}/hls/{segment}", server.browse(server.handle(playbackRoutes.hlsSegment)))
 	mux.Handle("GET /subtitles/{id}", server.browse(server.handle(subtitleRoutes.subtitleVTT)))
-	mux.Handle("GET /posters/{name}", server.browse(server.handle(play.poster)))
+	mux.Handle("GET /posters/{name}", server.browse(server.handle(playbackRoutes.poster)))
 
-	// Accounts.
-	mux.HandleFunc("GET /login", server.handle(acct.loginPage))
-	mux.HandleFunc("POST /login", server.handle(acct.login))
-	mux.HandleFunc("GET /register", server.handle(acct.registerPage))
-	mux.HandleFunc("POST /register", server.handle(acct.register))
-	mux.HandleFunc("POST /logout", server.handle(acct.logout))
+	// Signing in and out.
+	mux.HandleFunc("GET /login", server.handle(accountRoutes.loginPage))
+	mux.HandleFunc("POST /login", server.handle(accountRoutes.login))
+	mux.HandleFunc("GET /register", server.handle(accountRoutes.registerPage))
+	mux.HandleFunc("POST /register", server.handle(accountRoutes.register))
+	mux.HandleFunc("POST /logout", server.handle(accountRoutes.logout))
 
 	// Signed-in features.
-	mux.Handle("GET /me/resume", server.member(server.handle(lib.resumeList)))
-	mux.Handle("GET /me/notifications", server.member(server.handle(lib.notificationList)))
-	mux.Handle("POST /me/progress", server.member(server.handle(play.saveProgress)))
-	mux.Handle("POST /collections/{id}/subscribe", server.member(server.handle(lib.toggleSubscription)))
+	mux.Handle("GET /me/resume", server.member(server.handle(libraryRoutes.resumeList)))
+	mux.Handle("GET /me/notifications", server.member(server.handle(libraryRoutes.notificationList)))
+	mux.Handle("POST /me/progress", server.member(server.handle(playbackRoutes.saveProgress)))
+	mux.Handle("POST /collections/{id}/subscribe", server.member(server.handle(libraryRoutes.toggleSubscription)))
 	mux.Handle("GET /media/{id}/subtitle-report", server.member(server.handle(subtitleRoutes.subtitleReport)))
 	mux.Handle("POST /cues/{id}/changes", server.member(server.handle(subtitleRoutes.proposeChange)))
 	mux.Handle("POST /changes/{id}/vote", server.member(server.handle(subtitleRoutes.voteChange)))
 
 	// Administration.
-	mux.Handle("GET /admin", server.admin(server.handle(adm.controlPanel)))
-	mux.Handle("POST /admin/scan", server.admin(server.handle(adm.scanNow)))
-	mux.Handle("GET /admin/conversions", server.admin(server.handle(adm.conversionsPanel)))
-	mux.Handle("POST /admin/media/{id}/retry-conversion", server.admin(server.handle(adm.retryConversion)))
-	mux.Handle("GET /admin/media/{id}", server.admin(server.handle(adm.editMediaPage)))
-	mux.Handle("POST /admin/media/{id}", server.admin(server.handle(adm.saveMedia)))
-	mux.Handle("POST /admin/media/{id}/refresh-metadata", server.admin(server.handle(adm.refreshMetadata)))
-	mux.Handle("POST /admin/media/{id}/subtitles", server.admin(server.handle(adm.uploadSubtitle)))
-	mux.Handle("POST /admin/subtitles/{id}", server.admin(server.handle(adm.saveSubtitle)))
-	mux.Handle("POST /admin/subtitles/{id}/delete", server.admin(server.handle(adm.deleteSubtitle)))
-	mux.Handle("POST /admin/collections", server.admin(server.handle(adm.createCollection)))
-	mux.Handle("GET /admin/collections/{id}", server.admin(server.handle(adm.editCollectionPage)))
-	mux.Handle("POST /admin/collections/{id}", server.admin(server.handle(adm.saveCollection)))
-	mux.Handle("POST /admin/collections/{id}/delete", server.admin(server.handle(adm.deleteCollection)))
+	mux.Handle("GET /admin", server.admin(server.handle(adminRoutes.controlPanel)))
+	mux.Handle("POST /admin/scan", server.admin(server.handle(adminRoutes.scanNow)))
+	mux.Handle("GET /admin/conversions", server.admin(server.handle(adminRoutes.conversionsPanel)))
+	mux.Handle("POST /admin/media/{id}/retry-conversion", server.admin(server.handle(adminRoutes.retryConversion)))
+	mux.Handle("GET /admin/media/{id}", server.admin(server.handle(adminRoutes.editMediaPage)))
+	mux.Handle("POST /admin/media/{id}", server.admin(server.handle(adminRoutes.saveMedia)))
+	mux.Handle("POST /admin/media/{id}/refresh-metadata", server.admin(server.handle(adminRoutes.refreshMetadata)))
+	mux.Handle("POST /admin/media/{id}/subtitles", server.admin(server.handle(adminRoutes.uploadSubtitle)))
+	mux.Handle("POST /admin/subtitles/{id}", server.admin(server.handle(adminRoutes.saveSubtitle)))
+	mux.Handle("POST /admin/subtitles/{id}/delete", server.admin(server.handle(adminRoutes.deleteSubtitle)))
+	mux.Handle("POST /admin/collections", server.admin(server.handle(adminRoutes.createCollection)))
+	mux.Handle("GET /admin/collections/{id}", server.admin(server.handle(adminRoutes.editCollectionPage)))
+	mux.Handle("POST /admin/collections/{id}", server.admin(server.handle(adminRoutes.saveCollection)))
+	mux.Handle("POST /admin/collections/{id}/delete", server.admin(server.handle(adminRoutes.deleteCollection)))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { server.notFound(w, r) })
 
@@ -123,7 +154,14 @@ func (server *Server) Handler() http.Handler {
 	return chain(mux, server.logRequests, server.recoverer, securityHeaders, server.session, server.csrf)
 }
 
-// chain wraps h in middleware, the first outermost.
+// [chain] wraps a handler in middleware.
+//
+// Parameters:
+//   - [handler]: the innermost handler.
+//   - [middleware]: the wrappers, outermost first.
+//
+// Returns:
+//   - [http.Handler]: [handler] wrapped in every one of [middleware].
 func chain(handler http.Handler, middleware ...func(http.Handler) http.Handler) http.Handler {
 	for i := len(middleware) - 1; i >= 0; i-- {
 		handler = middleware[i](handler)
@@ -131,7 +169,15 @@ func chain(handler http.Handler, middleware ...func(http.Handler) http.Handler) 
 	return handler
 }
 
-// browse guards pages that are public unless the install requires login.
+// [browse] guards pages that are public unless the install requires
+// sign-in ([config.Config.RequireLogin]).
+//
+// Parameters:
+//   - [handler]: the page's handler.
+//
+// Returns:
+//   - [http.Handler]: a handler that runs [handler], or answers as
+//     [Server.needLogin] describes when sign-in is required and missing.
 func (server *Server) browse(handler http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if server.Config.RequireLogin && viewer(r).User == nil {
@@ -142,7 +188,14 @@ func (server *Server) browse(handler http.HandlerFunc) http.Handler {
 	})
 }
 
-// member guards features that need an account.
+// [member] guards features that need an account.
+//
+// Parameters:
+//   - [handler]: the feature's handler.
+//
+// Returns:
+//   - [http.Handler]: a handler that runs [handler] for a signed-in viewer,
+//     and otherwise answers as [Server.needLogin] describes.
 func (server *Server) member(handler http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if viewer(r).User == nil {
@@ -153,7 +206,15 @@ func (server *Server) member(handler http.HandlerFunc) http.Handler {
 	})
 }
 
-// admin guards the control panel.
+// [admin] guards the control panel.
+//
+// Parameters:
+//   - [handler]: the control panel's handler.
+//
+// Returns:
+//   - [http.Handler]: a handler that runs [handler] for the administrator,
+//     answers as [Server.needLogin] describes for a visitor who is not
+//     signed in, and with 403 for anyone else.
 func (server *Server) admin(handler http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		currentViewer := viewer(r)
@@ -169,10 +230,14 @@ func (server *Server) admin(handler http.HandlerFunc) http.Handler {
 	})
 }
 
-// needLogin answers a request that needs an account. htmx gets 401 with
-// HX-Redirect to the login page; a page load is redirected there and comes
-// back afterwards; media, subtitle and other requests get a plain 401,
-// since a redirect to an HTML page would only confuse the player.
+// [needLogin] answers a request that needs an account. htmx gets 401 with
+// HX-Redirect to the sign-in page; a page load is redirected there and comes
+// back afterwards; media, subtitle and other requests get a plain 401, since
+// a redirect to an HTML page would only confuse the player.
+//
+// Parameters:
+//   - [w]: where the answer is written.
+//   - [r]: the request.
 func (server *Server) needLogin(w http.ResponseWriter, r *http.Request) {
 	if isHTMX(r) {
 		w.Header().Set("HX-Redirect", "/login?next="+url.QueryEscape(currentURL(r)))
@@ -186,8 +251,15 @@ func (server *Server) needLogin(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "login required", http.StatusUnauthorized)
 }
 
-// currentURL is the page the user is on: for htmx, the page that made the
-// request (HX-Current-URL), not the fragment's URL.
+// [currentURL] gives the address of the page the user is on: for htmx, the
+// page that made the request (HX-Current-URL), not the fragment's address.
+//
+// Parameters:
+//   - [r]: the request.
+//
+// Returns:
+//   - [string]: the page's path and query, or "/" for an htmx request
+//     without a usable HX-Current-URL.
 func currentURL(r *http.Request) string {
 	if isHTMX(r) {
 		if parsedURL, err := url.Parse(r.Header.Get("HX-Current-URL")); err == nil && parsedURL.Path != "" {
@@ -198,7 +270,16 @@ func currentURL(r *http.Request) string {
 	return r.URL.RequestURI()
 }
 
-// session loads the logged-in user, if any, into the request context.
+// [session] is the middleware that finds the signed-in viewer from the
+// session cookie and stores them in the request's context, for [viewer]. A
+// missing, unknown or expired session means an anonymous viewer; a database
+// error is logged and also treated as anonymous.
+//
+// Parameters:
+//   - [next]: the rest of the chain.
+//
+// Returns:
+//   - [http.Handler]: [next] with the viewer added to each request.
 func (server *Server) session(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var viewer Viewer
@@ -215,11 +296,21 @@ func (server *Server) session(next http.Handler) http.Handler {
 // Request body limits. Only the admin forms accept uploads (posters and
 // subtitle files); everything else is a small form or a progress beacon.
 const (
-	maxUpload   = 20 << 20
+	// [maxUpload] is the largest request body the control panel accepts, in
+	// bytes (20 MiB), for poster and subtitle uploads.
+	maxUpload = 20 << 20
+	// [maxFormBody] is the largest request body every other route accepts, in
+	// bytes (1 MiB): small forms and progress beacons.
 	maxFormBody = 1 << 20
 )
 
-// bodyLimit returns the largest request body a route accepts.
+// [bodyLimit] gives the largest request body a route accepts.
+//
+// Parameters:
+//   - [r]: the request.
+//
+// Returns:
+//   - [int64]: [maxUpload] under "/admin/", [maxFormBody] elsewhere.
 func bodyLimit(r *http.Request) int64 {
 	if strings.HasPrefix(r.URL.Path, "/admin/") {
 		return maxUpload
@@ -227,23 +318,32 @@ func bodyLimit(r *http.Request) int64 {
 	return maxFormBody
 }
 
-// csrf protects state-changing requests in two layers:
+// [csrf] is the middleware that protects state-changing requests (anything
+// but GET, HEAD and OPTIONS) in two layers:
 //
-//   - Origin check (every unsafe request): Origin, else Referer, must match the
-//     Host (or X-Forwarded-Host behind a reverse proxy). When neither header is
+//   - Origin check, for every such request: Origin, else Referer, must match
+//     the Host (or X-Forwarded-Host behind a reverse proxy). When neither is
 //     present the request is accepted only if Sec-Fetch-Site is absent (a
-//     non-browser client, which has no ambient cookies to abuse) or
-//     "same-origin".
-//   - Token (signed-in requests): the session's CSRF token in X-CSRF-Token
-//     (htmx sends it from hx-headers on <body>, and player.js reads it from
-//     there) or in the csrf_token form field (plain forms).
+//     client that is not a browser, which has no cookies to abuse) or
+//     "same-origin". Failing gets 403.
+//   - Token, for signed-in requests: the session's CSRF token in the
+//     X-CSRF-Token header (htmx sends it from hx-headers on <body>, and
+//     player.js reads it from there) or in the "csrf_token" form field
+//     (plain forms). A missing or wrong token gets 403.
 //
 // /login and /register skip the token, because a visitor may not have a
-// session yet or may hold a stale one; the Origin check still stops login CSRF.
+// session yet or may hold a stale one; the Origin check still stops login
+// CSRF.
 //
-// The body size limit is applied here, before anything reads the body, so an
-// oversize upload is answered with 413 rather than looking like a missing
-// token.
+// The body size limit ([bodyLimit]) is applied here, before anything reads
+// the body, so an oversize upload is answered with 413 rather than looking
+// like a missing token.
+//
+// Parameters:
+//   - [next]: the rest of the chain.
+//
+// Returns:
+//   - [http.Handler]: [next] behind the checks.
 func (server *Server) csrf(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -278,8 +378,17 @@ func (server *Server) csrf(next http.Handler) http.Handler {
 	})
 }
 
-// parseForm parses a URL-encoded or multipart body. Parsing twice is
-// harmless: later calls return the already parsed form.
+// [parseForm] parses a request's URL-encoded or multipart form body. Parsing
+// twice is harmless: later calls keep the form already parsed.
+//
+// Parameters:
+//   - [r]: the request.
+//   - [limit]: for a multipart body, how many bytes of it may be kept in
+//     memory; the rest goes to temporary files.
+//
+// Returns:
+//   - [error]: [nil] on success, or the parse error, which wraps an
+//     [*http.MaxBytesError] when the body was over its limit.
 func parseForm(r *http.Request, limit int64) error {
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
 		return r.ParseMultipartForm(limit)
@@ -287,8 +396,12 @@ func parseForm(r *http.Request, limit int64) error {
 	return r.ParseForm()
 }
 
-// writeFormError answers a body that could not be parsed: 413 when it was
-// over the size limit, 400 otherwise.
+// [writeFormError] answers a request whose body could not be parsed, as
+// plain text.
+//
+// Parameters:
+//   - [w]: where the answer is written.
+//   - [err]: the parse error.
 func writeFormError(w http.ResponseWriter, err error) {
 	var tooBig *http.MaxBytesError
 	if errors.As(err, &tooBig) {
@@ -298,7 +411,15 @@ func writeFormError(w http.ResponseWriter, err error) {
 	http.Error(w, "The form could not be read.", http.StatusBadRequest)
 }
 
-// sameOrigin is the Origin check described on csrf.
+// [sameOrigin] is the Origin check described at [Server.csrf].
+//
+// Parameters:
+//   - [r]: the request.
+//
+// Returns:
+//   - [bool]: [true] if the request comes from this site, or from a client
+//     that is not a browser; [false] otherwise, including for an Origin or
+//     Referer that cannot be parsed.
 func sameOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -313,16 +434,23 @@ func sameOrigin(r *http.Request) bool {
 		return false
 	}
 	host := r.Host
-	if fwd := r.Header.Get("X-Forwarded-Host"); fwd != "" {
-		host = fwd
+	if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
+		host = forwardedHost
 	}
 	return strings.EqualFold(parsedURL.Host, host)
 }
 
-// securityHeaders sets headers for every response. The Content-Security-
-// Policy allows only this site's own scripts and styles; blob: media and
-// workers are for hls.js, which feeds the video element through
-// MediaSource.
+// [securityHeaders] is the middleware that sets security headers on every
+// response: no MIME sniffing, no framing, the referrer only for this site,
+// and a Content-Security-Policy that allows only this site's own scripts
+// and styles (inline styles too). blob: media and workers are for hls.js,
+// which feeds the video element through MediaSource.
+//
+// Parameters:
+//   - [next]: the rest of the chain.
+//
+// Returns:
+//   - [http.Handler]: [next] with the headers set.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
@@ -335,17 +463,23 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// recoverer turns a panic in a handler into a logged 500 instead of a
-// dropped connection. http.ErrAbortHandler is re-raised: it is how a
-// handler deliberately aborts a response.
+// [recoverer] is the middleware that turns a panic in a handler into a
+// logged 500 instead of a dropped connection. [http.ErrAbortHandler] is
+// raised again, since it is how a handler deliberately aborts a response.
+//
+// Parameters:
+//   - [next]: the rest of the chain.
+//
+// Returns:
+//   - [http.Handler]: [next] with panics caught.
 func (server *Server) recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
-			if rec := recover(); rec != nil {
-				if rec == http.ErrAbortHandler {
-					panic(rec)
+			if recovered := recover(); recovered != nil {
+				if recovered == http.ErrAbortHandler {
+					panic(recovered)
 				}
-				server.Log.Error("panic", "err", rec, "path", r.URL.Path, "stack", string(debug.Stack()))
+				server.Log.Error("panic", "err", recovered, "path", r.URL.Path, "stack", string(debug.Stack()))
 				http.Error(w, "internal error", http.StatusInternalServerError)
 			}
 		}()
@@ -353,12 +487,19 @@ func (server *Server) recoverer(next http.Handler) http.Handler {
 	})
 }
 
-// statusWriter records the status code for the request log.
+// [statusWriter] records a response's status code for the request log.
 type statusWriter struct {
+	// [ResponseWriter] is the response being written.
 	http.ResponseWriter
+	// [status] is the first status code written, or 0 if none was written
+	// explicitly.
 	status int
 }
 
+// [WriteHeader] records the first status code and writes it.
+//
+// Parameters:
+//   - [code]: the status code.
 func (writer *statusWriter) WriteHeader(code int) {
 	if writer.status == 0 {
 		writer.status = code
@@ -366,10 +507,22 @@ func (writer *statusWriter) WriteHeader(code int) {
 	writer.ResponseWriter.WriteHeader(code)
 }
 
+// [Unwrap] gives the wrapped response, so [http.ResponseController] can
+// reach its optional features.
+//
+// Returns:
+//   - [http.ResponseWriter]: the response being written.
 func (writer *statusWriter) Unwrap() http.ResponseWriter { return writer.ResponseWriter }
 
-// logRequests logs each request at debug level (NEXUSPLAY_DEBUG), leaving
-// out static files and HLS segments, which would drown the rest.
+// [logRequests] is the middleware that logs each request at debug level
+// (NEXUSPLAY_DEBUG) with its status and duration, leaving out static files
+// and HLS segments, which would drown the rest.
+//
+// Parameters:
+//   - [next]: the rest of the chain.
+//
+// Returns:
+//   - [http.Handler]: [next] with logging.
 func (server *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -386,8 +539,12 @@ func (server *Server) logRequests(next http.Handler) http.Handler {
 	})
 }
 
-// healthz handles GET /healthz for the container health check: 200 while
-// the database answers, else 503.
+// [healthz] handles GET /healthz for the container health check: "ok" with
+// 200 while the database answers within 2 seconds, otherwise 503.
+//
+// Parameters:
+//   - [w]: where the answer is written.
+//   - [r]: the request.
 func (server *Server) healthz(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()

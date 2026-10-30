@@ -126,9 +126,9 @@ func controlPanel(p Page, pending []store.Media, collections []store.Collection,
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var6 templ.SafeURL
-					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/media/" + itoa(m.ID)))
+					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/media/" + formatInteger(m.ID)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 37, Col: 93}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 37, Col: 102}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 					if templ_7745c5c3_Err != nil {
@@ -202,9 +202,9 @@ func controlPanel(p Page, pending []store.Media, collections []store.Collection,
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var10 templ.SafeURL
-					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/collections/" + itoa(c.ID)))
+					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/collections/" + formatInteger(c.ID)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 56, Col: 99}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 56, Col: 108}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 					if templ_7745c5c3_Err != nil {
@@ -529,9 +529,9 @@ func editCollectionPage(p Page, c store.Collection, categories []string, metaEna
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var24 templ.SafeURL
-			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/collections/" + itoa(c.ID)))
+			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/collections/" + formatInteger(c.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 143, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 143, Col: 109}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
@@ -563,9 +563,9 @@ func editCollectionPage(p Page, c store.Collection, categories []string, metaEna
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var26 templ.SafeURL
-			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/collections/" + itoa(c.ID) + "/delete"))
+			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/collections/" + formatInteger(c.ID) + "/delete"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 151, Col: 93}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 151, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {
@@ -720,9 +720,9 @@ func editMediaPage(p Page, f MediaForm) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var33 templ.SafeURL
-			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/media/" + itoa(f.Media.ID)))
+			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/media/" + formatInteger(f.Media.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 182, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 182, Col: 109}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 			if templ_7745c5c3_Err != nil {
@@ -874,9 +874,9 @@ func editMediaPage(p Page, f MediaForm) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var43 string
-				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.SafeURL("/admin/media/" + itoa(f.Media.ID) + "/refresh-metadata"))
+				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.SafeURL("/admin/media/" + formatInteger(f.Media.ID) + "/refresh-metadata"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 231, Col: 92}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 231, Col: 101}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 				if templ_7745c5c3_Err != nil {
@@ -907,9 +907,9 @@ func editMediaPage(p Page, f MediaForm) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var44 templ.SafeURL
-					templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/subtitles/" + itoa(s.ID)))
+					templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/subtitles/" + formatInteger(s.ID)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 248, Col: 107}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 248, Col: 116}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 					if templ_7745c5c3_Err != nil {
@@ -959,9 +959,9 @@ func editMediaPage(p Page, f MediaForm) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var48 templ.SafeURL
-					templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/subtitles/" + itoa(s.ID) + "/delete"))
+					templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/subtitles/" + formatInteger(s.ID) + "/delete"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 262, Col: 97}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 262, Col: 106}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 					if templ_7745c5c3_Err != nil {
@@ -995,9 +995,9 @@ func editMediaPage(p Page, f MediaForm) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var50 templ.SafeURL
-			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/media/" + itoa(f.Media.ID) + "/subtitles"))
+			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/media/" + formatInteger(f.Media.ID) + "/subtitles"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 272, Col: 125}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/admin.templ`, Line: 272, Col: 134}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 			if templ_7745c5c3_Err != nil {

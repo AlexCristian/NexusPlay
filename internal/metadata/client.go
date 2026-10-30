@@ -199,7 +199,9 @@ func (client *Client) Show(ctx context.Context, name, year string) (Info, error)
 // Returns:
 //   - [Info]: the first search result, or a zero [Info] if [error] is not
 //     [nil].
-//   - [error]: the same errors as [Client.Show].
+//   - [error]: [nil] on success, [ErrNoMatch] if TMDB knows no such show,
+//     [ErrDisabled] if no API key is configured, and otherwise the network
+//     or decoding error.
 func (client *Client) searchShow(ctx context.Context, name, year string) (Info, error) {
 	query := url.Values{"query": {name}}
 	if year != "" {

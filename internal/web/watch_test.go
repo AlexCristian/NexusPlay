@@ -19,7 +19,7 @@ func TestWatchEpisodeMarkup(t *testing.T) {
 	coll, _ := environment.store.CreateCollection(ctx, store.Collection{Name: "Star Trek: The Next Generation", Category: "TV Shows"})
 	environment.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "Who Watches the Watchers", CollectionID: coll, Season: 3, Episode: 4}, true)
 
-	response, page := environment.client().sendForm("GET", "/watch/"+itoa(id), nil, nil)
+	response, page := environment.client().sendForm("GET", "/watch/"+formatInteger(id), nil, nil)
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("status %d", response.StatusCode)
 	}

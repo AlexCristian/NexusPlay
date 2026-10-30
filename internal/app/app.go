@@ -164,12 +164,12 @@ func build(config config.Config, database *store.Store, log *slog.Logger) (*App,
 // left open and Serve returns anyway: exiting with SQLite's write-ahead log
 // is safe, closing the database under a file swap is not.
 func (app *App) Serve(ctx context.Context, listener net.Listener) error {
-	workCtx, stopWorkers := context.WithCancel(context.Background())
+	workContext, stopWorkers := context.WithCancel(context.Background())
 	defer stopWorkers()
 	var workers sync.WaitGroup
 	for _, worker := range app.workers {
 		workers.Go(func() {
-			if err := worker.Run(workCtx); err != nil {
+			if err := worker.Run(workContext); err != nil {
 				app.Log.Error("background worker stopped", "worker", fmt.Sprintf("%T", worker), "err", err)
 			}
 		})
@@ -188,8 +188,8 @@ func (app *App) Serve(ctx context.Context, listener net.Listener) error {
 		}
 	}
 
-	httpCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	if shErr := srv.Shutdown(httpCtx); shErr != nil {
+	httpContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if shErr := srv.Shutdown(httpContext); shErr != nil {
 		app.Log.Warn("requests still running at shutdown", "err", shErr)
 	}
 	cancel()

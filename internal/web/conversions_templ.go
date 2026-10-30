@@ -209,9 +209,9 @@ func conversionsSection(csrf string, v ConversionView) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var10 templ.SafeURL
-				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/media/" + itoa(f.Media.ID) + "/retry-conversion"))
+				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/admin/media/" + formatInteger(f.Media.ID) + "/retry-conversion"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/conversions.templ`, Line: 54, Col: 108}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/conversions.templ`, Line: 54, Col: 117}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {

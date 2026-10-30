@@ -51,7 +51,7 @@ templ conversionsSection(csrf string, v ConversionView) {
 								<small class="convert-error">{ f.Error }</small>
 							</td>
 							<td>
-								<form method="post" action={ templ.SafeURL("/admin/media/" + itoa(f.Media.ID) + "/retry-conversion") }>
+								<form method="post" action={ templ.SafeURL("/admin/media/" + formatInteger(f.Media.ID) + "/retry-conversion") }>
 									<input type="hidden" name="csrf_token" value={ csrf }/>
 									<button type="submit" class="button button-small">Retry</button>
 								</form>

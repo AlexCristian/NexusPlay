@@ -127,18 +127,18 @@ func TestCategoriesGroupCollections(t *testing.T) {
 	_ = hidden
 	store.SaveProgress(ctx, user.ID, movie, 100, true)
 
-	cats, err := store.Categories(ctx, user.ID)
+	categories, err := store.Categories(ctx, user.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cats) != 2 || cats[0].Name != "Movies" || cats[1].Name != "TV Shows" {
-		t.Fatalf("categories = %+v", cats)
+	if len(categories) != 2 || categories[0].Name != "Movies" || categories[1].Name != "TV Shows" {
+		t.Fatalf("categories = %+v", categories)
 	}
-	if len(cats[0].Tiles) != 1 || !cats[0].Tiles[0].Watched {
-		t.Errorf("movies = %+v, want one watched tile", cats[0].Tiles)
+	if len(categories[0].Tiles) != 1 || !categories[0].Tiles[0].Watched {
+		t.Errorf("movies = %+v, want one watched tile", categories[0].Tiles)
 	}
-	if len(cats[1].Tiles) != 1 || !cats[1].Tiles[0].IsCollection {
-		t.Errorf("tv = %+v, want one collection tile", cats[1].Tiles)
+	if len(categories[1].Tiles) != 1 || !categories[1].Tiles[0].IsCollection {
+		t.Errorf("tv = %+v, want one collection tile", categories[1].Tiles)
 	}
 	recent, err := store.RecentTiles(ctx, user.ID, 10)
 	if err != nil || len(recent) != 2 {
@@ -307,12 +307,12 @@ func TestCategoriesIgnoreLetterCase(t *testing.T) {
 	if names, _ := store.CategoryNames(ctx); strings.Join(names, ",") != "Documentaries,Movies" {
 		t.Errorf("stored categories = %v, want one spelling each", names)
 	}
-	cats, err := store.Categories(ctx, 0)
+	categories, err := store.Categories(ctx, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var got []string
-	for _, category := range cats {
+	for _, category := range categories {
 		got = append(got, fmt.Sprintf("%s:%d", category.Name, len(category.Tiles)))
 	}
 	if want := "Documentaries:1,Movies:3,Other:1"; strings.Join(got, ",") != want {

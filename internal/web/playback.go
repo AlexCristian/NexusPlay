@@ -1,7 +1,10 @@
 package web
 
-// Playback describes how the browser should load a video.
+// [Playback] tells the player how to load a video.
 type Playback struct {
-	Direct bool   // the file itself; otherwise an HLS conversion
-	URL    string // the file or the HLS playlist
+	// [Direct] is [true] when the browser plays the file itself, and [false]
+	// when it plays an HLS transcode.
+	Direct bool
+	// [URL] is the file's or the HLS playlist's URL.
+	URL string
 }
