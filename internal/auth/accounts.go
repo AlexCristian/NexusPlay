@@ -134,7 +134,7 @@ func validate(registration Registration) error {
 		return &ValidationError{"nickname", "Your nickname must be between 2 and 40 characters."}
 	}
 	if utf8.RuneCountInString(registration.Password) < 8 || len(registration.Password) > 1024 {
-		return &ValidationError{"password", "Your password must be at least 8 characters long."}
+		return &ValidationError{"password", "Your password must be at least 8 characters and at most 1024 bytes long."}
 	}
 	return nil
 }

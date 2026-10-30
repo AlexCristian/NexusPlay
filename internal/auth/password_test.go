@@ -70,3 +70,22 @@ func TestTokens(t *testing.T) {
 		t.Error("different tokens hashed to the same value")
 	}
 }
+
+func TestVerifyRejectsDamagedHashes(t *testing.T) {
+	hash, err := HashPassword("right")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyStart := strings.LastIndex(hash, "$") + 1
+	for name, damaged := range map[string]string{
+		"empty key":    hash[:keyStart],
+		"short key":    hash[:keyStart] + "AAAA",
+		"zero passes":  strings.Replace(hash, ",t=2,", ",t=0,", 1),
+		"zero threads": strings.Replace(hash, ",p=1$", ",p=0$", 1),
+		"huge memory":  strings.Replace(hash, "m=19456,", "m=4294967295,", 1),
+	} {
+		if _, err := VerifyPassword("anything", damaged); err == nil || errors.Is(err, ErrMismatch) {
+			t.Errorf("%s: err = %v; want a parameter error", name, err)
+		}
+	}
+}

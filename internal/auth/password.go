@@ -30,6 +30,16 @@ const (
 	saltLength = 16
 )
 
+// [maximumArgonMemory] is the most memory, in KiB (1 GiB), a stored hash may
+// ask for. A larger value can only come from a damaged hash, and would make
+// checking it allocate that much.
+const maximumArgonMemory = 1 << 20
+
+// [minimumKeyLength] is the shortest derived key, in bytes, a stored hash may
+// hold. A shorter one can only come from a damaged hash; an empty one would
+// crash the Argon2 library.
+const minimumKeyLength = 16
+
 // [ErrMismatch] is returned by [VerifyPassword] when a password does not
 // match its hash.
 var ErrMismatch = errors.New("password does not match")
@@ -71,7 +81,9 @@ func HashPassword(password string) (string, error) {
 //     it should be replaced; [false] otherwise.
 //   - [error]: [nil] if the password matches; [ErrMismatch] if it does not;
 //     another error if [encoded] is not an Argon2id hash of the current
-//     version or cannot be decoded.
+//     version, its parts are not valid base64, or its parameters are out of
+//     range (fewer than 1 pass or 1 thread, more than [maximumArgonMemory],
+//     or a key shorter than [minimumKeyLength]).
 func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {
@@ -86,6 +98,9 @@ func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism); err != nil {
 		return false, errors.New("bad argon2 parameters")
 	}
+	if iterations < 1 || parallelism < 1 || memory > maximumArgonMemory {
+		return false, errors.New("argon2 parameters out of range")
+	}
 	encoding := base64.RawStdEncoding
 	salt, err := encoding.DecodeString(parts[4])
 	if err != nil {
@@ -94,6 +109,9 @@ func VerifyPassword(password, encoded string) (needsRehash bool, err error) {
 	want, err := encoding.DecodeString(parts[5])
 	if err != nil {
 		return false, err
+	}
+	if len(want) < minimumKeyLength {
+		return false, errors.New("argon2 key too short")
 	}
 	got := argon2.IDKey([]byte(password), salt, iterations, memory, parallelism, uint32(len(want)))
 	if subtle.ConstantTimeCompare(got, want) != 1 {
