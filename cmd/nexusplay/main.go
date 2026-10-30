@@ -1,4 +1,4 @@
-// Command nexusplay runs the NexusPlay media server. It reads the
+// Command [nexusplay] runs the NexusPlay media server. It reads the
 // configuration from NEXUSPLAY_* environment variables (see package config),
 // then hands everything else to package app.
 //
@@ -21,6 +21,9 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/config"
 )
 
+// [main] runs the health check when called as "nexusplay healthcheck", and
+// the server otherwise. It exits with status 1 if the server fails to start
+// or stops with an error, after logging why.
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		os.Exit(healthcheck())
@@ -31,6 +34,14 @@ func main() {
 	}
 }
 
+// [run] loads the configuration, sets up logging (debug level when
+// NEXUSPLAY_DEBUG is on), and serves until the process receives SIGINT or
+// SIGTERM, then shuts down cleanly.
+//
+// Returns:
+//   - [error]: [nil] after a clean shutdown; otherwise a configuration error,
+//     an error from building the application, an error listening on
+//     NEXUSPLAY_ADDR, or the server's error.
 func run() error {
 	configuration, err := config.Load()
 	if err != nil {
@@ -58,7 +69,13 @@ func run() error {
 	return application.Serve(ctx, listener)
 }
 
-// healthcheck lets a minimal container check itself without curl.
+// [healthcheck] lets a minimal container check itself without curl: it asks
+// the server at NEXUSPLAY_ADDR (or the default address) for /healthz,
+// waiting at most 3 seconds. An address without a host, such as ":8080",
+// is reached on 127.0.0.1. Problems are printed to stderr.
+//
+// Returns:
+//   - [int]: the exit status: 0 if the server answered 200, 1 otherwise.
 func healthcheck() int {
 	address := os.Getenv("NEXUSPLAY_ADDR")
 	if address == "" {

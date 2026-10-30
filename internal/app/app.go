@@ -41,34 +41,68 @@ var (
 )
 
 const (
-	// sessionLifetime is how long a login lasts.
+	// [sessionLifetime] is how long a sign-in lasts: 30 days.
 	sessionLifetime = 30 * 24 * time.Hour
-	// shutdownTimeout bounds how long Serve waits for background work after
+	// [shutdownTimeout] is how long [App.Serve] waits for background work after
 	// it is asked to stop. A file swap ignores cancellation and finishes.
 	shutdownTimeout = 30 * time.Second
 )
 
-// worker is a background component that runs until its context ends.
+// [worker] is a background component that runs until its context ends: the
+// scanner, transcode manager, session clean-up, poster sweeper and, when
+// conversion is on, the converter.
 type worker interface {
+	// [Run] does the component's background work until [ctx] ends.
+	//
+	// Parameters:
+	//   - [ctx]: stops the work when cancelled.
+	//
+	// Returns:
+	//   - [error]: [nil] once stopped, or why it stopped early.
 	Run(ctx context.Context) error
 }
 
-// App is a configured server with its background workers.
+// [App] is a configured server with its background workers. Create one with
+// [New], then call [App.Serve] once, or [App.Close] if it will not be
+// served.
 type App struct {
-	Config     config.Config
-	Log        *slog.Logger
-	Store      *store.Store
-	Scanner    *library.Scanner
+	// [Config] holds the settings it was built with.
+	Config config.Config
+	// [Log] records the server's and workers' messages.
+	Log *slog.Logger
+	// [Store] is the open database.
+	Store *store.Store
+	// [Scanner] is the library scanner; tests trigger scans through it.
+	Scanner *library.Scanner
+	// [Transcodes] runs the HLS transcodes.
 	Transcodes *stream.Manager
-	Converter  web.Conversions // convert.Disabled when NEXUSPLAY_CONVERT is off
-	Handler    http.Handler
+	// [Converter] is the MP4 converter, or [convert.Disabled] when
+	// NEXUSPLAY_CONVERT is off.
+	Converter web.Conversions
+	// [Handler] is the complete HTTP handler, which tests can call directly.
+	Handler http.Handler
 
-	workers         []worker
+	// [workers] are the background components [App.Serve] runs.
+	workers []worker
+	// [shutdownTimeout] is how long [App.Serve] waits for the workers to stop;
+	// tests shorten it.
 	shutdownTimeout time.Duration
 }
 
-// New checks the environment, opens the database and builds every component.
-// Nothing runs until Serve.
+// [New] checks the environment, opens the database (applying migrations) and
+// builds every component. Nothing runs until [App.Serve].
+//
+// Parameters:
+//   - [ctx]: cancels opening the database.
+//   - [config]: the validated settings.
+//   - [log]: where every component logs.
+//
+// Returns:
+//   - [*App]: the application, or [nil] if [error] is not [nil].
+//   - [error]: [nil] on success, or why it could not start: a data folder
+//     that cannot be created, a missing media folder, ffmpeg or ffprobe not
+//     found, a database that cannot be opened, or a component that cannot
+//     be built.
 func New(ctx context.Context, config config.Config, log *slog.Logger) (*App, error) {
 	if err := ensureDirectories(config); err != nil {
 		return nil, err
@@ -88,7 +122,15 @@ func New(ctx context.Context, config config.Config, log *slog.Logger) (*App, err
 	return application, nil
 }
 
-// ensureDirectories creates the data folders and checks the media folder exists.
+// [ensureDirectories] creates the data and poster folders if needed, and
+// checks that the media folder exists.
+//
+// Parameters:
+//   - [config]: the settings naming the folders.
+//
+// Returns:
+//   - [error]: [nil] if the folders are ready, or an error naming the one
+//     that is not.
 func ensureDirectories(config config.Config) error {
 	for _, directory := range []string{config.DataDirectory, config.PosterDirectory()} {
 		if err := os.MkdirAll(directory, 0o755); err != nil {
@@ -101,18 +143,37 @@ func ensureDirectories(config config.Config) error {
 	return nil
 }
 
-// checkBinaries makes sure ffmpeg and ffprobe can be run.
+// [checkBinaries] makes sure ffmpeg and ffprobe can be found, on the PATH or
+// at the configured paths.
+//
+// Parameters:
+//   - [config]: the settings naming the programs.
+//
+// Returns:
+//   - [error]: [nil] if both are found, or an error naming the first one
+//     that is not and how to fix it.
 func checkBinaries(config config.Config) error {
-	for _, bin := range []string{config.FFmpegPath, config.FFprobePath} {
-		if _, err := exec.LookPath(bin); err != nil {
-			return fmt.Errorf("%s not found: install ffmpeg or set NEXUSPLAY_FFMPEG / NEXUSPLAY_FFPROBE", bin)
+	for _, program := range []string{config.FFmpegPath, config.FFprobePath} {
+		if _, err := exec.LookPath(program); err != nil {
+			return fmt.Errorf("%s not found: install ffmpeg or set NEXUSPLAY_FFMPEG / NEXUSPLAY_FFPROBE", program)
 		}
 	}
 	return nil
 }
 
-// build wires the components together. Every dependency edge in the program
-// is visible here.
+// [build] wires the components together. Every dependency edge in the
+// program is visible here.
+//
+// Parameters:
+//   - [config]: the validated settings.
+//   - [database]: the open database.
+//   - [log]: where every component logs; each gets its own "component"
+//     attribute.
+//
+// Returns:
+//   - [*App]: the application, or [nil] if [error] is not [nil].
+//   - [error]: [nil] on success; an error if the transcode folder cannot be
+//     prepared or the system's random source is broken.
 func build(config config.Config, database *store.Store, log *slog.Logger) (*App, error) {
 	tools := ffmpeg.Tools{FFmpeg: config.FFmpegPath, FFprobe: config.FFprobePath}
 	tmdbClient := metadata.New(metadata.Config{APIKey: config.TMDBAPIKey, PosterDirectory: config.PosterDirectory()}, log.With("component", "tmdb"))
@@ -144,25 +205,37 @@ func build(config config.Config, database *store.Store, log *slog.Logger) (*App,
 		workers = append(workers, converter)
 	}
 
-	srv := &web.Server{Config: config, Store: database, Scanner: scanner, Metadata: tmdbClient, Transcodes: transcodes,
+	webServer := &web.Server{Config: config, Store: database, Scanner: scanner, Metadata: tmdbClient, Transcodes: transcodes,
 		Converter: conversions, Accounts: accounts, Sessions: sessions, Log: log}
 	return &App{
 		Config: config, Log: log, Store: database, Scanner: scanner, Transcodes: transcodes,
-		Converter: conversions, Handler: srv.Handler(),
+		Converter: conversions, Handler: webServer.Handler(),
 		workers: workers, shutdownTimeout: shutdownTimeout,
 	}, nil
 }
 
-// Serve runs the HTTP server on ln and every background worker until ctx
-// ends (or the server fails), then shuts down in order:
+// [Serve] runs the HTTP server on a listener and every background worker
+// until [ctx] ends (or the server fails), then shuts down in order:
 //
-//  1. stop accepting requests and let those in flight finish (up to 10 s);
+//  1. stop accepting requests and let those in flight finish, for up to 10
+//     seconds;
 //  2. stop the workers and wait for them, up to the shutdown timeout;
 //  3. close the database.
 //
 // If a worker is still running when the timeout expires, the database is
-// left open and Serve returns anyway: exiting with SQLite's write-ahead log
-// is safe, closing the database under a file swap is not.
+// left open and [Serve] returns anyway: exiting with SQLite's write-ahead
+// log is safe, closing the database under a file swap is not. A worker that
+// stops with an error is logged. Call [Serve] once.
+//
+// Parameters:
+//   - [ctx]: starts the shutdown when cancelled.
+//   - [listener]: where to accept HTTP connections; it is closed on
+//     shutdown.
+//
+// Returns:
+//   - [error]: [nil] after a clean shutdown; otherwise the server's error
+//     (if it failed before [ctx] ended) joined with the error from closing
+//     the database.
 func (app *App) Serve(ctx context.Context, listener net.Listener) error {
 	workContext, stopWorkers := context.WithCancel(context.Background())
 	defer stopWorkers()
@@ -175,9 +248,9 @@ func (app *App) Serve(ctx context.Context, listener net.Listener) error {
 		})
 	}
 
-	srv := &http.Server{Handler: app.Handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
+	httpServer := &http.Server{Handler: app.Handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
 	served := make(chan error, 1)
-	go func() { served <- srv.Serve(listener) }()
+	go func() { served <- httpServer.Serve(listener) }()
 	var err error
 	select {
 	case <-ctx.Done():
@@ -189,8 +262,8 @@ func (app *App) Serve(ctx context.Context, listener net.Listener) error {
 	}
 
 	httpContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	if shErr := srv.Shutdown(httpContext); shErr != nil {
-		app.Log.Warn("requests still running at shutdown", "err", shErr)
+	if shutdownErr := httpServer.Shutdown(httpContext); shutdownErr != nil {
+		app.Log.Warn("requests still running at shutdown", "err", shutdownErr)
 	}
 	cancel()
 
@@ -206,5 +279,9 @@ func (app *App) Serve(ctx context.Context, listener net.Listener) error {
 	}
 }
 
-// Close releases the database. Use it only when Serve was never called.
+// [Close] releases the database. Use it only when [App.Serve] was never
+// called, since [App.Serve] closes it itself.
+//
+// Returns:
+//   - [error]: [nil] on success, or the error from closing the database.
 func (app *App) Close() error { return app.Store.Close() }
