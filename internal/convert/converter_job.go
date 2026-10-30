@@ -2,6 +2,7 @@ package convert
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -250,12 +251,16 @@ func (converter *Converter) commit(ctx context.Context, media store.Media, work 
 //
 // Returns:
 //   - [error]: [nil] on success; [ErrSourceChanged] if the media row no
-//     longer points at [media]'s path; [ErrTargetExists] if a file appeared
-//     at [target]; an error wrapping the database error if the media item
-//     cannot be re-read or updated; otherwise the file error from step 1.
+//     longer points at [media]'s path or was removed; [ErrTargetExists] if
+//     a file appeared at [target]; an error wrapping the database error if
+//     the media item cannot be re-read or updated; otherwise the file error
+//     from step 1.
 func (converter *Converter) swap(ctx context.Context, media store.Media, source, temporaryPath, target string, result store.ReplacedFile) error {
 	ctx = context.WithoutCancel(ctx)
 	current, err := converter.dependencies.Store.MediaByID(ctx, media.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		return ErrSourceChanged // a scan removed the row
+	}
 	if err != nil {
 		return fmt.Errorf("re-reading media %d: %w", media.ID, err)
 	}

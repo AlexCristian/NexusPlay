@@ -259,8 +259,8 @@ func (converter *Converter) Status(ctx context.Context) (Status, error) {
 }
 
 // [runJob] converts one file and records the outcome. A shutdown and a file
-// whose row now points elsewhere ([ErrSourceChanged]) are logged only; a
-// file whose row a scan removed is recorded as failed; a disk too full postpones
+// whose row now points elsewhere or was removed ([ErrSourceChanged]) are
+// logged only; a disk too full postpones
 // the file for [noSpaceRetry]; any other error is recorded with
 // [Store.SetConvertFailed] so the control panel can show it. After a
 // success it asks for a rescan to import the extracted subtitles.

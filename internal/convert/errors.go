@@ -11,7 +11,7 @@ var (
 	// one the user added while the conversion ran. It is never overwritten.
 	ErrTargetExists = errors.New("a file with the converted file's name already exists")
 	// [ErrSourceChanged] means the media row now points at a different file
-	// than the one converted. The converted file is discarded. A row that was
-	// deleted gives a wrapped [store.ErrNotFound] instead.
+	// than the one converted, or a scan removed it. The converted file is
+	// discarded.
 	ErrSourceChanged = errors.New("the file changed in the library while it was being converted")
 )

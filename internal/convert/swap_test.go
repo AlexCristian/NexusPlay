@@ -55,11 +55,11 @@ func TestSwapNeverOverwritesAnExistingTarget(t *testing.T) {
 	converter, mediaItem, media := newSwapFixture(t, "Movie.mkv")
 	source := filepath.Join(media, "Movie.mkv")
 	target := filepath.Join(media, "Movie.mp4")
-	temporaryDirectory := filepath.Join(media, ".Movie"+temporarySuffix)
-	os.WriteFile(temporaryDirectory, []byte("converted"), 0o644)
+	temporaryPath := filepath.Join(media, ".Movie"+temporarySuffix)
+	os.WriteFile(temporaryPath, []byte("converted"), 0o644)
 	os.WriteFile(target, []byte("the user's own file"), 0o644) // appeared mid-conversion
 
-	err := converter.swap(context.Background(), mediaItem, source, temporaryDirectory, target, store.ReplacedFile{Path: "Movie.mp4", VideoCodec: "h264"})
+	err := converter.swap(context.Background(), mediaItem, source, temporaryPath, target, store.ReplacedFile{Path: "Movie.mp4", VideoCodec: "h264"})
 	if !errors.Is(err, ErrTargetExists) {
 		t.Fatalf("swap error = %v, want ErrTargetExists", err)
 	}
@@ -80,14 +80,14 @@ func TestSwapDatabaseFailureRemovesOnlyItsOwnFile(t *testing.T) {
 	converter, mediaItem, media := newSwapFixture(t, "Movie.mkv")
 	source := filepath.Join(media, "Movie.mkv")
 	target := filepath.Join(media, "Movie.mp4")
-	temporaryDirectory := filepath.Join(media, ".Movie"+temporarySuffix)
-	os.WriteFile(temporaryDirectory, []byte("converted"), 0o644)
+	temporaryPath := filepath.Join(media, ".Movie"+temporarySuffix)
+	os.WriteFile(temporaryPath, []byte("converted"), 0o644)
 	// Another row already uses the target path, so the update hits the unique index.
 	if _, _, err := converter.dependencies.Store.(*store.Store).InsertScannedMedia(context.Background(), store.ScannedMedia{Path: "Movie.mp4", Title: "x"}); err != nil {
 		t.Fatal(err)
 	}
 
-	err := converter.swap(context.Background(), mediaItem, source, temporaryDirectory, target, store.ReplacedFile{Path: "Movie.mp4", VideoCodec: "h264"})
+	err := converter.swap(context.Background(), mediaItem, source, temporaryPath, target, store.ReplacedFile{Path: "Movie.mp4", VideoCodec: "h264"})
 	if err == nil {
 		t.Fatal("swap succeeded, want a database error")
 	}
@@ -103,16 +103,16 @@ func TestSwapReplacesAndDeletesOriginal(t *testing.T) {
 	converter, mediaItem, media := newSwapFixture(t, "Movie.mkv")
 	source := filepath.Join(media, "Movie.mkv")
 	target := filepath.Join(media, "Movie.mp4")
-	temporaryDirectory := filepath.Join(media, ".Movie"+temporarySuffix)
-	os.WriteFile(temporaryDirectory, []byte("converted"), 0o644)
+	temporaryPath := filepath.Join(media, ".Movie"+temporarySuffix)
+	os.WriteFile(temporaryPath, []byte("converted"), 0o644)
 
-	if err := converter.swap(context.Background(), mediaItem, source, temporaryDirectory, target, store.ReplacedFile{Path: "Movie.mp4", VideoCodec: "h264"}); err != nil {
+	if err := converter.swap(context.Background(), mediaItem, source, temporaryPath, target, store.ReplacedFile{Path: "Movie.mp4", VideoCodec: "h264"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := readFile(t, target); got != "converted" {
 		t.Errorf("target = %q", got)
 	}
-	for _, gone := range []string{source, temporaryDirectory} {
+	for _, gone := range []string{source, temporaryPath} {
 		if _, err := os.Stat(gone); !os.IsNotExist(err) {
 			t.Errorf("%s should be gone, stat err = %v", filepath.Base(gone), err)
 		}
@@ -126,10 +126,10 @@ func TestSwapReplacesAndDeletesOriginal(t *testing.T) {
 func TestSwapSameNameReplacesInPlace(t *testing.T) {
 	converter, mediaItem, media := newSwapFixture(t, "Movie.mp4")
 	path := filepath.Join(media, "Movie.mp4")
-	temporaryDirectory := filepath.Join(media, ".Movie"+temporarySuffix)
-	os.WriteFile(temporaryDirectory, []byte("converted"), 0o644)
+	temporaryPath := filepath.Join(media, ".Movie"+temporarySuffix)
+	os.WriteFile(temporaryPath, []byte("converted"), 0o644)
 
-	if err := converter.swap(context.Background(), mediaItem, path, temporaryDirectory, path, store.ReplacedFile{Path: "Movie.mp4", VideoCodec: "h264"}); err != nil {
+	if err := converter.swap(context.Background(), mediaItem, path, temporaryPath, path, store.ReplacedFile{Path: "Movie.mp4", VideoCodec: "h264"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := readFile(t, path); got != "converted" {
@@ -143,15 +143,36 @@ func TestSwapRefusesWhenTheRowChanged(t *testing.T) {
 	converter, mediaItem, media := newSwapFixture(t, "Movie.mkv")
 	source := filepath.Join(media, "Movie.mkv")
 	target := filepath.Join(media, "Movie.mp4")
-	temporaryDirectory := filepath.Join(media, ".Movie"+temporarySuffix)
-	os.WriteFile(temporaryDirectory, []byte("converted"), 0o644)
+	temporaryPath := filepath.Join(media, ".Movie"+temporarySuffix)
+	os.WriteFile(temporaryPath, []byte("converted"), 0o644)
 	mediaItem.Path = "Something else.mkv" // the job's snapshot no longer matches the row
 
-	err := converter.swap(context.Background(), mediaItem, source, temporaryDirectory, target, store.ReplacedFile{Path: "Movie.mp4"})
+	err := converter.swap(context.Background(), mediaItem, source, temporaryPath, target, store.ReplacedFile{Path: "Movie.mp4"})
 	if !errors.Is(err, ErrSourceChanged) {
 		t.Fatalf("swap error = %v, want ErrSourceChanged", err)
 	}
 	if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
 		t.Error("no file should be placed when the row changed")
+	}
+}
+
+// A row a scan removed while the conversion ran discards the conversion like
+// a changed row, instead of recording a failure.
+func TestSwapDiscardsWhenTheRowWasRemoved(t *testing.T) {
+	converter, mediaItem, media := newSwapFixture(t, "Movie.mkv")
+	source := filepath.Join(media, "Movie.mkv")
+	target := filepath.Join(media, "Movie.mp4")
+	temporaryPath := filepath.Join(media, ".Movie"+temporarySuffix)
+	os.WriteFile(temporaryPath, []byte("converted"), 0o644)
+	if err := converter.dependencies.Store.(*store.Store).DeleteMedia(context.Background(), mediaItem.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	err := converter.swap(context.Background(), mediaItem, source, temporaryPath, target, store.ReplacedFile{Path: "Movie.mp4"})
+	if !errors.Is(err, ErrSourceChanged) {
+		t.Fatalf("swap error = %v, want ErrSourceChanged", err)
+	}
+	if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
+		t.Error("no file should be placed when the row was removed")
 	}
 }
