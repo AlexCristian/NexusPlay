@@ -79,15 +79,15 @@ func TestPublishNotifiesSubscribers(t *testing.T) {
 	store := newStore(t)
 	admin := mustUser(t, store, "a@example.com", "admin")
 	fan := mustUser(t, store, "f@example.com", "fan")
-	coll, err := store.CreateCollection(ctx, Collection{Name: "Cosmos", Category: "TV Shows"})
+	collectionID, err := store.CreateCollection(ctx, Collection{Name: "Cosmos", Category: "TV Shows"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if subscribed, err := store.ToggleSubscription(ctx, fan.ID, coll); err != nil || !subscribed {
+	if subscribed, err := store.ToggleSubscription(ctx, fan.ID, collectionID); err != nil || !subscribed {
 		t.Fatalf("subscribe: on=%v err=%v", subscribed, err)
 	}
 	episodeID := mustMedia(t, store, "Cosmos/S01E01.mp4")
-	if err := store.UpdateMedia(ctx, episodeID, MediaUpdate{Title: "Pilot", CollectionID: coll, Season: 1, Episode: 1}, true); err != nil {
+	if err := store.UpdateMedia(ctx, episodeID, MediaUpdate{Title: "Pilot", CollectionID: collectionID, Season: 1, Episode: 1}, true); err != nil {
 		t.Fatal(err)
 	}
 	notes, err := store.Notifications(ctx, fan.ID, 10)
@@ -101,7 +101,7 @@ func TestPublishNotifiesSubscribers(t *testing.T) {
 		t.Errorf("unsubscribed user got %d notifications", len(notifications))
 	}
 	// Saving again must not notify twice.
-	if err := store.UpdateMedia(ctx, episodeID, MediaUpdate{Title: "Pilot", CollectionID: coll, Season: 1, Episode: 1}, true); err != nil {
+	if err := store.UpdateMedia(ctx, episodeID, MediaUpdate{Title: "Pilot", CollectionID: collectionID, Season: 1, Episode: 1}, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ClearNotification(ctx, fan.ID, episodeID); err != nil {
@@ -116,14 +116,14 @@ func TestCategoriesGroupCollections(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
 	user := mustUser(t, store, "a@example.com", "a")
-	coll, _ := store.CreateCollection(ctx, Collection{Name: "Doctor Who", Category: "TV Shows"})
+	collectionID, _ := store.CreateCollection(ctx, Collection{Name: "Doctor Who", Category: "TV Shows"})
 	movie := mustMedia(t, store, "m.mp4")
 	firstEpisodeID := mustMedia(t, store, "dw1.mp4")
 	secondEpisodeID := mustMedia(t, store, "dw2.mp4")
 	hidden := mustMedia(t, store, "unpublished.mp4")
 	store.UpdateMedia(ctx, movie, MediaUpdate{Title: "Alien", Category: "Movies"}, true)
-	store.UpdateMedia(ctx, firstEpisodeID, MediaUpdate{Title: "Rose", CollectionID: coll, Season: 1, Episode: 1}, true)
-	store.UpdateMedia(ctx, secondEpisodeID, MediaUpdate{Title: "The End of the World", CollectionID: coll, Season: 1, Episode: 2}, true)
+	store.UpdateMedia(ctx, firstEpisodeID, MediaUpdate{Title: "Rose", CollectionID: collectionID, Season: 1, Episode: 1}, true)
+	store.UpdateMedia(ctx, secondEpisodeID, MediaUpdate{Title: "The End of the World", CollectionID: collectionID, Season: 1, Episode: 2}, true)
 	_ = hidden
 	store.SaveProgress(ctx, user.ID, movie, 100, true)
 

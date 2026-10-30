@@ -182,11 +182,11 @@ func TestCSRF(t *testing.T) {
 	environment := newEnvironment(t, nil)
 	client := environment.client()
 	client.register("alex")
-	coll, err := environment.store.CreateCollection(context.Background(), store.Collection{Name: "Show", Category: "TV Shows"})
+	collectionID, err := environment.store.CreateCollection(context.Background(), store.Collection{Name: "Show", Category: "TV Shows"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := "/collections/" + formatInteger(coll) + "/subscribe"
+	path := "/collections/" + formatInteger(collectionID) + "/subscribe"
 
 	if response, _ := client.sendForm("POST", path, url.Values{}, nil); response.StatusCode != http.StatusForbidden {
 		t.Errorf("no token: %d, want 403", response.StatusCode)

@@ -20,6 +20,8 @@ cb callback
 cfg config
 cmd command
 cnt count
+coll collection
+colls collections
 cols columns
 conf config
 conv conversion

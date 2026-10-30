@@ -16,8 +16,8 @@ func TestWatchEpisodeMarkup(t *testing.T) {
 	environment := newEnvironment(t, nil)
 	ctx := context.Background()
 	id, _, _ := environment.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "Show/Show S01E04.mp4", Title: "E4", VideoCodec: "h264", Duration: 2672.3})
-	coll, _ := environment.store.CreateCollection(ctx, store.Collection{Name: "Star Trek: The Next Generation", Category: "TV Shows"})
-	environment.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "Who Watches the Watchers", CollectionID: coll, Season: 3, Episode: 4}, true)
+	collectionID, _ := environment.store.CreateCollection(ctx, store.Collection{Name: "Star Trek: The Next Generation", Category: "TV Shows"})
+	environment.store.UpdateMedia(ctx, id, store.MediaUpdate{Title: "Who Watches the Watchers", CollectionID: collectionID, Season: 3, Episode: 4}, true)
 
 	response, page := environment.client().sendForm("GET", "/watch/"+formatInteger(id), nil, nil)
 	if response.StatusCode != http.StatusOK {
