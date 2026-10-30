@@ -146,7 +146,8 @@ func (store *Store) MediaNeedingMetadata(ctx context.Context, checkedBefore time
 }
 
 // [H264MissingPixelFormat] finds H.264 media whose pixel format has not been
-// recorded, because they were added before it was stored.
+// recorded: files added before the pixel format was stored, or whose probe
+// reported none.
 //
 // Parameters:
 //   - [ctx]: cancels the query.
@@ -386,7 +387,7 @@ func (store *Store) PosterNames(ctx context.Context) (collections.Set[string], e
 //   - [userID]: the viewer, for [Tile.Watched], or 0 for anonymous.
 //
 // Returns:
-//   - [[]Category]: the rows by name, regardless of letter case, each with
+//   - [[]Category]: the rows by name, regardless of ASCII letter case, each with
 //     its tiles by title; [nil] if nothing is published.
 //   - [error]: [nil] on success, or the database error.
 func (store *Store) Categories(ctx context.Context, userID int64) ([]Category, error) {
@@ -430,7 +431,7 @@ func (store *Store) categorized(ctx context.Context, userID int64, query string,
 		tile     Tile
 	}
 	pattern := "%" + likeEscape(query) + "%"
-	// The names of categories are compared without regard to letter case. Writes
+	// The names of categories are compared without regard to ASCII letter case. Writes
 	// already reuse an existing spelling ([canonicalCategory]); grouping here
 	// also merges rows saved before that rule existed.
 	rows, err := queryAll(ctx, store.database, func(scannedRow rowScanner) (row, error) {
@@ -500,7 +501,7 @@ func (store *Store) RecentTiles(ctx context.Context, userID int64, limit int) ([
 //   - [ctx]: cancels the query.
 //
 // Returns:
-//   - [[]string]: the names, sorted regardless of letter case; [nil] if
+//   - [[]string]: the names, sorted regardless of ASCII letter case; [nil] if
 //     there are none.
 //   - [error]: [nil] on success, or the database error.
 func (store *Store) CategoryNames(ctx context.Context) ([]string, error) {

@@ -7,8 +7,9 @@ import (
 // [MediaForm] is the data behind the control panel's edit and publish form
 // for one media item.
 type MediaForm struct {
-	// [Media] is the item, with any values typed into a form that failed to
-	// save.
+	// [Media] is the item as stored. After a failed save it still holds the
+	// stored values, not what was typed; only [MediaForm.Error] reports the
+	// failure.
 	Media store.Media
 	// [CollectionName] is the collection field's value, which may name a
 	// collection that does not exist yet.

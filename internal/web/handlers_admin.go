@@ -38,6 +38,18 @@ type adminHandlers struct {
 	posterDirectory string
 }
 
+// Defaults for the control panel.
+const (
+	// [defaultFilmCategory] is the category suggested for a film that has
+	// none.
+	defaultFilmCategory = "Movies"
+	// [defaultShowCategory] is the category of a collection created for an
+	// episode without one.
+	defaultShowCategory = "TV Shows"
+	// [collectionLookupTimeout] limits a collection's TMDB lookup.
+	collectionLookupTimeout = 20 * time.Second
+)
+
 // [adminStore] is the part of the database the control panel edits;
 // [store.Store] implements it. Each method is described at the
 // [store.Store] method of the same name.
@@ -329,8 +341,9 @@ func (handlers *adminHandlers) controlPanel(w http.ResponseWriter, r *http.Reque
 //go:embed done_messages.txt
 var doneMessagesFile string
 
-// [doneMessages] confirm an action after the redirect back to /admin?done=,
-// from done_messages.txt.
+// [doneMessages] maps each value of the "done" parameter (/admin?done=scan)
+// to the confirmation shown, from done_messages.txt. An unknown value maps
+// to "", which shows nothing.
 var doneMessages = datafile.Table("done_messages.txt", doneMessagesFile)
 
 // [conversionView] loads the converter's status and the recorded failures.
@@ -372,7 +385,8 @@ func (handlers *adminHandlers) conversionsPanel(w http.ResponseWriter, r *http.R
 
 // [retryConversion] handles POST /admin/media/{id}/retry-conversion: it puts
 // a failed file back in the queue, wakes the converter and goes back to the
-// control panel with a confirmation.
+// control panel with a confirmation. An ID with no such item, or one that
+// had not failed, still gets the confirmation.
 //
 // Parameters:
 //   - [w]: where the redirect is written.
@@ -446,7 +460,7 @@ func (handlers *adminHandlers) mediaForm(ctx context.Context, media store.Media)
 			}
 		}
 		if form.Media.Category == "" && !guess.IsEpisode() {
-			form.Media.Category = "Movies"
+			form.Media.Category = defaultFilmCategory
 		}
 	}
 	return form, nil
@@ -605,7 +619,7 @@ func (handlers *adminHandlers) findOrCreateCollection(ctx context.Context, name,
 		return collection, err
 	}
 	if category == "" {
-		category = "TV Shows"
+		category = defaultShowCategory
 	}
 	collection = store.Collection{Name: name, Category: category, Year: year}
 	handlers.fillFromTMDB(ctx, &collection)
@@ -678,15 +692,21 @@ func (handlers *adminHandlers) lookupCollection(ctx context.Context, name, categ
 //     matter.
 //
 // Returns:
-//   - [bool]: [true] for "movies", "movie", "films" and "film", [false]
-//     otherwise.
+//   - [bool]: [true] for a name in film_categories.txt, such as "movies",
+//     [false] otherwise.
 func isFilmCategory(category string) bool {
-	switch strings.ToLower(strings.TrimSpace(category)) {
-	case "movies", "movie", "films", "film":
-		return true
-	}
-	return false
+	return filmCategories.Contains(strings.ToLower(strings.TrimSpace(category)))
 }
+
+// [filmCategoriesFile] is the contents of film_categories.txt, built into the
+// program by the compiler. The build fails if the file is missing.
+//
+//go:embed film_categories.txt
+var filmCategoriesFile string
+
+// [filmCategories] holds the lowercase category names that hold films, from
+// film_categories.txt.
+var filmCategories = datafile.Set(filmCategoriesFile)
 
 // [fillFromTMDB] fills a collection's empty year, overview and poster from
 // TMDB, when lookups are on, within 20 seconds. A failed lookup is logged
@@ -699,7 +719,7 @@ func (handlers *adminHandlers) fillFromTMDB(ctx context.Context, collection *sto
 	if !handlers.metadata.Enabled() {
 		return
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, collectionLookupTimeout)
 	defer cancel()
 	info, err := handlers.lookupCollection(ctx, collection.Name, collection.Category)
 	if err != nil {
@@ -727,11 +747,13 @@ func (handlers *adminHandlers) fillFromTMDB(ctx context.Context, collection *sto
 //   - [upload]: the poster, or [nil] if none was uploaded.
 //
 // Returns:
-//   - [string]: the new file's name, such as "upload-3f9a0c1d2e4b5a6f.jpg",
-//     or "" if [upload] is [nil] or [error] is not [nil].
+//   - [string]: the new file's name: "upload-", 16 URL-safe base64
+//     characters and the extension, such as "upload-Xk3_9aQ-Lm2bR7tZ.jpg";
+//     "" if [upload] is [nil] or the file could not be written. The name is
+//     still returned when only closing the file failed.
 //   - [error]: [nil] on success or when [upload] is [nil]; otherwise the
 //     error from reading the upload, making the random name, creating the
-//     file, or writing it.
+//     file, writing it, or closing it.
 func (handlers *adminHandlers) savePoster(upload *posterUpload) (string, error) {
 	if upload == nil {
 		return "", nil
@@ -1024,7 +1046,8 @@ func (handlers *adminHandlers) showCollectionFormError(w http.ResponseWriter, r 
 
 // [deleteCollection] handles POST /admin/collections/{id}/delete: it removes
 // the collection, whose media stay in the library outside any collection,
-// and goes back to the control panel with a confirmation.
+// and goes back to the control panel with a confirmation. An ID with no such
+// collection still gets the confirmation.
 //
 // Parameters:
 //   - [w]: where the redirect is written.

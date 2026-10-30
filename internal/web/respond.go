@@ -12,6 +12,10 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/stream"
 )
 
+// [busyRetryAfterSeconds] is how long a client is asked to wait, in the
+// Retry-After header, when every transcode slot is taken.
+const busyRetryAfterSeconds = 30
+
 // [handlerFunc] is an HTTP handler that returns an error instead of writing
 // an error response. [responder.handle] turns the error into the right
 // response, so every handler maps errors the same way.
@@ -98,7 +102,7 @@ func (responder responder) respondError(w http.ResponseWriter, r *http.Request, 
 	case errors.Is(err, store.ErrDuplicate):
 		responder.errorPage(w, r, http.StatusConflict, "Already exists", "Something with that name already exists.")
 	case errors.Is(err, stream.ErrBusy):
-		w.Header().Set("Retry-After", "30")
+		w.Header().Set("Retry-After", strconv.Itoa(busyRetryAfterSeconds))
 		http.Error(w, "The server is busy converting other videos. Try again in a minute.", http.StatusServiceUnavailable)
 	default:
 		responder.serverError(w, r, err)

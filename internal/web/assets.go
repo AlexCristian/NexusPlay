@@ -8,9 +8,9 @@ import (
 	"strings"
 )
 
-// Static files are linked with a hash of their content (asset), so a new
-// release is fetched at once: without it, browsers kept the old styles and
-// scripts for up to a day after an update, next to the new pages.
+// [assetHashLength] is how many hex digits of a static file's SHA-256 hash
+// its links carry.
+const assetHashLength = 10
 
 // [assetHashes] maps each static file's URL path, such as
 // "/static/css/app.css", to the first 10 hex digits of its SHA-256 hash.
@@ -35,7 +35,7 @@ func hashStatic() map[string]string {
 			return nil
 		}
 		sum := sha256.Sum256(data)
-		hashes["/"+path] = hex.EncodeToString(sum[:])[:10]
+		hashes["/"+path] = hex.EncodeToString(sum[:])[:assetHashLength]
 		return nil
 	})
 	return hashes
@@ -59,7 +59,8 @@ func asset(path string) string {
 
 // [cacheStatic] sets how long browsers keep a static file: a year when the
 // URL carries the file's current hash (the URL changes with the content),
-// and a day otherwise (fonts, which the stylesheet links without a hash).
+// and a day otherwise, such as for fonts, which the stylesheet links without
+// a hash, or for a link with an old hash.
 //
 // Parameters:
 //   - [next]: the handler that serves the files.

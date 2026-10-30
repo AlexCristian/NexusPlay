@@ -237,7 +237,7 @@ templ notificationList(items []store.Media, subscriptions int) {
 	if len(items) == 0 && subscriptions == 0 {
 		<p class="popover-empty">No new episodes. Subscribe to a show from its poster.</p>
 	} else if len(items) == 0 {
-		<p class="popover-empty">No new episodes in { subscriptionCount(subscriptions) }.</p>
+		<p class="popover-empty">No new episodes in { subscriptionPhrase(subscriptions) }.</p>
 	} else {
 		<ul class="mini-list">
 			for _, mediaItem := range items {

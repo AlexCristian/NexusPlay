@@ -112,7 +112,7 @@ func TestFormatting(t *testing.T) {
 		{percent(5, 8), "62.5%"}, {percent(9, 8), "100.0%"}, {percent(1, 0), "0%"},
 		{fileSize(840 << 10), "840 KB"}, {fileSize(1258291), "1.2 MB"}, {fileSize(4692251771), "4.37 GB"},
 		{blankZero(0), ""}, {blankZero(7), "7"},
-		{subscriptionCount(1), "your 1 subscription"}, {subscriptionCount(3), "your 3 subscriptions"},
+		{subscriptionPhrase(1), "your 1 subscription"}, {subscriptionPhrase(3), "your 3 subscriptions"},
 		{sentence("you have already voted on this line"), "You have already voted on this line."},
 		{seasonSummary(store.Collection{Year: "1987"}, []Season{{Number: 0}, {Number: 1}, {Number: 2}}), "2 Seasons, 1987"},
 		{seasonSummary(store.Collection{}, []Season{{Number: 0}}), "Specials"},

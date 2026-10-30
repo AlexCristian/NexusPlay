@@ -7,6 +7,8 @@
 // of calls by the caller.
 //
 // Errors: a lookup of one row returns [ErrNotFound] when there is none; a
-// write that breaks a uniqueness rule returns [ErrDuplicate]. Callers test
-// them with [errors.Is]. A [Store] is safe for concurrent use.
+// write that repeats an e-mail, nickname or collection name returns
+// [ErrDuplicate]. Other uniqueness clashes are ignored where a method says
+// so, and otherwise come back as the driver's error. Callers test them with
+// [errors.Is]. A [Store] is safe for concurrent use.
 package store

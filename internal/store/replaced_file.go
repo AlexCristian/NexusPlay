@@ -8,7 +8,8 @@ type ReplacedFile struct {
 	Path string
 	// [Duration] is the converted file's length in seconds.
 	Duration float64
-	// [Container] is ffprobe's container format names for the converted file.
+	// [Container] is ffprobe's container format names for the converted file,
+	// as one comma-separated string.
 	Container string
 	// [VideoCodec] is the converted file's video codec, "h264".
 	VideoCodec string

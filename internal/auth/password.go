@@ -135,8 +135,9 @@ func NewToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(randomBytes), nil
 }
 
-// [HashToken] is how session tokens are stored, so a leaked database does not
-// leak live sessions: only the browser holds the token itself.
+// [HashToken] turns a session token into the form the database stores: its
+// SHA-256 hash. Only the browser holds the token itself, so a leaked
+// database does not leak live sessions.
 //
 // Parameters:
 //   - [token]: a token from [NewToken].

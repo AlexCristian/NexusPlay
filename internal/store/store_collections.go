@@ -17,7 +17,7 @@ import (
 //   - [int64]: the new collection's ID; not meaningful if [error] is not
 //     [nil].
 //   - [error]: [nil] on success; [ErrDuplicate] if the name is
-//     taken, regardless of letter case; otherwise the database error.
+//     taken, regardless of ASCII letter case; otherwise the database error.
 func (store *Store) CreateCollection(ctx context.Context, collection Collection) (int64, error) {
 	var id int64
 	err := store.withTransaction(ctx, func(transaction *sql.Tx) error {
@@ -99,7 +99,7 @@ func (store *Store) CollectionByID(ctx context.Context, id int64) (Collection, e
 	return collection, notFound(err)
 }
 
-// [CollectionByName] finds a collection by name, regardless of letter case.
+// [CollectionByName] finds a collection by name, regardless of ASCII letter case.
 //
 // Parameters:
 //   - [ctx]: cancels the query.
@@ -114,7 +114,7 @@ func (store *Store) CollectionByName(ctx context.Context, name string) (Collecti
 	return collection, notFound(err)
 }
 
-// [Collections] lists every collection, by name regardless of letter case.
+// [Collections] lists every collection, by name regardless of ASCII letter case.
 //
 // Parameters:
 //   - [ctx]: cancels the query.

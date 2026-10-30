@@ -24,11 +24,17 @@ type playbackHandlers struct {
 	store playbackStore
 	// [transcodes] runs the HLS transcodes; normally the [stream.Manager].
 	transcodes transcoder
-	// [mediaDirectory] is the media folder.
+	// [mediaDirectory] is the folder that [store.Media.Path] is relative to;
+	// [playbackHandlers.mediaPath] refuses paths outside it.
 	mediaDirectory string
-	// [posterDirectory] is the poster folder.
+	// [posterDirectory] is the folder that poster file names
+	// ([store.Media.Poster]) are relative to.
 	posterDirectory string
 }
+
+// [finishedFraction] is how far through a video playback counts as finished,
+// because a tab closed during the credits never sends "ended".
+const finishedFraction = 0.95
 
 // [playbackStore] is the part of the database the player uses;
 // [store.Store] implements it.
@@ -234,8 +240,9 @@ func (handlers *playbackHandlers) mediaPath(media store.Media) (string, error) {
 //
 // Returns:
 //   - [error]: [nil] once the file is served; [store.ErrNotFound] if the
-//     item does not exist, the viewer may not see it, or its file was
-//     deleted since the last scan; otherwise a path or file error.
+//     item does not exist, the viewer may not see it, or its file cannot be
+//     opened (normally because it was deleted since the last scan);
+//     otherwise a path or stat error.
 func (handlers *playbackHandlers) mediaFile(w http.ResponseWriter, r *http.Request) error {
 	mediaItem, err := visibleMedia(r, handlers.store)
 	if err != nil {
@@ -402,7 +409,7 @@ func (handlers *playbackHandlers) saveProgress(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		return err
 	}
-	finished := r.FormValue("finished") == "1" || (media.Duration > 0 && position >= media.Duration*0.95)
+	finished := r.FormValue("finished") == "1" || (media.Duration > 0 && position >= media.Duration*finishedFraction)
 	if err := handlers.store.SaveProgress(r.Context(), currentViewer.ID(), id, position, finished); err != nil {
 		return err
 	}

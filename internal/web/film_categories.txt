@@ -1,0 +1,10 @@
+# Category names that hold films rather than TV shows. A collection in one of
+# these categories is looked up on TMDB as a series of films first.
+#
+# One name per line, in lower case; names are compared after lowercasing and
+# trimming. Blank lines and lines starting with # are skipped. This file is
+# built into the program, so a change takes effect on the next build.
+movies
+movie
+films
+film

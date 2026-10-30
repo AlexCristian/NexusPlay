@@ -74,7 +74,8 @@ type sessionService interface {
 	// Returns:
 	//   - [string] ([token]): the token for the session cookie.
 	//   - [time.Time] ([expires]): when the session expires.
-	//   - [error] ([err]): [nil] on success, or the error.
+	//   - [error] ([err]): [nil] on success, or the random-source or database
+	//     error.
 	Start(ctx context.Context, userID int64) (token string, expires time.Time, err error)
 	// [End] deletes a session.
 	//
@@ -182,14 +183,16 @@ func (handlers *accountHandlers) rejectAuthForm(w http.ResponseWriter, r *http.R
 
 // [login] handles POST /login from the sign-in form or dialog: it checks
 // the e-mail and password, starts a session and sends the browser to
-// "next". Wrong credentials show the form again with a 401.
+// "next". Wrong credentials show the form again with a 401 (htmx gets 200
+// instead; see [accountHandlers.rejectAuthForm]).
 //
 // Parameters:
 //   - [w]: where the redirect or form is written.
 //   - [r]: the request with the form fields "email", "password" and "next".
 //
 // Returns:
-//   - [error]: [nil] once answered, or a database or session error.
+//   - [error]: [nil] once answered, or a database, stored-hash or session
+//     error.
 func (handlers *accountHandlers) login(w http.ResponseWriter, r *http.Request) error {
 	email := strings.TrimSpace(r.FormValue("email"))
 	next := safeNext(r.FormValue("next"))
@@ -210,7 +213,8 @@ func (handlers *accountHandlers) login(w http.ResponseWriter, r *http.Request) e
 // [register] handles POST /register: it creates the account, signs it in
 // and sends the browser to the home page. The first account becomes the
 // administrator. Invalid input or a taken e-mail or nickname shows the form
-// again with a 400, and closed registration with a 403.
+// again with a 400, and closed registration with a 403 (htmx gets 200
+// instead; see [accountHandlers.rejectAuthForm]).
 //
 // Parameters:
 //   - [w]: where the redirect or form is written.
@@ -218,7 +222,8 @@ func (handlers *accountHandlers) login(w http.ResponseWriter, r *http.Request) e
 //     "password".
 //
 // Returns:
-//   - [error]: [nil] once answered, or a database or session error.
+//   - [error]: [nil] once answered, or a hashing, database or session
+//     error.
 func (handlers *accountHandlers) register(w http.ResponseWriter, r *http.Request) error {
 	registration := auth.Registration{Email: r.FormValue("email"), Nickname: r.FormValue("nickname"), Password: r.FormValue("password")}
 	user, err := handlers.accounts.Register(r.Context(), registration)

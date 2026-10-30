@@ -28,6 +28,9 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
+// [healthCheckTimeout] is how long /healthz waits for the database.
+const healthCheckTimeout = 2 * time.Second
+
 // [sessionCookie] is the name of the cookie that carries the session token.
 const sessionCookie = "nexusplay_session"
 
@@ -51,7 +54,8 @@ type Server struct {
 	Sessions *auth.Sessions
 	// [Converter] is the MP4 converter, or [convert.Disabled].
 	Converter Conversions
-	// [Log] records errors, and every request at debug level.
+	// [Log] records errors, and at debug level every request except static
+	// files and HLS.
 	Log *slog.Logger
 
 	// [responder] writes the middleware's error responses; [Server.Handler] sets
@@ -232,8 +236,10 @@ func (server *Server) admin(handler http.HandlerFunc) http.Handler {
 
 // [needLogin] answers a request that needs an account. htmx gets 401 with
 // HX-Redirect to the sign-in page; a page load is redirected there and comes
-// back afterwards; media, subtitle and other requests get a plain 401, since
-// a redirect to an HTML page would only confuse the player.
+// back afterwards; media (/media/) and subtitle (/subtitles/) requests and
+// anything that is not a GET get a plain 401, since a redirect to an HTML
+// page would only confuse the player. Poster requests are redirected like
+// pages.
 //
 // Parameters:
 //   - [w]: where the answer is written.
@@ -327,9 +333,9 @@ func bodyLimit(r *http.Request) int64 {
 //     client that is not a browser, which has no cookies to abuse) or
 //     "same-origin". Failing gets 403.
 //   - Token, for signed-in requests: the session's CSRF token in the
-//     X-CSRF-Token header (htmx sends it from hx-headers on <body>, and
-//     player.js reads it from there) or in the "csrf_token" form field
-//     (plain forms). A missing or wrong token gets 403.
+//     X-CSRF-Token header (htmx sends it from hx-headers on <body>) or in
+//     the "csrf_token" form field (plain forms, and player.js, which reads
+//     the token from hx-headers because sendBeacon cannot set headers). A missing or wrong token gets 403.
 //
 // /login and /register skip the token, because a visitor may not have a
 // session yet or may hold a stale one; the Origin check still stops login
@@ -516,7 +522,8 @@ func (writer *statusWriter) Unwrap() http.ResponseWriter { return writer.Respons
 
 // [logRequests] is the middleware that logs each request at debug level
 // (NEXUSPLAY_DEBUG) with its status and duration, leaving out static files
-// and HLS segments, which would drown the rest.
+// and every HLS request (playlists and segments), which would drown the
+// rest.
 //
 // Parameters:
 //   - [next]: the rest of the chain.
@@ -546,7 +553,7 @@ func (server *Server) logRequests(next http.Handler) http.Handler {
 //   - [w]: where the answer is written.
 //   - [r]: the request.
 func (server *Server) healthz(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), healthCheckTimeout)
 	defer cancel()
 	if err := server.Store.Ping(ctx); err != nil {
 		http.Error(w, "database unavailable", http.StatusServiceUnavailable)

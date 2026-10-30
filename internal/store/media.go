@@ -43,7 +43,8 @@ type Media struct {
 	OwnPoster bool
 	// [Duration] is the length in seconds, or 0 if unknown.
 	Duration float64
-	// [Container] lists the container format names ffprobe matched, such as
+	// [Container] is the container format names ffprobe matched, as one
+	// comma-separated string, such as
 	// "mov,mp4,m4a,3gp,3g2,mj2".
 	Container string
 	// [VideoCodec] is the video codec as ffprobe names it, such as "h264".
@@ -59,7 +60,8 @@ type Media struct {
 	// [Published] is [true] once an administrator has published the item; until
 	// then only administrators can see it.
 	Published bool
-	// [Views] counts how many times playback started.
+	// [Views] counts how many times the item's player page was opened while
+	// it was published; every page load counts, reloads included.
 	Views int
 	// [AddedAt] is when the scanner first found the file.
 	AddedAt time.Time
@@ -94,8 +96,11 @@ const mediaFrom = ` FROM media m LEFT JOIN collections c ON c.id = m.collection_
 //
 // Returns:
 //   - [string]: the name with runs of spaces made single and spaces around
-//     it trimmed, spelled like the oldest existing category that matches it
-//     regardless of case; "" for a blank name.
+//     it trimmed, spelled like an existing category that matches it
+//     regardless of ASCII letter case: the spelling whose first media item
+//     or collection has the lowest ID. The IDs of media and of collections are
+//     compared as one sequence, so this is not necessarily the oldest
+//     spelling. "" for a blank name.
 //   - [error]: [nil] on success, or the database error.
 func canonicalCategory(ctx context.Context, transaction *sql.Tx, name string) (string, error) {
 	name = strings.Join(strings.Fields(name), " ")

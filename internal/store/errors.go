@@ -17,7 +17,7 @@ var (
 
 // [ErrDuplicate] is returned when a write would repeat a value that must be
 // unique: an e-mail, nickname or collection name, compared without regard
-// to letter case.
+// to ASCII letter case.
 var ErrDuplicate = errors.New("already exists")
 
 // [ErrUserLimit] is returned by [Store.CreateUser] when the account limit is

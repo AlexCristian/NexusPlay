@@ -253,7 +253,8 @@ func truncate(text string, limit int) string {
 
 // [collection] handles GET /collections/{id}: a collection's dialog with its
 // seasons and, for a signed-in viewer, their subscription and watched marks.
-// Without htmx it is a full page.
+// Without htmx it is a full page. A collection with no published media is
+// still shown, empty.
 //
 // Parameters:
 //   - [w]: where the dialog or page is written.

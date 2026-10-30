@@ -153,7 +153,7 @@ func (handlers *subtitleHandlers) visibleCue(ctx context.Context, viewer Viewer,
 
 // [subtitleVTT] handles GET /subtitles/{id}: a subtitle track as WebVTT,
 // built from the database so accepted corrections show at once. Browsers
-// must not keep it.
+// must check back with the server before reusing a stored copy (no-cache).
 //
 // Parameters:
 //   - [w]: where the track is written; a failed write means the client
@@ -193,7 +193,7 @@ func (handlers *subtitleHandlers) subtitleVTT(w http.ResponseWriter, r *http.Req
 
 // [subtitleReport] handles GET /media/{id}/subtitle-report?track=&t=: the
 // "Report a subtitle error" dialog for the line on screen at "t"
-// milliseconds (the start of the video if missing or malformed). If no line
+// milliseconds, or the last one shown before it (the start of the video if missing or malformed). If no line
 // has been shown yet, it answers with a note instead.
 //
 // Parameters:
@@ -284,7 +284,7 @@ func (handlers *subtitleHandlers) proposeChange(w http.ResponseWriter, r *http.R
 	}
 	text := strings.TrimSpace(r.FormValue("text"))
 	if text == "" || len(text) > maxCorrectionBytes {
-		return badRequest("A correction must be between 1 and 500 characters.")
+		return badRequest("A correction must be between 1 and " + strconv.Itoa(maxCorrectionBytes) + " characters.")
 	}
 	if err := handlers.visibleCue(r.Context(), viewer(r), cueID); err != nil {
 		return err

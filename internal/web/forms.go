@@ -56,16 +56,18 @@ type mediaInput struct {
 
 // [decodeMediaForm] reads and checks the media edit form (POST
 // /admin/media/{id}). The season, episode and last episode must be whole
-// numbers of 0 or more; a last episode equal to the first means one episode;
-// the title must not be empty. The title is joined onto one line and other
+// numbers of 0 or more; a last episode equal to the first means one episode,
+// and one below the first (other than 0) is refused; the title must not be
+// empty; and the poster fields must pass [decodePoster]. The title is joined onto one line and other
 // fields are trimmed.
 //
 // Parameters:
 //   - [r]: the request with the form, at most [maxUpload] bytes.
 //
 // Returns:
-//   - [mediaInput]: the decoded form, filled as far as it was read even when
-//     [error] is not [nil], so the form can be shown again.
+//   - [mediaInput]: the decoded form, filled as far as it was read, or a
+//     zero [mediaInput] if the body could not be parsed. On an error the
+//     caller shows the stored item again, not this value.
 //   - [error]: [nil] if the form is valid, or a [*formError] saying what to
 //     fix.
 func decodeMediaForm(r *http.Request) (mediaInput, error) {
@@ -83,13 +85,13 @@ func decodeMediaForm(r *http.Request) (mediaInput, error) {
 		publish:    r.FormValue("publish") == "1",
 	}
 	var valid bool
-	if input.update.Season, valid = formCount(r, "season"); !valid {
+	if input.update.Season, valid = formWholeNumber(r, "season"); !valid {
 		return input, newFormError("Season must be a number.")
 	}
-	if input.update.Episode, valid = formCount(r, "episode"); !valid {
+	if input.update.Episode, valid = formWholeNumber(r, "episode"); !valid {
 		return input, newFormError("Episode must be a number.")
 	}
-	if input.update.EpisodeEnd, valid = formCount(r, "episode_end"); !valid {
+	if input.update.EpisodeEnd, valid = formWholeNumber(r, "episode_end"); !valid {
 		return input, newFormError("The last episode must be a number.")
 	}
 	if input.update.EpisodeEnd == input.update.Episode {
@@ -125,8 +127,8 @@ type collectionInput struct {
 //   - [r]: the request with the form, at most [maxUpload] bytes.
 //
 // Returns:
-//   - [collectionInput]: the decoded form, filled as far as it was read even
-//     when [error] is not [nil].
+//   - [collectionInput]: the decoded form, filled as far as it was read, or
+//     a zero [collectionInput] if the body could not be parsed.
 //   - [error]: [nil] if the form is valid, or a [*formError] saying what to
 //     fix.
 func decodeCollectionForm(r *http.Request) (collectionInput, error) {
@@ -274,7 +276,7 @@ func decodePoster(r *http.Request) (upload *posterUpload, remove bool, err error
 //     and line breaks made a single space.
 func oneLine(text string) string { return strings.Join(strings.Fields(text), " ") }
 
-// [formCount] reads an optional form field holding a whole number that
+// [formWholeNumber] reads an optional form field holding a whole number that
 // cannot be negative, such as a season.
 //
 // Parameters:
@@ -285,7 +287,7 @@ func oneLine(text string) string { return strings.Join(strings.Fields(text), " "
 //   - [int]: the number, or 0 for a blank or missing field.
 //   - [bool]: [true] if the field is blank or a number of 0 or more, [false]
 //     otherwise, in which case the [int] must not be used.
-func formCount(r *http.Request, key string) (int, bool) {
+func formWholeNumber(r *http.Request, key string) (int, bool) {
 	value := strings.TrimSpace(r.FormValue(key))
 	if value == "" {
 		return 0, true

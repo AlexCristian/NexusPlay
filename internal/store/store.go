@@ -16,8 +16,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// [migrations] holds the schema changes in migrations/, applied in the order
-// of their number prefix ("0001_init.sql" first).
+// [migrations] holds the schema changes in migrations/, applied in file-name
+// order, which matches their four-digit number prefix ("0001_init.sql"
+// first). A new file needs a number higher than every existing one: a
+// database that already has a higher version skips it without an error.
 //
 //go:embed migrations/*.sql
 var migrations embed.FS
@@ -49,8 +51,10 @@ type Store struct {
 // Returns:
 //   - [*Store]: the open database, or [nil] if [error] is not [nil]. Call
 //     [Store.Close] when done.
-//   - [error]: [nil] on success, the driver's error if the file cannot be
-//     opened, or an error starting with "migrate" if a migration fails.
+//   - [error]: [nil] on success; otherwise an error starting with
+//     "migrate". That covers a database file that cannot be opened (the
+//     driver connects on the first query, which is in the migrations) as
+//     well as a failed migration.
 func Open(ctx context.Context, path string) (*Store, error) {
 	pool, err := sql.Open("sqlite", dataSourceName(path))
 	if err != nil {

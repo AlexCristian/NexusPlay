@@ -196,3 +196,14 @@ func TestDataFilesLoaded(t *testing.T) {
 		t.Errorf("done_messages.txt loaded %v", doneMessages)
 	}
 }
+
+func TestFilmCategoriesLoaded(t *testing.T) {
+	for _, category := range []string{"Movies", " films ", "FILM"} {
+		if !isFilmCategory(category) {
+			t.Errorf("isFilmCategory(%q) = false; want true", category)
+		}
+	}
+	if isFilmCategory("TV Shows") {
+		t.Error(`isFilmCategory("TV Shows") = true; want false`)
+	}
+}

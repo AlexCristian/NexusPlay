@@ -9,7 +9,7 @@ import (
 type Collection struct {
 	// [ID] identifies the collection.
 	ID int64
-	// [Name] is the collection's name, unique regardless of letter case.
+	// [Name] is the collection's name, unique regardless of ASCII letter case.
 	Name string
 	// [Category] is the home-page row the collection appears in, such as "TV
 	// Shows", or "" (shown as "Other").

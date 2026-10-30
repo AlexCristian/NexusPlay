@@ -26,7 +26,8 @@ type UserStore interface {
 	//     nickname is taken; [store.ErrUserLimit] if [maxUsers] accounts already
 	//     exist; otherwise the database error.
 	CreateUser(ctx context.Context, email, nickname, passwordHash string, maxUsers int) (store.User, error)
-	// [UserByEmail] finds an account by its e-mail address.
+	// [UserByEmail] finds an account by its e-mail address, regardless of ASCII
+	// letter case.
 	//
 	// Parameters:
 	//   - [ctx]: cancels the query.

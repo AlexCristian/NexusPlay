@@ -20,9 +20,10 @@ import (
 //   - [maxUsers]: how many accounts may exist, or 0 for no limit.
 //
 // Returns:
-//   - [User]: the new account, or a zero [User] if [error] is not [nil].
+//   - [User]: the new account. If [error] is not [nil] it must not be used:
+//     it may be partly or fully filled in.
 //   - [error]: [nil] on success; [ErrDuplicate] if the e-mail or nickname is
-//     taken, regardless of letter case; [ErrUserLimit] if [maxUsers]
+//     taken, regardless of ASCII letter case; [ErrUserLimit] if [maxUsers]
 //     accounts already exist; otherwise the database error.
 func (store *Store) CreateUser(ctx context.Context, email, nickname, passwordHash string, maxUsers int) (User, error) {
 	var user User

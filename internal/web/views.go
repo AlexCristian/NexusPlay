@@ -30,7 +30,8 @@ func newPage(r *http.Request, title string) Page {
 }
 
 // [csrfHeaders] makes the hx-headers attribute value that has htmx send the
-// CSRF token with every request.
+// CSRF token with every request. The token is URL-safe base64, so Go's %q
+// quoting of it is also valid JSON.
 //
 // Parameters:
 //   - [viewer]: who is viewing the page.
@@ -197,7 +198,8 @@ func seasonLabel(season int) string {
 }
 
 // [seasonSummary] writes the line under a collection's title, such as "2
-// Seasons, 2019". Specials (season 0) are not counted as a season.
+// Seasons, 2019". Specials (season 0) are not counted as a season, so a
+// film collection, or one with no episodes, reads "Specials".
 //
 // Parameters:
 //   - [collection]: the collection, for its year.
@@ -229,7 +231,8 @@ func seasonSummary(collection store.Collection, seasons []Season) string {
 }
 
 // [displayTitle] names a media item with its show, such as "Cosmos · S1E3 ·
-// The Harmony of the Worlds".
+// The Harmony of the Worlds". Items in a film collection, which have no
+// season or episode, are labelled as specials ("Special 0").
 //
 // Parameters:
 //   - [media]: the media item.
@@ -317,8 +320,8 @@ func twoDigits(number int64) string {
 
 // ---- Control panel ----
 
-// [blankZero] writes a number for a form field, leaving 0 blank, since a
-// film has no season or episode.
+// [blankZero] writes a number for a form field, leaving 0 blank: a film has
+// no season or episode, and a blank season is read back as 0 (specials).
 //
 // Parameters:
 //   - [number]: the number.
@@ -332,7 +335,7 @@ func blankZero(number int) string {
 	return strconv.Itoa(number)
 }
 
-// [subscriptionCount] writes "your 1 subscription" or "your 3
+// [subscriptionPhrase] writes "your 1 subscription" or "your 3
 // subscriptions".
 //
 // Parameters:
@@ -340,7 +343,7 @@ func blankZero(number int) string {
 //
 // Returns:
 //   - [string]: the phrase, singular for exactly 1.
-func subscriptionCount(count int) string {
+func subscriptionPhrase(count int) string {
 	if count == 1 {
 		return "your 1 subscription"
 	}
@@ -400,8 +403,8 @@ func detectedAs(media store.Media) string {
 //   - [media]: the media item.
 //
 // Returns:
-//   - [string]: the video codec, the audio codec if there is one, the length
-//     if known, and the size, joined with " · ".
+//   - [string]: the video codec (with " / " and the audio codec if there
+//     is one), then the length if known and the size, each after " · ".
 func techSummary(media store.Media) string {
 	summary := media.VideoCodec
 	if media.AudioCodec != "" {

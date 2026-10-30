@@ -9,7 +9,7 @@ import (
 type ConversionView struct {
 	// [Status] is what the converter is doing now.
 	Status convert.Status
-	// [Failures] lists the files whose conversion failed, by path.
+	// [Failures] lists the files whose conversion failed, sorted by path.
 	Failures []store.ConversionFailure
 }
 

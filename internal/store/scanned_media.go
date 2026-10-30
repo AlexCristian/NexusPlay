@@ -19,7 +19,8 @@ type ScannedMedia struct {
 	EpisodeEnd int
 	// [Duration] is the length in seconds from ffprobe, or 0.
 	Duration float64
-	// [Container] is ffprobe's container format names.
+	// [Container] is ffprobe's container format names, as one comma-separated
+	// string.
 	Container string
 	// [VideoCodec] is the video codec from ffprobe.
 	VideoCodec string

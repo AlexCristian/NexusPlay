@@ -54,7 +54,8 @@ type querier interface {
 //
 // Returns:
 //   - [[]T]: one value per row, in the query's order; [nil] if there are no
-//     rows or [error] is not [nil].
+//     rows or the query or a scan fails. If reading the rows fails partway,
+//     the values read so far come back with the error.
 //   - [error]: [nil] on success, or the first error from the query, a scan
 //     or reading the rows.
 func queryAll[T any](ctx context.Context, database querier, scan func(rowScanner) (T, error), query string, arguments ...any) ([]T, error) {
