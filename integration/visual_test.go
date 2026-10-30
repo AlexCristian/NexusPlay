@@ -30,7 +30,9 @@ import (
 // pixels differ. On failure the actual image and a diff (changed pixels in
 // red) are written next to the references under failures/.
 //
-// To accept intended UI changes: go test -tags integration ./integration/ -run TestScreens -update
+// To accept intended UI changes, run:
+//
+//	go test -tags integration ./integration/ -run TestScreens -update
 const (
 	channelTolerance = 8
 	maxDiffRatio     = 0.002

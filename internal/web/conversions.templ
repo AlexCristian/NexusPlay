@@ -3,11 +3,11 @@ package web
 import "strconv"
 
 // conversionsSection refreshes itself every few seconds while work is running.
-templ conversionsSection(csrf string, v ConversionView) {
+templ conversionsSection(csrf string, view ConversionView) {
 	<section
 		id="conversions"
 		class="conversions"
-		if v.busy() {
+		if view.busy() {
 			hx-get="/admin/conversions"
 			hx-trigger="every 3s"
 			hx-swap="outerHTML"
@@ -15,43 +15,43 @@ templ conversionsSection(csrf string, v ConversionView) {
 	>
 		<h2>Conversion to MP4</h2>
 		switch {
-			case v.Status.Off:
+			case view.Status.Off:
 				<p class="muted">Off (NEXUSPLAY_CONVERT=false). It is on by default: files browsers cannot play are converted to MP4 and the originals deleted. Until then they play through on-the-fly conversion.</p>
-			case v.Status.Unavailable != "":
-				@alert("error", v.Status.Unavailable)
-			case len(v.Status.Active) == 0 && v.Status.Queued == 0 && v.Status.Postponed > 0:
-				<p class="muted">{ queuedLabel(v.Status.Postponed) } waiting for free disk space. They are retried every 30 minutes.</p>
-			case len(v.Status.Active) == 0 && v.Status.Queued == 0 && len(v.Failures) > 0:
+			case view.Status.Unavailable != "":
+				@alert("error", view.Status.Unavailable)
+			case len(view.Status.Active) == 0 && view.Status.Queued == 0 && view.Status.Postponed > 0:
+				<p class="muted">{ queuedLabel(view.Status.Postponed) } waiting for free disk space. They are retried every 30 minutes.</p>
+			case len(view.Status.Active) == 0 && view.Status.Queued == 0 && len(view.Failures) > 0:
 				<p class="muted">Nothing is converting. The files below need attention.</p>
-			case len(v.Status.Active) == 0 && v.Status.Queued == 0:
+			case len(view.Status.Active) == 0 && view.Status.Queued == 0:
 				<p class="muted">Every file is a browser-ready MP4. New files in other formats are converted as soon as they are found, and the originals deleted.</p>
 			default:
 				<ul class="convert-list">
-					for _, j := range v.Status.Active {
+					for _, active := range view.Status.Active {
 						<li>
-							<span class="path">{ j.Media.Path }</span>
-							<progress max="100" value={ strconv.Itoa(j.Percent) } aria-label={ "Converting " + j.Media.Title }></progress>
-							<span class="convert-pct">{ strconv.Itoa(j.Percent) }%</span>
+							<span class="path">{ active.Media.Path }</span>
+							<progress max="100" value={ strconv.Itoa(active.Percent) } aria-label={ "Converting " + active.Media.Title }></progress>
+							<span class="convert-pct">{ strconv.Itoa(active.Percent) }%</span>
 						</li>
 					}
 				</ul>
-				if v.Status.Queued > 0 {
-					<p class="muted">{ queuedLabel(v.Status.Queued) } more waiting. Originals are deleted once their MP4 is checked.</p>
+				if view.Status.Queued > 0 {
+					<p class="muted">{ queuedLabel(view.Status.Queued) } more waiting. Originals are deleted once their MP4 is checked.</p>
 				}
 		}
-		if len(v.Failures) > 0 {
+		if len(view.Failures) > 0 {
 			<h3>Could not convert</h3>
 			<table class="admin-table">
 				<tbody>
-					for _, f := range v.Failures {
+					for _, failure := range view.Failures {
 						<tr>
 							<td>
-								<span class="path">{ f.Media.Path }</span>
+								<span class="path">{ failure.Media.Path }</span>
 								<br/>
-								<small class="convert-error">{ f.Error }</small>
+								<small class="convert-error">{ failure.Error }</small>
 							</td>
 							<td>
-								<form method="post" action={ templ.SafeURL("/admin/media/" + formatInteger(f.Media.ID) + "/retry-conversion") }>
+								<form method="post" action={ templ.SafeURL("/admin/media/" + formatInteger(failure.Media.ID) + "/retry-conversion") }>
 									<input type="hidden" name="csrf_token" value={ csrf }/>
 									<button type="submit" class="button button-small">Retry</button>
 								</form>

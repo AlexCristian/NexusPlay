@@ -6,8 +6,8 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resumeAt float64) {
-	@shell(p) {
+templ watchPage(page Page, mediaItem store.Media, playback Playback, subtitles []store.Subtitle, resumeAt float64) {
+	@shell(page) {
 		<script src={ asset("/static/js/player.js") } defer></script>
 		<div class="player-container" id="player-container">
 			<video
@@ -16,16 +16,16 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 				controls
 				playsinline
 				preload="metadata"
-				data-media-id={ formatInteger(m.ID) }
-				data-src={ pb.URL }
-				data-hls={ strconv.FormatBool(!pb.Direct) }
+				data-media-id={ formatInteger(mediaItem.ID) }
+				data-src={ playback.URL }
+				data-hls={ strconv.FormatBool(!playback.Direct) }
 				data-resume={ formatSeconds(resumeAt) }
-				data-duration={ formatSeconds(m.Duration) }
+				data-duration={ formatSeconds(mediaItem.Duration) }
 				data-hls-script={ asset("/static/vendor/hls.light.min.js") }
-				data-signed-in={ strconv.FormatBool(p.Viewer.User != nil) }
+				data-signed-in={ strconv.FormatBool(page.Viewer.User != nil) }
 			>
-				for _, s := range subs {
-					<track kind="subtitles" id={ "sub-" + formatInteger(s.ID) } src={ "/subtitles/" + formatInteger(s.ID) } srclang={ s.Language } label={ s.Label }/>
+				for _, track := range subtitles {
+					<track kind="subtitles" id={ "sub-" + formatInteger(track.ID) } src={ "/subtitles/" + formatInteger(track.ID) } srclang={ track.Language } label={ track.Label }/>
 				}
 			</video>
 			<div class="cues" id="cues"></div>
@@ -34,13 +34,13 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 			</button>
 			<div class="player-spinner" id="player-spinner" role="status" aria-label="Loading" hidden></div>
 			<p id="player-status" class="player-status" role="alert" hidden></p>
-			@playerControls(len(subs) > 0)
+			@playerControls(len(subtitles) > 0)
 		</div>
 		<section class="video-content">
-			if p.Viewer.User != nil {
+			if page.Viewer.User != nil {
 				<div class="player-actions">
-					if p.Viewer.IsAdmin() {
-						<a class="player-action" href={ templ.SafeURL("/admin/media/" + formatInteger(m.ID)) } title="Edit metadata" aria-label="Edit metadata">
+					if page.Viewer.IsAdmin() {
+						<a class="player-action" href={ templ.SafeURL("/admin/media/" + formatInteger(mediaItem.ID)) } title="Edit metadata" aria-label="Edit metadata">
 							@icon("pencil")
 						</a>
 					}
@@ -50,27 +50,27 @@ templ watchPage(p Page, m store.Media, pb Playback, subs []store.Subtitle, resum
 				</div>
 			}
 			<div class="metadata">
-				if m.CollectionID != 0 {
-					<a href={ templ.SafeURL(collectionURL(m.CollectionID)) } hx-get={ collectionURL(m.CollectionID) } hx-target="#modal-body" class="watch-poster" title={ "All episodes of " + m.CollectionName }>
-						<img src={ posterURL(m.Poster) } alt={ m.CollectionName } width="120" height="180"/>
+				if mediaItem.CollectionID != 0 {
+					<a href={ templ.SafeURL(collectionURL(mediaItem.CollectionID)) } hx-get={ collectionURL(mediaItem.CollectionID) } hx-target="#modal-body" class="watch-poster" title={ "All episodes of " + mediaItem.CollectionName }>
+						<img src={ posterURL(mediaItem.Poster) } alt={ mediaItem.CollectionName } width="120" height="180"/>
 					</a>
 					<div class="meta-text">
-						<h1>{ m.CollectionName }<span class="episode-title">{ episodeLabel(m) + ": " + m.Title }</span></h1>
-						if m.Overview != "" {
-							@clampedText(m.Overview)
+						<h1>{ mediaItem.CollectionName }<span class="episode-title">{ episodeLabel(mediaItem) + ": " + mediaItem.Title }</span></h1>
+						if mediaItem.Overview != "" {
+							@clampedText(mediaItem.Overview)
 						}
 					</div>
 				} else {
 					<span class="watch-poster">
-						<img src={ posterURL(m.Poster) } alt="" width="120" height="180"/>
+						<img src={ posterURL(mediaItem.Poster) } alt="" width="120" height="180"/>
 					</span>
 					<div class="meta-text">
-						<h1>{ m.Title }</h1>
-						if m.Year != "" {
-							<p class="meta-sub">Released in { m.Year }</p>
+						<h1>{ mediaItem.Title }</h1>
+						if mediaItem.Year != "" {
+							<p class="meta-sub">Released in { mediaItem.Year }</p>
 						}
-						if m.Overview != "" {
-							@clampedText(m.Overview)
+						if mediaItem.Overview != "" {
+							@clampedText(mediaItem.Overview)
 						}
 					</div>
 				}
@@ -111,31 +111,31 @@ templ playerControls(hasSubtitles bool) {
 	</div>
 }
 
-templ subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []store.Change, msg, msgKind string) {
+templ subtitleReport(csrf string, track store.Subtitle, cue store.Cue, changes []store.Change, message, messageKind string) {
 	<div class="report" id="subtitle-report">
 		<h2 id="modal-title" class="modal-heading">Report a subtitle error</h2>
 		<div class="report-body">
-			if msg != "" {
-				@alert(msgKind, msg)
+			if message != "" {
+				@alert(messageKind, message)
 			}
 			if len(changes) > 0 {
 				<h3>Vote up a proposed change</h3>
 				<ul class="changes">
-					for _, c := range changes {
+					for _, change := range changes {
 						<li class="proposed-change">
-							<div class="original-sub">{ c.OriginalText }</div>
+							<div class="original-sub">{ change.OriginalText }</div>
 							<div class="changed-sub">
-								<span>{ c.ProposedText }</span>
+								<span>{ change.ProposedText }</span>
 								<button
 									type="button"
-									class={ "vote-box", templ.KV("voted", c.VotedByMe) }
-									hx-post={ "/changes/" + formatInteger(c.ID) + "/vote" }
+									class={ "vote-box", templ.KV("voted", change.VotedByMe) }
+									hx-post={ "/changes/" + formatInteger(change.ID) + "/vote" }
 									hx-target="#subtitle-report"
 									hx-swap="outerHTML"
 									title="Vote for this correction"
-									disabled?={ c.VotedByMe }
+									disabled?={ change.VotedByMe }
 								>
-									<span class="count-votes">{ strconv.Itoa(c.Votes) }</span>
+									<span class="count-votes">{ strconv.Itoa(change.Votes) }</span>
 									@icon("thumbs-up")
 								</button>
 							</div>

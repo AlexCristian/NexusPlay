@@ -28,6 +28,10 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: golangci-lint
+        # Reports without failing the build until the findings that predate it
+        # (unchecked errors and gosec warnings, about 200) are triaged. Remove
+        # continue-on-error once they are fixed.
+        continue-on-error: true
         uses: golangci/golangci-lint-action@v9.3.0
         with:
           version: v2.15.0

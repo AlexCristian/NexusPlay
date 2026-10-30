@@ -8,11 +8,11 @@ import (
 	"github.com/AlexCristian/NexusPlay/internal/store"
 )
 
-templ homePage(p Page, recent []store.Tile, cats []store.Category) {
-	@shell(p) {
+templ homePage(page Page, recent []store.Tile, categories []store.Category) {
+	@shell(page) {
 		<section class="panel library-panel">
 			<div id="library">
-				@libraryView(p, recent, cats)
+				@libraryView(page, recent, categories)
 			</div>
 			<div class="featurette">
 				<h2><strong>Nexus Play</strong><span class="muted">, the open-source web media center.</span></h2>
@@ -25,11 +25,11 @@ templ homePage(p Page, recent []store.Tile, cats []store.Category) {
 	}
 }
 
-templ libraryView(p Page, recent []store.Tile, cats []store.Category) {
-	if len(recent) == 0 && len(cats) == 0 {
+templ libraryView(page Page, recent []store.Tile, categories []store.Category) {
+	if len(recent) == 0 && len(categories) == 0 {
 		<div class="empty">
 			<h2>Your library is empty</h2>
-			if p.Viewer.IsAdmin() {
+			if page.Viewer.IsAdmin() {
 				<p>Add videos to the media folder, then publish them from the <a href="/admin">control panel</a>.</p>
 			} else {
 				<p>Nothing has been published yet. Check back soon.</p>
@@ -39,17 +39,17 @@ templ libraryView(p Page, recent []store.Tile, cats []store.Category) {
 		<div class="tabs" data-tabs>
 			<div class="tab-list" role="tablist">
 				<button type="button" role="tab" class="tab" aria-selected="true" data-tab="tab-recent">Just added</button>
-				for i, c := range cats {
-					<button type="button" role="tab" class="tab" aria-selected="false" data-tab={ fmt.Sprintf("tab-%d", i) }>{ c.Name }</button>
+				for i, category := range categories {
+					<button type="button" role="tab" class="tab" aria-selected="false" data-tab={ fmt.Sprintf("tab-%d", i) }>{ category.Name }</button>
 				}
 			</div>
 			<div class="tile-strip">
 				<div class="tab-panel" id="tab-recent" role="tabpanel">
 					@tileGrid(recent)
 				</div>
-				for i, c := range cats {
+				for i, category := range categories {
 					<div class="tab-panel" id={ fmt.Sprintf("tab-%d", i) } role="tabpanel" hidden>
-						@tileGrid(c.Tiles)
+						@tileGrid(category.Tiles)
 					</div>
 				}
 			</div>
@@ -60,20 +60,20 @@ templ libraryView(p Page, recent []store.Tile, cats []store.Category) {
 // searchResults fills the search drawer: "Search for" and a tab per
 // category, as on the home page. With nothing found it renders nothing, and
 // the drawer closes.
-templ searchResults(cats []store.Category) {
-	if len(cats) > 0 {
+templ searchResults(categories []store.Category) {
+	if len(categories) > 0 {
 		<section class="panel library-panel search-panel">
 			<div class="tabs" data-tabs>
 				<div class="tab-list" role="tablist">
 					<span class="tab tab-label">Search for</span>
-					for i, c := range cats {
-						<button type="button" role="tab" class="tab" aria-selected={ strconv.FormatBool(i == 0) } data-tab={ fmt.Sprintf("search-tab-%d", i) }>{ c.Name }</button>
+					for i, category := range categories {
+						<button type="button" role="tab" class="tab" aria-selected={ strconv.FormatBool(i == 0) } data-tab={ fmt.Sprintf("search-tab-%d", i) }>{ category.Name }</button>
 					}
 				</div>
 				<div class="tile-strip">
-					for i, c := range cats {
+					for i, category := range categories {
 						<div class="tab-panel" id={ fmt.Sprintf("search-tab-%d", i) } role="tabpanel" hidden?={ i != 0 }>
-							@tileGrid(c.Tiles)
+							@tileGrid(category.Tiles)
 						</div>
 					}
 				</div>
@@ -84,15 +84,15 @@ templ searchResults(cats []store.Category) {
 
 templ tileGrid(tiles []store.Tile) {
 	<ul class="tiles">
-		for _, t := range tiles {
+		for _, tile := range tiles {
 			<li>
-				if t.IsCollection {
-					<a class="tile" href={ templ.SafeURL(collectionURL(t.ID)) } hx-get={ collectionURL(t.ID) } hx-target="#modal-body">
-						@tileBody(t)
+				if tile.IsCollection {
+					<a class="tile" href={ templ.SafeURL(collectionURL(tile.ID)) } hx-get={ collectionURL(tile.ID) } hx-target="#modal-body">
+						@tileBody(tile)
 					</a>
 				} else {
-					<a class="tile" href={ watchURL(t.ID) }>
-						@tileBody(t)
+					<a class="tile" href={ watchURL(tile.ID) }>
+						@tileBody(tile)
 					</a>
 				}
 			</li>
@@ -100,63 +100,63 @@ templ tileGrid(tiles []store.Tile) {
 	</ul>
 }
 
-templ tileBody(t store.Tile) {
-	<img src={ posterURL(t.Poster) } alt="" loading="lazy" width="140" height="210"/>
-	<span class="tile-title" title={ t.Title } dir="auto">{ t.Title }</span>
+templ tileBody(tile store.Tile) {
+	<img src={ posterURL(tile.Poster) } alt="" loading="lazy" width="140" height="210"/>
+	<span class="tile-title" title={ tile.Title } dir="auto">{ tile.Title }</span>
 	<span class="tile-meta">
-		if t.Watched {
+		if tile.Watched {
 			<span class="watched" title="Watched">
 				@icon("check")
 			</span>
 		}
-		{ t.Year }
+		{ tile.Year }
 	</span>
 }
 
-templ collectionDialog(v Viewer, c store.Collection, seasons []Season, subscribed bool, watched collections.Set[int64]) {
+templ collectionDialog(viewer Viewer, collection store.Collection, seasons []Season, subscribed bool, watched collections.Set[int64]) {
 	<div class="collection">
 		<header class="collection-header">
 			<div class="poster-wrapper">
-				<img src={ posterURL(c.Poster) } alt="" width="140" height="210"/>
-				if v.User != nil {
-					@subscribeRibbon(c.ID, subscribed)
+				<img src={ posterURL(collection.Poster) } alt="" width="140" height="210"/>
+				if viewer.User != nil {
+					@subscribeRibbon(collection.ID, subscribed)
 				}
 			</div>
 			<div class="collection-meta">
-				<h2 id="modal-title" title={ c.Name }>{ c.Name }</h2>
-				<p class="collection-sub">{ seasonSummary(c, seasons) }</p>
+				<h2 id="modal-title" title={ collection.Name }>{ collection.Name }</h2>
+				<p class="collection-sub">{ seasonSummary(collection, seasons) }</p>
 				if len(seasons) > 0 {
 					<div class="season-tabs" role="tablist" data-tabs data-tabs-scope=".collection">
-						for i, s := range seasons {
+						for i, season := range seasons {
 							<button
 								type="button"
 								role="tab"
 								class="season-tab"
 								aria-selected={ strconv.FormatBool(i == 0) }
-								data-tab={ fmt.Sprintf("season-%d-%d", c.ID, s.Number) }
-							>{ seasonLabel(s.Number) }</button>
+								data-tab={ fmt.Sprintf("season-%d-%d", collection.ID, season.Number) }
+							>{ seasonLabel(season.Number) }</button>
 						}
 					</div>
 				}
 			</div>
 		</header>
 		<div class="collection-body">
-			if c.Overview != "" {
-				@clampedText(c.Overview)
+			if collection.Overview != "" {
+				@clampedText(collection.Overview)
 			}
-			for i, s := range seasons {
-				<div class="tab-panel" id={ fmt.Sprintf("season-%d-%d", c.ID, s.Number) } role="tabpanel" hidden?={ i != 0 }>
+			for i, season := range seasons {
+				<div class="tab-panel" id={ fmt.Sprintf("season-%d-%d", collection.ID, season.Number) } role="tabpanel" hidden?={ i != 0 }>
 					<table class="episodes">
 						<thead>
 							<tr><th scope="col">Episode</th><th scope="col">Title</th></tr>
 						</thead>
 						<tbody>
-							for _, e := range s.Episodes {
+							for _, episode := range season.Episodes {
 								<tr>
-									<td>{ episodeNumbers(e) }</td>
+									<td>{ episodeNumbers(episode) }</td>
 									<td>
-										<a href={ watchURL(e.ID) }>{ e.Title }</a>
-										if watched.Contains(e.ID) {
+										<a href={ watchURL(episode.ID) }>{ episode.Title }</a>
+										if watched.Contains(episode.ID) {
 											<span class="watched" title="Watched">
 												@icon("check")
 											</span>
@@ -208,22 +208,22 @@ templ resumeList(items []store.Resume) {
 		<p class="popover-empty">Nothing paused right now.</p>
 	} else {
 		<ul class="mini-list">
-			for _, r := range items {
+			for _, resume := range items {
 				<li>
-					<a href={ watchURL(r.Media.ID) }>
-						<img src={ posterURL(r.Media.Poster) } alt="" width="40" height="60"/>
+					<a href={ watchURL(resume.Media.ID) }>
+						<img src={ posterURL(resume.Media.Poster) } alt="" width="40" height="60"/>
 						<span>
-							{ displayTitle(r.Media) }
+							{ displayTitle(resume.Media) }
 							<small>
 								@icon("pause")
-								if r.Media.Duration > 0 {
-									{ clock(r.Position) } of { clock(r.Media.Duration) }
+								if resume.Media.Duration > 0 {
+									{ clock(resume.Position) } of { clock(resume.Media.Duration) }
 								} else {
-									{ clock(r.Position) }
+									{ clock(resume.Position) }
 								}
 							</small>
-							if r.Media.Duration > 0 {
-								<span class="progress" aria-hidden="true"><span style={ "width:" + percent(r.Position, r.Media.Duration) }></span></span>
+							if resume.Media.Duration > 0 {
+								<span class="progress" aria-hidden="true"><span style={ "width:" + percent(resume.Position, resume.Media.Duration) }></span></span>
 							}
 						</span>
 					</a>
@@ -240,11 +240,11 @@ templ notificationList(items []store.Media, subscriptions int) {
 		<p class="popover-empty">No new episodes in { subscriptionCount(subscriptions) }.</p>
 	} else {
 		<ul class="mini-list">
-			for _, m := range items {
+			for _, mediaItem := range items {
 				<li>
-					<a href={ watchURL(m.ID) }>
-						<img src={ posterURL(m.Poster) } alt="" width="40" height="60"/>
-						<span>{ displayTitle(m) }</span>
+					<a href={ watchURL(mediaItem.ID) }>
+						<img src={ posterURL(mediaItem.Poster) } alt="" width="40" height="60"/>
+						<span>{ displayTitle(mediaItem) }</span>
 					</a>
 				</li>
 			}
@@ -254,26 +254,26 @@ templ notificationList(items []store.Media, subscriptions int) {
 
 // searchPage is /search without JavaScript: the home page with the search
 // drawer open. When nothing matches, the drawer says so.
-templ searchPage(p Page, cats []store.Category, recent []store.Tile, libCats []store.Category) {
-	@shellWithSearch(p, searchPageResults(cats)) {
+templ searchPage(page Page, categories []store.Category, recent []store.Tile, libraryCategories []store.Category) {
+	@shellWithSearch(page, searchPageResults(categories)) {
 		<section class="panel library-panel" id="library">
-			@libraryView(p, recent, libCats)
+			@libraryView(page, recent, libraryCategories)
 		</section>
 	}
 }
 
-templ searchPageResults(cats []store.Category) {
-	if len(cats) == 0 {
+templ searchPageResults(categories []store.Category) {
+	if len(categories) == 0 {
 		<section class="panel message">
 			<p>Nothing matches your search.</p>
 		</section>
 	} else {
-		@searchResults(cats)
+		@searchResults(categories)
 	}
 }
 
-templ collectionPage(p Page, dialog templ.Component) {
-	@shell(p) {
+templ collectionPage(page Page, dialog templ.Component) {
+	@shell(page) {
 		<section class="panel collection-page">
 			@dialog
 		</section>

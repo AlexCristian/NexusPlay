@@ -10,7 +10,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "github.com/AlexCristian/NexusPlay/internal/auth"
 
-func authPage(p Page, form templ.Component) templ.Component {
+func authPage(page Page, form templ.Component) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -57,7 +57,7 @@ func authPage(p Page, form templ.Component) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = shell(p).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = shell(page).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -65,7 +65,7 @@ func authPage(p Page, form templ.Component) templ.Component {
 	})
 }
 
-func loginForm(errMsg, email, next string) templ.Component {
+func loginForm(errorMessage, email, next string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -90,8 +90,8 @@ func loginForm(errMsg, email, next string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if errMsg != "" {
-			templ_7745c5c3_Err = alert("error", errMsg).Render(ctx, templ_7745c5c3_Buffer)
+		if errorMessage != "" {
+			templ_7745c5c3_Err = alert("error", errorMessage).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -143,7 +143,7 @@ func loginForm(errMsg, email, next string) templ.Component {
 	})
 }
 
-func registerForm(errMsg, email, nickname string, st auth.RegistrationStatus) templ.Component {
+func registerForm(errorMessage, email, nickname string, status auth.RegistrationStatus) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -168,12 +168,12 @@ func registerForm(errMsg, email, nickname string, st auth.RegistrationStatus) te
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if st.Closed {
+		if status.Closed {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div class=\"auth-body\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = alert("info", registrationClosedMessage(st.MaxAccounts)).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = alert("info", registrationClosedMessage(status.MaxAccounts)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -186,13 +186,13 @@ func registerForm(errMsg, email, nickname string, st auth.RegistrationStatus) te
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if errMsg != "" {
-				templ_7745c5c3_Err = alert("error", errMsg).Render(ctx, templ_7745c5c3_Buffer)
+			if errorMessage != "" {
+				templ_7745c5c3_Err = alert("error", errorMessage).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			if st.FirstUser {
+			if status.FirstUser {
 				templ_7745c5c3_Err = alert("info", "This is the first account on this server, so it becomes the administrator.").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
