@@ -17,3 +17,6 @@
 .DS_Store
 /.cache/
 /integration/testdata/screenshots/failures/
+
+# Temporary git worktrees made by Claude Code agents.
+.claude/worktrees/
