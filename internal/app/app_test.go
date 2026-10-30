@@ -122,3 +122,34 @@ func TestServeShutdownTimeoutLeavesStoreOpen(t *testing.T) {
 	}
 	t.Cleanup(func() { time.Sleep(2 * time.Second); app.Close() })
 }
+
+// A request still running after the grace period has its context cancelled,
+// and Serve waits for it to return before closing the database.
+func TestServeCancelsRequestsThatOutliveTheGracePeriod(t *testing.T) {
+	app, err := New(context.Background(), testConfig(t), quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.httpShutdownTimeout = 100 * time.Millisecond
+	started := make(chan struct{})
+	var cancelled, finished atomic.Bool
+	app.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-r.Context().Done() // a slow request that only stops when told to
+		cancelled.Store(true)
+		time.Sleep(50 * time.Millisecond) // still using the database a moment
+		finished.Store(true)
+	})
+	url, stop := serve(t, app)
+	go http.Get(url + "/slow")
+	<-started
+	if err := stop(); err != nil {
+		t.Errorf("Serve = %v", err)
+	}
+	if !cancelled.Load() || !finished.Load() {
+		t.Errorf("Serve returned before the slow request was cancelled and finished (cancelled %v, finished %v)", cancelled.Load(), finished.Load())
+	}
+	if err := app.Store.Ping(context.Background()); err == nil {
+		t.Error("the database is still open after the shutdown")
+	}
+}

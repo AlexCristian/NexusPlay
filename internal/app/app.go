@@ -43,9 +43,13 @@ var (
 const (
 	// [sessionLifetime] is how long a sign-in lasts: 30 days.
 	sessionLifetime = 30 * 24 * time.Hour
-	// [shutdownTimeout] is how long [App.Serve] waits for background work after
-	// it is asked to stop. A file swap ignores cancellation and finishes.
+	// [shutdownTimeout] is how long [App.Serve] waits for background work and
+	// cancelled requests after it is asked to stop. A file swap ignores
+	// cancellation and finishes.
 	shutdownTimeout = 30 * time.Second
+	// [httpShutdownTimeout] is how long [App.Serve] lets requests in flight
+	// finish before cancelling them.
+	httpShutdownTimeout = 10 * time.Second
 )
 
 // [worker] is a background component that runs until its context ends: the
@@ -84,9 +88,12 @@ type App struct {
 
 	// [workers] are the background components [App.Serve] runs.
 	workers []worker
-	// [shutdownTimeout] is how long [App.Serve] waits for the workers to stop;
-	// tests shorten it.
+	// [shutdownTimeout] is how long [App.Serve] waits for the workers and
+	// cancelled requests to stop; tests shorten it.
 	shutdownTimeout time.Duration
+	// [httpShutdownTimeout] is how long [App.Serve] lets requests in flight
+	// finish before cancelling them; tests shorten it.
+	httpShutdownTimeout time.Duration
 }
 
 // [New] checks the environment, opens the database (applying migrations) and
@@ -212,7 +219,7 @@ func build(config config.Config, database *store.Store, log *slog.Logger) (*App,
 	return &App{
 		Config: config, Log: log, Store: database, Scanner: scanner, Transcodes: transcodes,
 		Converter: conversions, Handler: webServer.Handler(),
-		workers: workers, shutdownTimeout: shutdownTimeout,
+		workers: workers, shutdownTimeout: shutdownTimeout, httpShutdownTimeout: httpShutdownTimeout,
 	}, nil
 }
 
@@ -220,11 +227,13 @@ func build(config config.Config, database *store.Store, log *slog.Logger) (*App,
 // until [ctx] ends (or the server fails), then shuts down in order:
 //
 //  1. stop accepting requests and wait up to 10 seconds for those in
-//     flight; requests still running after that are left running;
-//  2. stop the workers and wait for them, up to the shutdown timeout;
+//     flight; then cancel the context of any still running and close their
+//     connections;
+//  2. stop the workers and wait for them and for the cancelled requests,
+//     up to the shutdown timeout;
 //  3. close the database.
 //
-// If a worker is still running when the timeout expires, the database is
+// If a worker or request is still running when the timeout expires, the database is
 // left open and [Serve] returns anyway: exiting with SQLite's write-ahead
 // log is safe, closing the database under a file swap is not. A worker that
 // stops with an error is logged. Call [Serve] once.
@@ -250,7 +259,18 @@ func (app *App) Serve(ctx context.Context, listener net.Listener) error {
 		})
 	}
 
-	httpServer := &http.Server{Handler: app.Handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
+	// Every request's context ends when [requestContext] does, so requests still
+	// running after the grace period stop their database work.
+	requestContext, cancelRequests := context.WithCancel(context.Background())
+	defer cancelRequests()
+	var activeRequests sync.WaitGroup
+	countedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		activeRequests.Add(1)
+		defer activeRequests.Done()
+		app.Handler.ServeHTTP(w, r)
+	})
+	httpServer := &http.Server{Handler: countedHandler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute,
+		BaseContext: func(net.Listener) context.Context { return requestContext }}
 	served := make(chan error, 1)
 	go func() { served <- httpServer.Serve(listener) }()
 	var err error
@@ -263,20 +283,22 @@ func (app *App) Serve(ctx context.Context, listener net.Listener) error {
 		}
 	}
 
-	httpContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	httpContext, cancel := context.WithTimeout(context.Background(), app.httpShutdownTimeout)
 	if shutdownErr := httpServer.Shutdown(httpContext); shutdownErr != nil {
-		app.Log.Warn("requests still running at shutdown", "err", shutdownErr)
+		app.Log.Warn("requests still running at shutdown; cancelling them", "err", shutdownErr)
+		cancelRequests()
+		httpServer.Close()
 	}
 	cancel()
 
 	stopWorkers()
 	done := make(chan struct{})
-	go func() { workers.Wait(); close(done) }()
+	go func() { workers.Wait(); activeRequests.Wait(); close(done) }()
 	select {
 	case <-done:
 		return errors.Join(err, app.Store.Close())
 	case <-time.After(app.shutdownTimeout):
-		app.Log.Error("background work did not stop in time; leaving the database open")
+		app.Log.Error("background work or requests did not stop in time; leaving the database open")
 		return err
 	}
 }
