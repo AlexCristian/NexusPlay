@@ -624,7 +624,7 @@ func (handlers *adminHandlers) findOrCreateCollection(ctx context.Context, name,
 //   - [existing]: the collection as stored.
 //   - [update]: the edit; its year, overview and poster fields are changed.
 func (handlers *adminHandlers) fillCollectionUpdate(ctx context.Context, existing store.Collection, update *store.CollectionUpdate) {
-	collection := store.Collection{Name: update.Name, Year: update.Year, Overview: update.Overview, Poster: update.Poster}
+	collection := store.Collection{Name: update.Name, Category: update.Category, Year: update.Year, Overview: update.Overview, Poster: update.Poster}
 	if collection.Poster == "" && !update.RemovePoster {
 		collection.Poster = existing.Poster
 	}

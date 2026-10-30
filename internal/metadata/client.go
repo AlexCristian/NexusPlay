@@ -376,7 +376,7 @@ func (client *Client) get(ctx context.Context, path string, query url.Values, ou
 	request.Header.Set("Accept", "application/json")
 	response, err := client.http.Do(request)
 	if err != nil {
-		return err
+		return withoutQuery(err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusNotFound {
@@ -386,6 +386,25 @@ func (client *Client) get(ctx context.Context, path string, query url.Values, ou
 		return fmt.Errorf("tmdb %s: %s", path, response.Status)
 	}
 	return json.NewDecoder(io.LimitReader(response.Body, 4<<20)).Decode(out)
+}
+
+// [withoutQuery] removes the query string from the URL a request error
+// quotes, so a v3 API key passed as "api_key" never reaches the logs.
+//
+// Parameters:
+//   - [err]: an error from [http.Client.Do].
+//
+// Returns:
+//   - [error]: [err] with its [*url.Error]'s URL cut before the "?", or
+//     [err] unchanged if it holds no [*url.Error].
+func withoutQuery(err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		if questionMark := strings.IndexByte(urlErr.URL, '?'); questionMark >= 0 {
+			urlErr.URL = urlErr.URL[:questionMark]
+		}
+	}
+	return err
 }
 
 // [posterOrEmpty] downloads a poster with [Client.fetchPoster], logging any

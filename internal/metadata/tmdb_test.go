@@ -218,3 +218,15 @@ func TestCollectionLookup(t *testing.T) {
 		t.Errorf("poster not saved: %v", err)
 	}
 }
+
+func TestRequestErrorsHideTheAPIKey(t *testing.T) {
+	client := New(Config{APIKey: "secret-v3-key"}, slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WithBaseURL("http://127.0.0.1:1", "http://127.0.0.1:1"))
+	_, err := client.Movie(context.Background(), "The Matrix", "")
+	if err == nil {
+		t.Fatal("expected a connection error")
+	}
+	if strings.Contains(err.Error(), "secret-v3-key") {
+		t.Errorf("error leaks the API key: %v", err)
+	}
+}

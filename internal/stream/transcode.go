@@ -35,7 +35,13 @@ type ffmpegStarter struct {
 //   - [Process]: the running ffmpeg.
 //   - [error]: [nil] on success, or the error from [ffmpeg.Tools.Start].
 func (starter ffmpegStarter) Start(ctx context.Context, arguments []string) (Process, error) {
-	return starter.tools.Start(ctx, arguments)
+	process, err := starter.tools.Start(ctx, arguments)
+	if err != nil {
+		// Return a plain nil: a nil *ffmpeg.Process inside the Process
+		// interface would not compare equal to nil.
+		return nil, err
+	}
+	return process, nil
 }
 
 // [job] is one transcode. Every job has its own folder, so cleaning up an old
