@@ -8,6 +8,7 @@ type Episode struct {
 	// when a two-part pilot is one file but two TMDB episodes.
 	Number int
 	// [Info] holds the episode's name, air year and overview. Its
-	// [Info.ID] and [Info.Poster] are always empty.
+	// [Info.ID] is always 0 and [Info.Poster] always "". [Info] is embedded,
+	// so its fields are used directly: [Episode.Title] is [Episode.Info.Title].
 	Info
 }

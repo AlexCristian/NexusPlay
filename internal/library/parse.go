@@ -112,8 +112,8 @@ func matchEpisode(name string) (episodeMatch, bool) {
 // [parseMovie] guesses a film's title and year from its file name, after
 // removing release tags. The last plausible year (see [plausibleYear]) not
 // at the very start is the release year. An earlier one may be part of the
-// title ("2001 A Space Odyssey 1968"), and so may a year that has not
-// happened yet ("Blade Runner 2049").
+// title ("2001 A Space Odyssey 1968"), and so may a year more than one year
+// in the future ("Blade Runner 2049").
 //
 // Parameters:
 //   - [name]: the file name without folder or extension.
@@ -253,8 +253,8 @@ func firstNonEmpty(first, second string) string {
 	return second
 }
 
-// [clean] tidies a name taken from a path, such as "The.Big_Show - " into
-// "The Big Show". Dots count as spaces only when the text has no spaces.
+// [clean] tidies a name taken from a path, such as "The.Big_Show" into "The
+// Big Show", or "The Big_Show - " into "The Big Show". Dots count as spaces only when the text has no spaces.
 //
 // Parameters:
 //   - [text]: the raw text.

@@ -303,9 +303,10 @@ func (manager *Manager) launch(job *job, mediaID int64, source string, format me
 }
 
 // [finish] waits for ffmpeg to exit, records whether it failed, and marks
-// the transcode finished. A failure is not logged here: [Manager.Playlist]
-// returns it to the request waiting for the playlist, and the handler
-// reports it there. Being stopped on purpose is not a failure.
+// the transcode finished. A failure is not logged here: if a
+// [Manager.Playlist] call is waiting, it returns the failure; a failure
+// after that is not reported anywhere, and the next request starts a fresh
+// transcode. Being stopped on purpose is not a failure.
 //
 // Parameters:
 //   - [job]: the transcode.
@@ -322,9 +323,9 @@ func (manager *Manager) finish(job *job, process Process) {
 }
 
 // [Run] cleans up idle and stale transcodes every 30 seconds (see
-// [Manager.sweep]) until [ctx] ends. Then it stops every transcode, waits for
-// each ffmpeg to exit and deletes the output, so nothing is left running or
-// on disk. It blocks, so call it in its own goroutine.
+// [Manager.sweep]) until [ctx] ends. Then it stops every transcode still
+// registered, waits for each ffmpeg to exit and deletes its output.
+// Transcodes an earlier sweep is still removing are not waited for. It blocks, so call it in its own goroutine.
 //
 // Parameters:
 //   - [ctx]: stops the manager when cancelled.

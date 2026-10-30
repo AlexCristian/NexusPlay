@@ -153,7 +153,8 @@ func (client *Client) Movie(ctx context.Context, title, year string) (Info, erro
 // [Show] searches TMDB for a TV series and downloads its poster. Matches and
 // [ErrNoMatch] are cached for the life of the process; other errors are not,
 // so the next call tries again. Concurrent calls for the same show share one
-// request.
+// request, which runs under the first caller's [ctx]: if that is cancelled,
+// every caller waiting on it gets the cancellation error.
 //
 // Parameters:
 //   - [ctx]: cancels the search and the poster download.
@@ -239,7 +240,7 @@ func (client *Client) searchShow(ctx context.Context, name, year string) (Info, 
 //
 // Returns:
 //   - [Info]: the episode's name, air year and overview, or a zero [Info] if
-//     [error] is not [nil]. [Info.ID] and [Info.Poster] are always empty:
+//     [error] is not [nil]. [Info.ID] is always 0 and [Info.Poster] always "":
 //     episodes use their show's poster.
 //   - [error]: [nil] on success, [ErrNoMatch] if TMDB has no such episode,
 //     [ErrDisabled] if no API key is configured, and otherwise the network
@@ -296,7 +297,8 @@ func (client *Client) Collection(ctx context.Context, name string) (Info, error)
 // [Season] lists every episode of one season of a show, in TMDB's numbering.
 // Lists are cached for [seasonTTL], so matching a whole season's files by
 // title costs one request. Concurrent calls for the same season share one
-// request.
+// request, which runs under the first caller's [ctx]: if that is cancelled,
+// every caller waiting on it gets the cancellation error.
 //
 // Parameters:
 //   - [ctx]: cancels the request.
@@ -432,7 +434,8 @@ func (client *Client) posterOrEmpty(ctx context.Context, posterPath, name string
 
 // [fetchPoster] downloads a poster into the poster folder, unless an earlier
 // call already did. The file appears atomically, so a half-written poster is
-// never served. Posters larger than 10 MiB are cut off.
+// never served. Posters larger than 10 MiB are saved truncated and count as
+// downloaded.
 //
 // Parameters:
 //   - [ctx]: cancels the download.
@@ -446,9 +449,9 @@ func (client *Client) posterOrEmpty(ctx context.Context, posterPath, name string
 //     "tmdb-movie-603.jpg", or "" if [posterPath] is "" or [error] is not
 //     [nil].
 //   - [error]: [nil] on success, including when there is no poster or the
-//     file already exists. Otherwise an error naming [posterPath], for a
-//     failed request, a status other than 200 OK, or a failure to write the
-//     file.
+//     file already exists. Otherwise the request error; an error naming
+//     [posterPath] for a status other than 200 OK or a failed write; or the
+//     error creating the temporary file.
 func (client *Client) fetchPoster(ctx context.Context, posterPath, name string) (string, error) {
 	if posterPath == "" {
 		return "", nil

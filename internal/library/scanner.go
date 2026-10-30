@@ -27,11 +27,13 @@ import (
 // use.
 //
 // Locking: [Scanner.scan] lets only one scan run at a time.
-// [Scanner.reconcile] is held only while a scan changes the database (and
-// re-checks the disk), never while it probes files or calls TMDB. The
+// [Scanner.reconcile] is held only while a scan inserts new media rows and
+// deletes rows whose files are gone (re-checking the disk for each); metadata,
+// subtitle, pixel-format and episode-range writes happen after it is
+// released, and it is never held while probing files or calling TMDB. The
 // converter holds [Scanner.reconcile] too, through [Scanner.Exclusive],
-// while it swaps a file and its row, so a scan never sees a file renamed but
-// not yet updated in the database. Neither lock is reentrant: never call
+// while it swaps a file and its row, so a scan never adds or removes a row
+// for a file renamed but not yet updated in the database. Neither lock is reentrant: never call
 // [Scanner.Scan] from inside [Scanner.Exclusive].
 type Scanner struct {
 	// [dependencies] are the database, prober, metadata lookups and log.
@@ -92,9 +94,10 @@ func (scanner *Scanner) Trigger() {
 	}
 }
 
-// [Exclusive] runs an operation while no scan is changing the database. It
-// waits at most for one database-changing step of a scan, which only
-// touches the database and checks whether files exist.
+// [Exclusive] runs an operation while no scan is adding or removing media
+// rows. It waits at most for one such step, which only touches the database
+// and checks whether files exist. A scan may meanwhile write metadata,
+// subtitles and pixel formats.
 //
 // Parameters:
 //   - [operation]: the work to do under the lock. It must not call
@@ -110,8 +113,10 @@ func (scanner *Scanner) Exclusive(operation func() error) error {
 
 // [Run] scans at once and then whenever the timer fires, [Scanner.Trigger] is
 // called, or the media folder changes (5 seconds after the last change),
-// until [ctx] ends. If the folder cannot be watched it logs a warning and
-// relies on the timer. It blocks, so call it in its own goroutine.
+// until [ctx] ends; also one second after the watcher loses changes, and
+// [Config.Settle] plus 5 seconds after a scan that found files still
+// settling. If no watcher can be created it logs a warning and relies on
+// the timer; folders that cannot be watched are logged at debug level. It blocks, so call it in its own goroutine.
 //
 // Parameters:
 //   - [ctx]: stops the scanner when cancelled.
@@ -163,8 +168,8 @@ func (scanner *Scanner) Run(ctx context.Context) error {
 
 // [onEvent] schedules a scan 5 seconds after a change in the media folder,
 // postponing any already scheduled, so a burst of changes (a file being
-// copied in) causes one scan. Changes that are only to permissions are
-// ignored.
+// copied in) causes one scan. Events that include a permission change but
+// no write are ignored.
 //
 // Parameters:
 //   - [event]: the change.
@@ -236,7 +241,8 @@ func (scanner *Scanner) scanOnce(ctx context.Context, watcher *fsnotify.Watcher,
 //   - [ctx]: cancels the scan.
 //
 // Returns:
-//   - [Result]: what the scan did, so far as it got.
+//   - [Result]: what the scan did. On an [error], only [Result.Waiting] is
+//     set, even if some media were already added or removed.
 //   - [error]: [nil] on success, the error from reading the media folder
 //     itself, or a database error. Problems with single files are logged,
 //     not returned.
@@ -312,12 +318,14 @@ type videoFile struct {
 	relativePath string
 	// [absolutePath] is the file's full path.
 	absolutePath string
-	// [info] holds the file's size and modification time.
+	// [info] holds the file's size and modification time; for a symbolic
+	// link, the link's own.
 	info fs.FileInfo
 }
 
 // [walk] lists the media folder and all its subfolders. Hidden files and
-// folders (starting with ".") are skipped. Paths that cannot be read are
+// folders (starting with ".") are skipped, and symbolic links to folders are
+// not followed. Paths that cannot be read are
 // logged and recorded rather than treated as gone: a folder that fails to
 // list on a flaky network share must not look deleted.
 //
@@ -811,16 +819,16 @@ func (scanner *Scanner) importAllSidecars(ctx context.Context, tree tree, known 
 // "Movie.srt" or "Movie.en.vtt" next to "Movie.mp4" (see [SidecarLanguage]).
 // The converter writes extracted subtitles with the same naming, so they
 // come in here too. Files that cannot be read, parsed or saved are logged
-// and skipped; one that cannot be parsed is not tried again until the next
-// run of the program.
+// and skipped; one that cannot be parsed is skipped for the rest of this
+// scan and tried again on the next.
 //
 // Parameters:
 //   - [ctx]: cancels the database work.
 //   - [mediaID]: the video's media ID.
 //   - [videoRelativePath]: the video's path relative to the media folder.
 //   - [candidates]: the subtitle files in the video's folder.
-//   - [imported]: the sources already imported; each file handled here is
-//     added to it.
+//   - [imported]: the sources already imported, as read at the start of
+//     this scan; each file imported or found unparseable is added to it.
 //
 // Returns:
 //   - [int]: how many subtitle tracks were added.
@@ -842,7 +850,7 @@ func (scanner *Scanner) importSidecars(ctx context.Context, mediaID int64, video
 		cues, err := subtitle.Parse(data)
 		if err != nil {
 			scanner.dependencies.Log.Warn("could not parse subtitle", "path", subtitlePath, "err", err)
-			imported.Add(subtitlePath) // do not retry a broken file on every scan of this run
+			imported.Add(subtitlePath) // skip it for the rest of this scan
 			continue
 		}
 		_, inserted, err := scanner.dependencies.Store.AddSubtitle(ctx, store.NewSubtitle{
@@ -892,7 +900,9 @@ func SidecarLanguage(videoRelativePath, subtitleRelativePath string) (language s
 }
 
 // [backfillLimit] caps how many files one scan re-probes, so the first scan
-// after upgrading a large library stays short; later scans do the rest.
+// after upgrading a large library stays short. Files whose re-probe fails
+// or finds no pixel format count against the cap and come first again next
+// scan, so 50 such files stop the backfill.
 const backfillLimit = 50
 
 // [backfillEpisodeEnd] records the episode range of multi-episode files that

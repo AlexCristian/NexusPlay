@@ -3,7 +3,7 @@
 // then hands everything else to package app.
 //
 // "nexusplay healthcheck" asks a running server's /healthz and exits 0 if it
-// answers; the container image uses it because it has no curl.
+// answers 200 OK; the container image uses it because it has no curl.
 package main
 
 import (

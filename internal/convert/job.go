@@ -74,8 +74,9 @@ func CheckConverted(got, source ffmpeg.Probe, plan Plan) error {
 // [moveNoReplace] moves a file to a path only if nothing exists there. A hard
 // link fails atomically when the target exists, unlike a rename, which would
 // replace it. On file systems without hard links (FAT, some network shares)
-// it falls back to checking first, which is safe here because the caller
-// holds the scan lock and the scanner never creates files.
+// it falls back to checking first and then renaming, which can still replace
+// a file the user creates in between; the reconcile lock only keeps the
+// scanner out.
 //
 // Parameters:
 //   - [temporaryPath]: the file to move.
@@ -83,8 +84,9 @@ func CheckConverted(got, source ffmpeg.Probe, plan Plan) error {
 //
 // Returns:
 //   - [error]: [nil] on success; [ErrTargetExists] (wrapped with the file's
-//     name) if something exists at [target]; otherwise an error wrapping the
-//     rename or remove error.
+//     name) if something exists at [target]; an error wrapping the rename
+//     error; or an error wrapping the remove error, in which case the file
+//     is already at [target] and a copy remains at [temporaryPath].
 func moveNoReplace(temporaryPath, target string) error {
 	err := os.Link(temporaryPath, target)
 	switch {
@@ -114,9 +116,9 @@ func moveNoReplace(temporaryPath, target string) error {
 //   - [mediaDirectory]: the media folder, searched with all its subfolders.
 //
 // Returns:
-//   - [error]: [nil] if every leftover was deleted, or every error joined
-//     with [errors.Join]: files that could not be deleted, and the error
-//     from walking the folder.
+//   - [error]: [nil] if every leftover found was deleted, otherwise the
+//     deletion errors joined with [errors.Join]. Folders that cannot be
+//     read, including [mediaDirectory] itself, are skipped silently.
 func removeLeftovers(mediaDirectory string) error {
 	var problems []error
 	walkErr := filepath.WalkDir(mediaDirectory, func(path string, entry fs.DirEntry, err error) error {

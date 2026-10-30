@@ -15,8 +15,8 @@ import (
 
 // [Converter] works through the queue of files that need converting, at most
 // [Config.Max] at a time, newest first, and deletes each original once its
-// MP4 is checked and in the library. Conversions run at low CPU priority so
-// playback stays smooth. Create one with [New] and start it with
+// MP4 is checked and in the library. The encode runs at low CPU priority so
+// playback stays smooth; subtitle extraction, which is short, does not. Create one with [New] and start it with
 // [Converter.Run]. It is safe for concurrent use.
 //
 // A file's state, from the control panel's point of view:
@@ -259,7 +259,8 @@ func (converter *Converter) Status(ctx context.Context) (Status, error) {
 }
 
 // [runJob] converts one file and records the outcome. A shutdown and a file
-// that changed while converting are logged only; a disk too full postpones
+// whose row now points elsewhere ([ErrSourceChanged]) are logged only; a
+// file whose row a scan removed is recorded as failed; a disk too full postpones
 // the file for [noSpaceRetry]; any other error is recorded with
 // [Store.SetConvertFailed] so the control panel can show it. After a
 // success it asks for a rescan to import the extracted subtitles.

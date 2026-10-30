@@ -15,7 +15,9 @@ import (
 // [convert] turns one file into an MP4 that replaces it. The steps are:
 // prepare (checks and plan), extract subtitles, encode, check the result,
 // and commit (swap the files and the database row). The partly written MP4
-// is deleted if any step before the swap fails.
+// is deleted if any step before the swap fails. Extracted subtitle files are
+// kept even if a later step fails; the next scan imports them for the
+// original.
 //
 // Parameters:
 //   - [ctx]: stops the conversion when cancelled; the swap itself ignores it.
@@ -195,9 +197,9 @@ func (converter *Converter) verify(ctx context.Context, work work) (store.Replac
 		VideoCodec: video.Codec, AudioCodec: got.AudioCodec(), PixelFormat: video.PixelFormat, Size: info.Size()}, nil
 }
 
-// [commit] swaps the checked MP4 in with [Converter.swap], holding the
-// scanner's lock so no scan can run meanwhile (or without the lock when
-// there is no scanner).
+// [commit] swaps the checked MP4 in with [Converter.swap] under
+// [Library.Exclusive], so no scan adds or removes media rows meanwhile (or
+// without the lock when there is no scanner).
 //
 // Parameters:
 //   - [ctx]: passed to the swap, which ignores its cancellation.
@@ -206,7 +208,7 @@ func (converter *Converter) verify(ctx context.Context, work work) (store.Replac
 //   - [result]: what to record about the converted file.
 //
 // Returns:
-//   - [error]: [nil] on success, or the swap's or the lock's error.
+//   - [error]: [nil] on success, or the swap's error.
 func (converter *Converter) commit(ctx context.Context, media store.Media, work work, result store.ReplacedFile) error {
 	swap := func() error {
 		return converter.swap(ctx, media, work.sourcePath, work.temporaryPath, work.target, result)
@@ -234,8 +236,8 @@ func (converter *Converter) commit(ctx context.Context, media store.Media, work 
 //  3. Delete the original. Failing here only leaves a stray file behind,
 //     which is logged; the library is already correct.
 //
-// [swap] runs under the scanner's lock, so no scan sees the state between
-// steps 1 and 2, and it ignores cancellation: a half-finished swap is worse
+// [swap] runs under the scanner's reconcile lock, so no scan adds or removes
+// rows between steps 1 and 2, and it ignores cancellation: a half-finished swap is worse
 // than a slow shutdown.
 //
 // Parameters:

@@ -163,7 +163,7 @@ func safeLanguage(tag string) string {
 // [ConvertArguments] builds the ffmpeg arguments that write the MP4: the
 // main video and every audio track, copied or re-encoded as planned (video
 // to H.264 high profile, CRF 20, 8-bit 4:2:0), with the original's default
-// audio track marked default, metadata and chapters kept, no subtitles or
+// audio track (or the first, if none is marked) marked default, metadata and chapters kept, no subtitles or
 // data, and the index at the front so playback can start before the file is
 // downloaded.
 //
@@ -194,7 +194,8 @@ func (plan Plan) ConvertArguments(source, outputPath string) []string {
 		}
 	}
 	if len(plan.Audio) > 0 {
-		// Players start with the first audio track; keep the original's default one first in line.
+		// Mark the original's default track as default (the first track if none
+		// is) and clear the flag on the others.
 		defaultIndex := 0
 		for i, audioPlan := range plan.Audio {
 			if audioPlan.Stream.Default {

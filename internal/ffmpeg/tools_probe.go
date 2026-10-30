@@ -14,9 +14,10 @@ import (
 //   - [Probe]: the file's details, or a zero [Probe] if [error] is not
 //     [nil].
 //   - [error]: [nil] on success; [ctx]'s error if ffprobe was killed because
-//     [ctx] ended; an [*ExitError] if ffprobe failed, for example on a file
-//     that is not media; the [exec] error if ffprobe could not be started; or
-//     an error from [parseProbe] if its output could not be read.
+//     [ctx] ended; an [*ExitError] if ffprobe failed (for example on a file
+//     that is not media) or could not be started (its [ExitError.Err] is
+//     then the [exec] error, such as [exec.ErrNotFound]); or an error from
+//     [parseProbe] if its output could not be read.
 func (tools Tools) Probe(ctx context.Context, file string) (Probe, error) {
 	execCommand := command(ctx, tools.FFprobe, "-v", "error", "-print_format", "json",
 		"-show_format", "-show_streams", file)

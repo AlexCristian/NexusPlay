@@ -12,7 +12,8 @@ import (
 )
 
 // [command] prepares a program run that is killed when [ctx] is cancelled.
-// Once it is killed, waiting for its output pipes to close is limited to 2
+// After the program exits or is killed, waiting for its output pipes to
+// close is limited to 2
 // seconds, so a child process that inherited them cannot hold up shutdown.
 //
 // Parameters:

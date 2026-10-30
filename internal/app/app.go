@@ -90,7 +90,9 @@ type App struct {
 }
 
 // [New] checks the environment, opens the database (applying migrations) and
-// builds every component. Nothing runs until [App.Serve].
+// builds every component. It creates the data and poster folders if they are
+// missing and deletes everything in the transcode folder
+// ([stream.NewManager]). No background work starts until [App.Serve].
 //
 // Parameters:
 //   - [ctx]: cancels opening the database.
@@ -217,8 +219,8 @@ func build(config config.Config, database *store.Store, log *slog.Logger) (*App,
 // [Serve] runs the HTTP server on a listener and every background worker
 // until [ctx] ends (or the server fails), then shuts down in order:
 //
-//  1. stop accepting requests and let those in flight finish, for up to 10
-//     seconds;
+//  1. stop accepting requests and wait up to 10 seconds for those in
+//     flight; requests still running after that are left running;
 //  2. stop the workers and wait for them, up to the shutdown timeout;
 //  3. close the database.
 //

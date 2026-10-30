@@ -37,8 +37,8 @@ type ffmpegStarter struct {
 func (starter ffmpegStarter) Start(ctx context.Context, arguments []string) (Process, error) {
 	process, err := starter.tools.Start(ctx, arguments)
 	if err != nil {
-		// Return a plain nil: a nil *ffmpeg.Process inside the Process
-		// interface would not compare equal to nil.
+		// Return a plain [nil]: a [nil] [*ffmpeg.Process] inside the [Process]
+		// interface would not compare equal to [nil].
 		return nil, err
 	}
 	return process, nil
@@ -82,11 +82,14 @@ var segmentName = regexp.MustCompile(`^seg\d{5}\.ts$`)
 func IsSegmentName(name string) bool { return segmentName.MatchString(name) }
 
 // [ffmpegArguments] builds the ffmpeg arguments for an HLS transcode of the
-// first video and first audio stream (if any), without subtitles or data.
-// Browser-safe H.264 (8-bit 4:2:0) is copied as it is, a cheap remux for MKV
-// files; anything else, including 10-bit H.264, is encoded to H.264. Audio
-// is copied when it is AAC and otherwise made stereo AAC at 160 kbit/s,
-// which every browser plays. Segments are 6 seconds long.
+// first video stream (which can be cover art) and first audio stream (if
+// any), without subtitles or data. H.264 whose pixel format is 8-bit 4:2:0,
+// or not yet recorded, is copied as it is, a cheap remux for MKV files;
+// anything else, including H.264 known to be 10-bit, is encoded to H.264.
+// Audio is copied when it is AAC and otherwise made stereo AAC at 160
+// kbit/s, which every browser plays. Segments are 6 seconds long when
+// re-encoding; copied video splits at the source's keyframes, so its
+// segments can be longer.
 //
 // Parameters:
 //   - [source]: the original file's path.

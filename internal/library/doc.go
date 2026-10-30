@@ -11,6 +11,7 @@
 // under an unreadable folder, or every row when the folder has no videos at
 // all (an unmounted drive), are kept.
 //
-// The scan lock ([Scanner.Exclusive]) keeps scans from overlapping the
-// converter's file swap.
+// The reconcile lock, taken through [Scanner.Exclusive], keeps a scan from
+// adding or removing media rows while the converter swaps a file and its
+// row.
 package library
