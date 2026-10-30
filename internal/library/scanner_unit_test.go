@@ -2,10 +2,12 @@ package library
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -183,5 +185,44 @@ func TestSidecarLanguage(t *testing.T) {
 		if language != testCase.language || isSidecar != testCase.isSidecar {
 			t.Errorf("SidecarLanguage(%q, %q) = %q, %v; want %q, %v", testCase.video, testCase.subtitle, language, isSidecar, testCase.language, testCase.isSidecar)
 		}
+	}
+}
+
+// pixelFormatProber reports no pixel format for files whose name starts with
+// "bad", and yuv420p for the rest.
+type pixelFormatProber struct{}
+
+func (pixelFormatProber) Probe(ctx context.Context, file string) (ffmpeg.Probe, error) {
+	pixelFormat := "yuv420p"
+	if strings.HasPrefix(filepath.Base(file), "bad") {
+		pixelFormat = ""
+	}
+	return ffmpeg.Probe{Streams: []ffmpeg.Stream{{Type: "video", Codec: "h264", PixelFormat: pixelFormat}}}, nil
+}
+
+// Files whose re-probe finds no pixel format must not hold up the backfill
+// for the files after them.
+func TestBackfillSkipsFilesWithNoPixelFormat(t *testing.T) {
+	scanner, database, media := newUnitScanner(t, pixelFormatProber{})
+	ctx := context.Background()
+	var videos []videoFile
+	for i := range backfillLimit + 1 {
+		name := fmt.Sprintf("bad%03d.mkv", i)
+		if i == backfillLimit {
+			name = "good.mkv"
+		}
+		if _, _, err := database.InsertScannedMedia(ctx, store.ScannedMedia{Path: name, Title: name, VideoCodec: "h264"}); err != nil {
+			t.Fatal(err)
+		}
+		videos = append(videos, videoFile{relativePath: name, absolutePath: filepath.Join(media, name)})
+	}
+	scanner.backfillPixelFormat(ctx, videos) // probes the first backfillLimit files, all bad
+	scanner.backfillPixelFormat(ctx, videos) // must now reach the good one
+	missing, err := database.H264MissingPixelFormat(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, stillMissing := missing["good.mkv"]; stillMissing {
+		t.Error("good.mkv never got its pixel format: the bad files block the backfill")
 	}
 }

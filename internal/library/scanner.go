@@ -54,6 +54,11 @@ type Scanner struct {
 	// [onAdded] is called after a scan that added media, or [nil]. Set it with
 	// [Scanner.OnAdded] before [Scanner.Run].
 	onAdded func()
+	// [backfillSkipped] holds the paths whose re-probe for a pixel format
+	// failed or found none, so [Scanner.backfillPixelFormat] does not try
+	// them again until the program restarts. Only scans use it, and they run
+	// one at a time.
+	backfillSkipped collections.Set[string]
 }
 
 // [NewScanner] creates a scanner. Nothing runs until [Scanner.Run] or
@@ -73,7 +78,7 @@ func NewScanner(dependencies Dependencies, config Config) *Scanner {
 	if config.Settle <= 0 {
 		config.Settle = 30 * time.Second
 	}
-	return &Scanner{dependencies: dependencies, config: config, trigger: make(chan struct{}, 1), now: time.Now}
+	return &Scanner{dependencies: dependencies, config: config, trigger: make(chan struct{}, 1), now: time.Now, backfillSkipped: collections.NewSet[string]()}
 }
 
 // [OnAdded] sets what to call after a scan that added media; the converter
@@ -900,9 +905,10 @@ func SidecarLanguage(videoRelativePath, subtitleRelativePath string) (language s
 }
 
 // [backfillLimit] caps how many files one scan re-probes, so the first scan
-// after upgrading a large library stays short. Files whose re-probe fails
-// or finds no pixel format count against the cap and come first again next
-// scan, so 50 such files stop the backfill.
+// after upgrading a large library stays short; later scans do the rest.
+// Files whose re-probe fails or finds no pixel format count against the cap
+// once, then are skipped until the program restarts (see
+// [Scanner.backfillSkipped]), so they cannot hold up the files after them.
 const backfillLimit = 50
 
 // [backfillEpisodeEnd] records the episode range of multi-episode files that
@@ -928,7 +934,8 @@ func (scanner *Scanner) backfillEpisodeEnd(ctx context.Context, videos []videoFi
 }
 
 // [backfillPixelFormat] records the pixel format of H.264 files added before
-// it was stored, re-probing at most [backfillLimit] of them per scan.
+// it was stored, re-probing at most [backfillLimit] of them per scan and
+// skipping files whose re-probe already failed or found no pixel format.
 // Without it, a 10-bit H.264 file (which no browser plays) would be served
 // as it is and never converted. Failures are logged.
 //
@@ -944,7 +951,7 @@ func (scanner *Scanner) backfillPixelFormat(ctx context.Context, videos []videoF
 	done := 0
 	for _, scannedVideo := range videos {
 		id, isMissing := missing[scannedVideo.relativePath]
-		if !isMissing || done == backfillLimit {
+		if !isMissing || done == backfillLimit || scanner.backfillSkipped.Contains(scannedVideo.relativePath) {
 			continue
 		}
 		done++
@@ -953,12 +960,16 @@ func (scanner *Scanner) backfillPixelFormat(ctx context.Context, videos []videoF
 		cancel()
 		if err != nil {
 			scanner.dependencies.Log.Warn("could not re-probe media", "path", scannedVideo.relativePath, "err", err)
+			scanner.backfillSkipped.Add(scannedVideo.relativePath)
 			continue
 		}
-		if video, hasVideo := probe.Video(); hasVideo && video.PixelFormat != "" {
-			if err := scanner.dependencies.Store.SetPixelFormat(ctx, id, video.PixelFormat); err != nil {
-				scanner.dependencies.Log.Warn("could not record pixel format", "path", scannedVideo.relativePath, "err", err)
-			}
+		video, hasVideo := probe.Video()
+		if !hasVideo || video.PixelFormat == "" {
+			scanner.backfillSkipped.Add(scannedVideo.relativePath)
+			continue
+		}
+		if err := scanner.dependencies.Store.SetPixelFormat(ctx, id, video.PixelFormat); err != nil {
+			scanner.dependencies.Log.Warn("could not record pixel format", "path", scannedVideo.relativePath, "err", err)
 		}
 	}
 }
