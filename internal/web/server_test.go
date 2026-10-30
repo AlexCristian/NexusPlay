@@ -522,3 +522,24 @@ func TestRefreshMetadataWithoutKey(t *testing.T) {
 		t.Errorf("unknown media: %d", response.StatusCode)
 	}
 }
+
+// A media edit form that fails validation is shown again with what was
+// typed, not the stored values.
+func TestFailedMediaFormKeepsTypedValues(t *testing.T) {
+	environment := newEnvironment(t, nil)
+	admin := environment.client()
+	admin.register("alex")
+	ctx := context.Background()
+	id, _, _ := environment.store.InsertScannedMedia(ctx, store.ScannedMedia{Path: "m.mp4", Title: "Stored Title", VideoCodec: "h264"})
+	form := url.Values{"csrf_token": {admin.csrf}, "title": {"Typed Title"}, "overview": {"Typed overview"}, "season": {"not a number"}}
+	response, page := admin.sendForm("POST", "/admin/media/"+formatInteger(id), form, nil)
+	if response.StatusCode != http.StatusBadRequest || !strings.Contains(page, "Season must be a number") {
+		t.Fatalf("invalid season: %d", response.StatusCode)
+	}
+	if !strings.Contains(page, "Typed Title") || !strings.Contains(page, "Typed overview") {
+		t.Error("the form shown again lost what was typed")
+	}
+	if media, _ := environment.store.MediaByID(ctx, id); media.Title != "Stored Title" {
+		t.Errorf("a refused save changed the title to %q", media.Title)
+	}
+}

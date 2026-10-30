@@ -52,6 +52,9 @@ type mediaInput struct {
 	poster *posterUpload
 	// [publish] is [true] when the "Publish" button was used.
 	publish bool
+	// [parsed] is [true] once the form's body was read, so the other fields
+	// hold what was typed even if validation then failed.
+	parsed bool
 }
 
 // [decodeMediaForm] reads and checks the media edit form (POST
@@ -65,9 +68,10 @@ type mediaInput struct {
 //   - [r]: the request with the form, at most [maxUpload] bytes.
 //
 // Returns:
-//   - [mediaInput]: the decoded form, filled as far as it was read, or a
-//     zero [mediaInput] if the body could not be parsed. On an error the
-//     caller shows the stored item again, not this value.
+//   - [mediaInput]: the decoded form, filled as far as it was read, with
+//     [mediaInput.parsed] set; or a zero [mediaInput] if the body could not
+//     be parsed. On an error the caller shows it again with
+//     [withTypedValues].
 //   - [error]: [nil] if the form is valid, or a [*formError] saying what to
 //     fix.
 func decodeMediaForm(r *http.Request) (mediaInput, error) {
@@ -83,6 +87,7 @@ func decodeMediaForm(r *http.Request) (mediaInput, error) {
 		},
 		collection: strings.TrimSpace(r.FormValue("collection")),
 		publish:    r.FormValue("publish") == "1",
+		parsed:     true,
 	}
 	var valid bool
 	if input.update.Season, valid = formWholeNumber(r, "season"); !valid {

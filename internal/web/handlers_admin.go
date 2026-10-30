@@ -492,8 +492,8 @@ func (handlers *adminHandlers) editMediaPage(w http.ResponseWriter, r *http.Requ
 }
 
 // [showMediaFormError] shows the edit page again with a [*formError]'s
-// message and status 400. Note that the form shows the item's stored values,
-// not what was typed.
+// message and status 400. The form shows the values of [media], so pass it
+// through [withTypedValues] to keep what was typed.
 //
 // Parameters:
 //   - [w]: where the page is written.
@@ -519,6 +519,29 @@ func (handlers *adminHandlers) showMediaFormError(w http.ResponseWriter, r *http
 	return nil
 }
 
+// [withTypedValues] puts what was typed into an edit form onto a media item,
+// so a form that failed to save can be shown again without losing the
+// administrator's changes.
+//
+// Parameters:
+//   - [media]: the media item as stored.
+//   - [input]: the form as decoded, possibly only partly.
+//
+// Returns:
+//   - [store.Media]: [media] with the typed title, year, overview, category,
+//     collection name, season, episode and last episode; [media] unchanged
+//     if the form's body could not be parsed at all.
+func withTypedValues(media store.Media, input mediaInput) store.Media {
+	if !input.parsed {
+		return media
+	}
+	typed := input.update
+	media.Title, media.Year, media.Overview, media.Category = typed.Title, typed.Year, typed.Overview, typed.Category
+	media.Season, media.Episode, media.EpisodeEnd = typed.Season, typed.Episode, typed.EpisodeEnd
+	media.CollectionName = input.collection
+	return media
+}
+
 // [saveMedia] handles POST /admin/media/{id}: the edit form, whose second
 // button also publishes. After saving it goes back to the edit page, or
 // after publishing to the control panel, with a confirmation.
@@ -538,7 +561,7 @@ func (handlers *adminHandlers) saveMedia(w http.ResponseWriter, r *http.Request)
 	}
 	input, err := decodeMediaForm(r)
 	if err != nil {
-		return handlers.showMediaFormError(w, r, media, err)
+		return handlers.showMediaFormError(w, r, withTypedValues(media, input), err)
 	}
 	if err := handlers.applyMediaInput(r.Context(), media, input); err != nil {
 		return err
