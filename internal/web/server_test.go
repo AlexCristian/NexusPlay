@@ -272,6 +272,14 @@ func TestSubtitleFlow(t *testing.T) {
 	if !strings.Contains(vtt, "WEBVTT") || !strings.Contains(vtt, "Hello") {
 		t.Errorf("vtt after vote:\n%s", vtt)
 	}
+	// The length limit counts characters, not bytes: 500 accented letters
+	// (1000 bytes) pass it, 501 do not.
+	if response, _ := secondClient.sendForm("POST", "/cues/"+formatInteger(cue.ID)+"/changes", url.Values{"text": {strings.Repeat("é", 500)}}, htmx(secondClient)); response.StatusCode == http.StatusBadRequest {
+		t.Errorf("500 accented characters refused as too long")
+	}
+	if response, _ := secondClient.sendForm("POST", "/cues/"+formatInteger(cue.ID)+"/changes", url.Values{"text": {strings.Repeat("é", 501)}}, htmx(secondClient)); response.StatusCode != http.StatusBadRequest {
+		t.Errorf("501 characters: status %d, want 400", response.StatusCode)
+	}
 }
 
 func TestRequireLogin(t *testing.T) {
@@ -282,6 +290,9 @@ func TestRequireLogin(t *testing.T) {
 	}
 	if response, _ := environment.client().sendForm("GET", "/login", nil, nil); response.StatusCode != 200 {
 		t.Errorf("login page must stay reachable: %d", response.StatusCode)
+	}
+	if response, _ := environment.client().sendForm("GET", "/posters/poster.jpg", nil, nil); response.StatusCode != http.StatusUnauthorized {
+		t.Errorf("anonymous poster with RequireLogin: %d, want a plain 401, not a redirect to a page", response.StatusCode)
 	}
 	client := environment.client()
 	client.register("alex")

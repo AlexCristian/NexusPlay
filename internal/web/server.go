@@ -236,10 +236,10 @@ func (server *Server) admin(handler http.HandlerFunc) http.Handler {
 
 // [needLogin] answers a request that needs an account. htmx gets 401 with
 // HX-Redirect to the sign-in page; a page load is redirected there and comes
-// back afterwards; media (/media/) and subtitle (/subtitles/) requests and
-// anything that is not a GET get a plain 401, since a redirect to an HTML
-// page would only confuse the player. Poster requests are redirected like
-// pages.
+// back afterwards; media (/media/), subtitle (/subtitles/) and poster
+// (/posters/) requests and anything that is not a GET get a plain 401,
+// since a redirect to an HTML page would only confuse the player or an
+// image.
 //
 // Parameters:
 //   - [w]: where the answer is written.
@@ -250,7 +250,8 @@ func (server *Server) needLogin(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	if r.Method == http.MethodGet && !strings.HasPrefix(r.URL.Path, "/media/") && !strings.HasPrefix(r.URL.Path, "/subtitles/") {
+	if r.Method == http.MethodGet && !strings.HasPrefix(r.URL.Path, "/media/") && !strings.HasPrefix(r.URL.Path, "/subtitles/") &&
+		!strings.HasPrefix(r.URL.Path, "/posters/") {
 		http.Redirect(w, r, "/login?next="+url.QueryEscape(currentURL(r)), http.StatusSeeOther)
 		return
 	}

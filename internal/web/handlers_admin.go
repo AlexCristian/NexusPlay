@@ -740,8 +740,9 @@ func (handlers *adminHandlers) fillFromTMDB(ctx context.Context, collection *sto
 }
 
 // [savePoster] stores an uploaded poster in the poster folder under a new
-// random name, never overwriting a file. If copying fails partway, the
-// partly written file is left behind for the [posters.Sweeper] to delete.
+// random name, never overwriting a file. If writing or closing the file
+// fails, the partly written file is deleted (a failure to delete it is
+// logged).
 //
 // Parameters:
 //   - [upload]: the poster, or [nil] if none was uploaded.
@@ -749,8 +750,7 @@ func (handlers *adminHandlers) fillFromTMDB(ctx context.Context, collection *sto
 // Returns:
 //   - [string]: the new file's name: "upload-", 16 URL-safe base64
 //     characters and the extension, such as "upload-Xk3_9aQ-Lm2bR7tZ.jpg";
-//     "" if [upload] is [nil] or the file could not be written. The name is
-//     still returned when only closing the file failed.
+//     "" if [upload] is [nil] or [error] is not [nil].
 //   - [error]: [nil] on success or when [upload] is [nil]; otherwise the
 //     error from reading the upload, making the random name, creating the
 //     file, writing it, or closing it.
@@ -772,11 +772,16 @@ func (handlers *adminHandlers) savePoster(upload *posterUpload) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	if _, err := io.Copy(posterFile, file); err != nil {
-		posterFile.Close()
+	_, copyErr := io.Copy(posterFile, file)
+	closeErr := posterFile.Close()
+	if err := errors.Join(copyErr, closeErr); err != nil {
+		// Do not leave a partly written poster behind.
+		if removeErr := os.Remove(posterFile.Name()); removeErr != nil {
+			handlers.log.Warn("could not remove a partly written poster", "file", name, "err", removeErr)
+		}
 		return "", err
 	}
-	return name, posterFile.Close()
+	return name, nil
 }
 
 // [refreshMetadata] handles POST /admin/media/{id}/refresh-metadata: it looks

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/AlexCristian/NexusPlay/internal/store"
 	"github.com/AlexCristian/NexusPlay/internal/subtitle"
@@ -22,9 +23,10 @@ type subtitleHandlers struct {
 	votesRequired int
 }
 
-// [maxCorrectionBytes] is the longest correction accepted, in bytes. The
-// message shown says "characters", which is only exact for ASCII text.
-const maxCorrectionBytes = 500
+// [maxCorrectionCharacters] is the longest correction accepted, in
+// characters (Unicode code points), so accented text gets the same room as
+// ASCII.
+const maxCorrectionCharacters = 500
 
 // [subtitleStore] is the part of the database the subtitle features use;
 // [store.Store] implements it. Each method is described at the
@@ -275,7 +277,7 @@ func (handlers *subtitleHandlers) renderReport(w http.ResponseWriter, r *http.Re
 // Returns:
 //   - [error]: [nil] once answered, including when the voting rules refuse
 //     the correction (shown in the dialog); a 400 [*statusError] if "text"
-//     is empty or longer than [maxCorrectionBytes]; [store.ErrNotFound] if
+//     is empty or longer than [maxCorrectionCharacters]; [store.ErrNotFound] if
 //     the line does not exist or is hidden; otherwise the database error.
 func (handlers *subtitleHandlers) proposeChange(w http.ResponseWriter, r *http.Request) error {
 	cueID, err := pathID(r)
@@ -283,8 +285,8 @@ func (handlers *subtitleHandlers) proposeChange(w http.ResponseWriter, r *http.R
 		return err
 	}
 	text := strings.TrimSpace(r.FormValue("text"))
-	if text == "" || len(text) > maxCorrectionBytes {
-		return badRequest("A correction must be between 1 and " + strconv.Itoa(maxCorrectionBytes) + " characters.")
+	if text == "" || utf8.RuneCountInString(text) > maxCorrectionCharacters {
+		return badRequest("A correction must be between 1 and " + strconv.Itoa(maxCorrectionCharacters) + " characters.")
 	}
 	if err := handlers.visibleCue(r.Context(), viewer(r), cueID); err != nil {
 		return err
