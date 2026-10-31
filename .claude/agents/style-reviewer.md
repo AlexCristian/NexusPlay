@@ -58,6 +58,10 @@ reading the code.
   clever one-liners.
 - **Hardcoded data or magic numbers** that should be named or live in an
   embedded file.
+- **Reinvented helpers:** a small function that duplicates the standard
+  library (`slices`, `maps`, `strings`, `strconv`, `cmp`, `fmt`, the
+  built-ins) or this repository's `collections` and `datafile` packages, or
+  two helpers in the repository that do the same thing.
 - Anything else the casebook suggests the owner would flag.
 
 ## Report

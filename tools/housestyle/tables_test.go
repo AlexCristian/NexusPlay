@@ -21,10 +21,3 @@ func TestEmbeddedTablesLoaded(t *testing.T) {
 		}
 	}
 }
-
-func TestReadTable(t *testing.T) {
-	table := readTable("# comment\n\n  Key  value \nlone\n")
-	if len(table) != 2 || table["key"] != "value" || table["lone"] != "" {
-		t.Errorf("readTable = %q, want key: value and lone: empty", table)
-	}
-}

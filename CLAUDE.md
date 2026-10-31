@@ -75,6 +75,14 @@ are required.
 - Sentinel errors go in `errors.go`; the package comment goes in `doc.go`.
 - Test files are named after the file they test (`client_test.go`).
 
+## Helpers
+
+- Before writing a small helper, check the standard library (`slices`,
+  `maps`, `strings`, `strconv`, `cmp`, `fmt`, the built-ins `min`, `max`
+  and `clear`) and this repository's packages (`collections`, `datafile`).
+  Use what exists. If a helper must exist because Go lacks something, such
+  as an integer absolute value, its comment says so.
+
 ## Data
 
 - Fixed data lists (word lists, allowlists, lookup tables of strings) go in

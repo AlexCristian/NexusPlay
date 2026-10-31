@@ -301,21 +301,7 @@ func formatSeconds(seconds float64) string { return strconv.FormatFloat(seconds,
 //   - [string]: hours, minutes and seconds.
 func cueTime(milliseconds int64) string {
 	seconds := milliseconds / 1000
-	return strconv.FormatInt(seconds/3600, 10) + ":" + twoDigits(seconds/60%60) + ":" + twoDigits(seconds%60)
-}
-
-// [twoDigits] writes a number from 0 to 99 with at least two digits.
-//
-// Parameters:
-//   - [number]: the number.
-//
-// Returns:
-//   - [string]: [number] with a leading "0" if it is below 10.
-func twoDigits(number int64) string {
-	if number < 10 {
-		return "0" + strconv.FormatInt(number, 10)
-	}
-	return strconv.FormatInt(number, 10)
+	return fmt.Sprintf("%d:%02d:%02d", seconds/3600, seconds/60%60, seconds%60)
 }
 
 // ---- Control panel ----

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"sync"
 	"time"
@@ -73,7 +72,7 @@ func (job *job) percent() int {
 	if job.duration <= 0 {
 		return 0
 	}
-	return int(math.Min(99, job.done/job.duration*100))
+	return int(min(99, job.done/job.duration*100))
 }
 
 // [New] creates a converter. Nothing runs until [Converter.Run].

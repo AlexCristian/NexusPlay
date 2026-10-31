@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/AlexCristian/NexusPlay/internal/collections"
+	"github.com/AlexCristian/NexusPlay/internal/datafile"
 	"github.com/AlexCristian/NexusPlay/internal/metadata"
 )
 
@@ -101,32 +102,7 @@ var ignoredWordsFile string
 // [ignoredWords] carry no meaning when comparing titles: "Encounter at
 // Farpoint, Part 1 and 2" should match "Encounter at Farpoint". The words
 // come from ignored_words.txt.
-var ignoredWords = parseWordList(ignoredWordsFile)
-
-// [parseWordList] turns the text of a word list file, such as
-// ignored_words.txt, into a [collections.Set] of its words, so callers can
-// check whether a word is on the list with [collections.Set.Contains].
-//
-// Parameters:
-//   - [text]: the file's contents, one word per line. Blank lines and lines
-//     starting with "#" are skipped, and spaces around each word are
-//     trimmed.
-//
-// Returns:
-//   - [collections.Set[string]]: every word on the list, lowercased so
-//     lookups are case-insensitive as long as the word looked up is also
-//     lowercase.
-func parseWordList(text string) collections.Set[string] {
-	words := collections.NewSet[string]()
-	for _, line := range strings.Split(text, "\n") {
-		word := strings.TrimSpace(line)
-		if word == "" || strings.HasPrefix(word, "#") {
-			continue
-		}
-		words.Add(strings.ToLower(word))
-	}
-	return words
-}
+var ignoredWords = datafile.Set(ignoredWordsFile)
 
 // [titleWords] splits a title into the words used to compare it with other
 // titles.
@@ -177,7 +153,8 @@ func similarity(first, second collections.Set[string]) float64 {
 	return 2 * float64(shared) / float64(first.Size()+second.Size())
 }
 
-// [absolute] gives the absolute value of a whole number.
+// [absolute] gives the absolute value of a whole number. Go's standard
+// library has none for integers: [math.Abs] works on [float64] only.
 //
 // Parameters:
 //   - [number]: any [int].

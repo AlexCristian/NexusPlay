@@ -165,6 +165,8 @@ func parseWordList(text string) collections.Set[string]
 **Rule:** sets are `collections.Set`. A name says what the thing is; a
 comment says what the caller gets and what it is for.
 
+(`parseWordList` itself was later replaced by `datafile.Set`; see case 11.)
+
 ## 10. Standards that conflict without anyone saying so
 
 **Owner:** "i asked you to apply google coding expectations and you kinda
@@ -177,3 +179,28 @@ That conflict was never pointed out; requests were followed one at a time.
 **Rule:** the reference standards are the Java-world ones listed in
 `CLAUDE.md`. When a request conflicts with them, or with Go's usual style,
 say so before doing it.
+
+## 11. Helpers that rewrite the standard library
+
+**Before:** `absolute(int)`, `firstNonEmpty(a, b)`, `twoDigits(n)` (zero
+padding by hand), `parseWordList` next to `datafile.Set`, and the analyzer's
+own copies of the data-file readers.
+
+**Owner:** "why did you reimplement absolute value in match.go? lmfao. any
+other basic things you rewrote from scratch?"
+
+**What was wrong:** `firstNonEmpty` is `cmp.Or`, `twoDigits` is
+`fmt.Sprintf("%02d")`, and the data-file readers existed twice. Each one is
+more code to read and trust for no gain. (`absolute` stays: Go has no
+integer absolute value, only `math.Abs` for `float64`; its comment now says
+so.)
+
+**After:** `cmp.Or(showYear, folderYear)`, `fmt.Sprintf("%d:%02d:%02d", …)`,
+`datafile.Set` and `datafile.Table` everywhere, and the built-in `min` and
+`max` instead of `math.Min` and `math.Max`.
+
+**Rule:** before writing a small helper, check the standard library
+(`slices`, `maps`, `strings`, `strconv`, `cmp`, `fmt`, the built-ins) and the
+repository's own packages (`collections`, `datafile`). If a helper must
+exist because Go lacks something, its comment says so.
+

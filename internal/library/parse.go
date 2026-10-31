@@ -1,6 +1,7 @@
 package library
 
 import (
+	"cmp"
 	"path"
 	"regexp"
 	"strconv"
@@ -164,7 +165,7 @@ func episodeGuess(match episodeMatch, directory string) Guess {
 	case showName == "":
 		guess.Show, guess.Year = folderShow, folderYear
 	case strings.EqualFold(showName, folderShow):
-		guess.Show, guess.Year = showName, firstNonEmpty(showYear, folderYear)
+		guess.Show, guess.Year = showName, cmp.Or(showYear, folderYear)
 	default:
 		guess.Show, guess.Year = showName, showYear
 	}
@@ -236,21 +237,6 @@ func splitYear(text string) (name, year string) {
 		return clean(text[:yearMatch[0]]), text[yearMatch[2]:yearMatch[3]]
 	}
 	return clean(text), ""
-}
-
-// [firstNonEmpty] picks the first of two strings that is not "".
-//
-// Parameters:
-//   - [first]: the preferred value.
-//   - [second]: the fallback.
-//
-// Returns:
-//   - [string]: [first] unless it is "", in which case [second].
-func firstNonEmpty(first, second string) string {
-	if first != "" {
-		return first
-	}
-	return second
 }
 
 // [clean] tidies a name taken from a path, such as "The.Big_Show" into "The

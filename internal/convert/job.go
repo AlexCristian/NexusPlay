@@ -63,7 +63,7 @@ func CheckConverted(got, source ffmpeg.Probe, plan Plan) error {
 		return fmt.Errorf("%d audio tracks, want %d", audioCount, len(plan.Audio))
 	}
 	if source.Duration > 0 {
-		tolerance := math.Max(2, source.Duration*0.01)
+		tolerance := max(2, source.Duration*0.01)
 		if math.Abs(got.Duration-source.Duration) > tolerance {
 			return fmt.Errorf("lasts %.1fs, the original %.1fs", got.Duration, source.Duration)
 		}
